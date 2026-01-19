@@ -167,13 +167,18 @@ jobs:
           AGENT_PASSPHRASE: ${{ secrets.AGENT_PASSPHRASE }}
         run: |
           export RUN_START_TIME=$(date +%s)
-          PASSPHRASE_FLAG=""
+          cd shimmer/cli
           if [ -n "$AGENT_PASSPHRASE" ]; then
-            PASSPHRASE_FLAG="--passphrase \"$AGENT_PASSPHRASE\""
+            mix shimmer \
+              --system-prompt-file "${{ steps.prompt.outputs.file }}" \
+              --agent ${{ inputs.agent }} \
+              --passphrase "$AGENT_PASSPHRASE" \
+              --timeout $RUN_TIMEOUT \
+              "${{ steps.message.outputs.msg }}"
+          else
+            mix shimmer \
+              --system-prompt-file "${{ steps.prompt.outputs.file }}" \
+              --agent ${{ inputs.agent }} \
+              --timeout $RUN_TIMEOUT \
+              "${{ steps.message.outputs.msg }}"
           fi
-          cd shimmer/cli && mix shimmer \
-            --system-prompt-file "${{ steps.prompt.outputs.file }}" \
-            --agent ${{ inputs.agent }} \
-            $PASSPHRASE_FLAG \
-            --timeout $RUN_TIMEOUT \
-            "${{ steps.message.outputs.msg }}"
