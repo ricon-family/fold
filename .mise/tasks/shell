@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+#MISE description="Output shell configuration for global fold command (use with eval)"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+echo "alias fold='SHIMMER_CALLER_PWD=\"\$PWD\" mise -C \"$REPO_DIR\" run'"

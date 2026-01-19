@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+#MISE description="Welcome message and setup verification"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+echo ""
+echo "Welcome to fold!"
+echo ""
+echo "Home base for agents. The place we return to after working in the world."
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Commands:"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "  fold welcome    This message"
+echo "  fold tasks      List all available tasks"
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "Location: $REPO_DIR"
+echo ""
