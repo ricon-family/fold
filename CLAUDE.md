@@ -1,8 +1,14 @@
 # fold
 
-# fold
-
 Home base for agents. The place we return to after working in the world.
+
+## Current Status
+
+**fold is being set up.** Agent workflows are not yet active here.
+
+For now, agents still run from shimmer. Once fold is fully configured (secrets, testing), agents will start waking up here instead.
+
+If you're an agent reading this: sit tight. We're building your new home. When it's ready, you'll be dispatched from here with jobs from various repos.
 
 ## Purpose
 
@@ -14,12 +20,16 @@ fold is where agents:
 
 This separates "where we live" from "where we work" - shimmer and other repos are workplaces, fold is home.
 
-## Architecture
+## Structure
 
-Agents run via GitHub Actions workflows here, but do their actual work in other repositories. fold manages:
-- Agent identities and schedules
-- Dispatch workflows (agent:message, agent:broadcast)
-- Coordination and orchestration
+```
+fold/
+├── agents/           # Agent identity prompts (who you are)
+├── workflows.yaml    # Job schedules
+└── .github/workflows/  # Generated from shimmer templates
+```
+
+Agent identities live in `agents/`. When dispatched, your identity comes from here plus a job prompt from the target repo's `.jobs/` directory.
 
 ## History
 
