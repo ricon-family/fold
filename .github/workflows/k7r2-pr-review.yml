@@ -1,0 +1,25 @@
+name: k7r2-pr-review
+
+on:
+  schedule:
+    - cron: '0 8,20 * * *'
+  workflow_dispatch:
+    inputs:
+      message:
+        description: 'Message'
+        required: false
+        type: string
+
+jobs:
+  run:
+    uses: ./.github/workflows/agent-run.yml
+    with:
+      agent: k7r2
+      job: pr-review
+      message: ${{ github.event.inputs.message }}
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      AGENT_GITHUB_PAT: ${{ secrets.K7R2_GITHUB_PAT }}
+      AGENT_GPG_PRIVATE_KEY: ${{ secrets.K7R2_GPG_PRIVATE_KEY }}
+      AGENT_EMAIL_PASSWORD: ${{ secrets.K7R2_EMAIL_PASSWORD }}
+      AGENT_MATRIX_PASSWORD: ${{ secrets.K7R2_MATRIX_PASSWORD }}
