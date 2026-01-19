@@ -63,6 +63,9 @@ jobs:
         with:
           install: true
 
+      - name: Install shimmer
+        run: cd shimmer && mise trust && mise install
+
       - name: Setup GPG
         env:
           GPG_PRIVATE_KEY: ${{ secrets.AGENT_GPG_PRIVATE_KEY }}
