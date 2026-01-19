@@ -166,19 +166,13 @@ jobs:
           RUN_TIMEOUT: 540
           AGENT_PASSPHRASE: ${{ secrets.AGENT_PASSPHRASE }}
         run: |
-          export RUN_START_TIME=$(date +%s)
-          cd shimmer/cli
           if [ -n "$AGENT_PASSPHRASE" ]; then
-            mix shimmer \
+            mise run -C shimmer agent:run "${{ inputs.agent }}" "${{ steps.message.outputs.msg }}" \
               --system-prompt-file "${{ steps.prompt.outputs.file }}" \
-              --agent ${{ inputs.agent }} \
-              --passphrase "$AGENT_PASSPHRASE" \
-              --timeout $RUN_TIMEOUT \
-              "${{ steps.message.outputs.msg }}"
+              --timeout "$RUN_TIMEOUT" \
+              --passphrase "$AGENT_PASSPHRASE"
           else
-            mix shimmer \
+            mise run -C shimmer agent:run "${{ inputs.agent }}" "${{ steps.message.outputs.msg }}" \
               --system-prompt-file "${{ steps.prompt.outputs.file }}" \
-              --agent ${{ inputs.agent }} \
-              --timeout $RUN_TIMEOUT \
-              "${{ steps.message.outputs.msg }}"
+              --timeout "$RUN_TIMEOUT"
           fi
