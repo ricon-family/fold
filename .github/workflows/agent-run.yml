@@ -31,6 +31,8 @@ on:
         required: true
       AGENT_MATRIX_PASSWORD:
         required: false
+      AGENT_PASSPHRASE:
+        required: false
 
 jobs:
   run:
@@ -159,10 +161,16 @@ jobs:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
           RUN_TIMEOUT: 540
+          AGENT_PASSPHRASE: ${{ secrets.AGENT_PASSPHRASE }}
         run: |
           export RUN_START_TIME=$(date +%s)
+          PASSPHRASE_FLAG=""
+          if [ -n "$AGENT_PASSPHRASE" ]; then
+            PASSPHRASE_FLAG="--passphrase \"$AGENT_PASSPHRASE\""
+          fi
           cd shimmer/cli && mix shimmer \
             --system-prompt-file "${{ steps.prompt.outputs.file }}" \
             --agent ${{ inputs.agent }} \
+            $PASSPHRASE_FLAG \
             --timeout $RUN_TIMEOUT \
             "${{ steps.message.outputs.msg }}"
