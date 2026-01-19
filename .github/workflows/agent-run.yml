@@ -38,6 +38,9 @@ jobs:
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      # Workspace layout: everything in ~/
+      REPO_NAME: ${{ github.event.repository.name }}
     steps:
       - name: Validate inputs
         run: |
@@ -50,6 +53,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.AGENT_GITHUB_PAT }}
+          path: repo
 
       - name: Checkout shimmer
         uses: actions/checkout@v4
@@ -57,72 +61,6 @@ jobs:
           repository: ricon-family/shimmer
           token: ${{ secrets.AGENT_GITHUB_PAT }}
           path: shimmer
-
-      - name: Set up mise
-        uses: jdx/mise-action@v2
-        with:
-          install: true
-
-      - name: Install shimmer
-        run: cd shimmer && mise trust && mise install
-
-      - name: Setup shimmer command
-        run: |
-          # Create shimmer wrapper script so agents can use `shimmer <task>`
-          mkdir -p "$HOME/.local/bin"
-          cat > "$HOME/.local/bin/shimmer" << EOF
-          #!/bin/bash
-          SHIMMER_CALLER_PWD="\$PWD" mise -C "$GITHUB_WORKSPACE/shimmer" run "\$@"
-          EOF
-          chmod +x "$HOME/.local/bin/shimmer"
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-      - name: Setup GPG
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.AGENT_GPG_PRIVATE_KEY }}
-        run: mise run -C shimmer gpg:setup ${{ inputs.agent }}
-
-      - name: Setup email
-        env:
-          EMAIL_PASSWORD: ${{ secrets.AGENT_EMAIL_PASSWORD }}
-        run: mise run -C shimmer email:setup ${{ inputs.agent }}
-
-      - name: Configure git
-        run: |
-          git config user.name "${{ inputs.agent }}"
-          git config user.email "${{ inputs.agent }}@ricon.family"
-
-      - name: Create working branch
-        id: branch
-        run: |
-          BRANCH_NAME="${{ inputs.agent }}/run-$(date +%Y%m%d-%H%M%S)"
-          git checkout -b "$BRANCH_NAME"
-          echo "name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-
-      - name: Setup Matrix
-        env:
-          MATRIX_PASSWORD: ${{ secrets.AGENT_MATRIX_PASSWORD }}
-        run: mise run -C shimmer matrix:login ${{ inputs.agent }}
-
-      - name: Accept Matrix room invites
-        run: mise run -C shimmer matrix:invites ${{ inputs.agent }}
-
-      - name: Clone zettelkasten
-        env:
-          GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
-        run: |
-          ZETTEL_DIR="$HOME/agents/${{ inputs.agent }}/zettelkasten"
-          ZETTEL_REPO="${{ inputs.agent }}-ricon/zettelkasten"
-
-          mkdir -p "$HOME/agents/${{ inputs.agent }}"
-
-          if gh repo view "$ZETTEL_REPO" --json name > /dev/null 2>&1; then
-            echo "Cloning zettelkasten from $ZETTEL_REPO..."
-            git clone "https://x-access-token:${GH_TOKEN}@github.com/${ZETTEL_REPO}.git" "$ZETTEL_DIR"
-            echo "Zettelkasten available at $ZETTEL_DIR"
-          else
-            echo "No zettelkasten found for ${{ inputs.agent }}, skipping"
-          fi
 
       - name: Cache Elixir build
         uses: actions/cache@v4
@@ -134,9 +72,84 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-elixir-
 
+      - name: Setup workspace
+        run: |
+          # Move checkouts to ~/ for cleaner workspace
+          mv repo "$HOME/$REPO_NAME"
+          mv shimmer "$HOME/shimmer"
+          mkdir -p "$HOME/agents/${{ inputs.agent }}"
+          echo "Workspace: ~/$REPO_NAME, ~/shimmer, ~/agents/${{ inputs.agent }}"
+
+      - name: Set up mise
+        uses: jdx/mise-action@v2
+        with:
+          install: true
+
+      - name: Install shimmer
+        run: cd ~/shimmer && mise trust && mise install
+
+      - name: Setup shimmer command
+        run: |
+          # Create shimmer wrapper script so agents can use `shimmer <task>`
+          mkdir -p "$HOME/.local/bin"
+          cat > "$HOME/.local/bin/shimmer" << 'EOF'
+          #!/bin/bash
+          SHIMMER_CALLER_PWD="$PWD" mise -C "$HOME/shimmer" run "$@"
+          EOF
+          chmod +x "$HOME/.local/bin/shimmer"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Setup GPG
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.AGENT_GPG_PRIVATE_KEY }}
+        run: mise run -C ~/shimmer gpg:setup ${{ inputs.agent }}
+
+      - name: Setup email
+        env:
+          EMAIL_PASSWORD: ${{ secrets.AGENT_EMAIL_PASSWORD }}
+        run: mise run -C ~/shimmer email:setup ${{ inputs.agent }}
+
+      - name: Configure git
+        run: |
+          # Global config so it applies to all repos (main repo, zettelkasten, etc.)
+          git config --global user.name "${{ inputs.agent }}"
+          git config --global user.email "${{ inputs.agent }}@ricon.family"
+          git config --global commit.gpgsign true
+
+      - name: Create working branch
+        id: branch
+        run: |
+          cd "$HOME/$REPO_NAME"
+          BRANCH_NAME="${{ inputs.agent }}/run-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BRANCH_NAME"
+          echo "name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+      - name: Setup Matrix
+        env:
+          MATRIX_PASSWORD: ${{ secrets.AGENT_MATRIX_PASSWORD }}
+        run: mise run -C ~/shimmer matrix:login ${{ inputs.agent }}
+
+      - name: Accept Matrix room invites
+        run: mise run -C ~/shimmer matrix:invites ${{ inputs.agent }}
+
+      - name: Clone zettelkasten
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
+        run: |
+          ZETTEL_DIR="$HOME/agents/${{ inputs.agent }}/zettelkasten"
+          ZETTEL_REPO="${{ inputs.agent }}-ricon/zettelkasten"
+
+          if gh repo view "$ZETTEL_REPO" --json name > /dev/null 2>&1; then
+            echo "Cloning zettelkasten from $ZETTEL_REPO..."
+            git clone "https://x-access-token:${GH_TOKEN}@github.com/${ZETTEL_REPO}.git" "$ZETTEL_DIR"
+            echo "Zettelkasten available at $ZETTEL_DIR"
+          else
+            echo "No zettelkasten found for ${{ inputs.agent }}, skipping"
+          fi
+
       - name: Build CLI
         run: |
-          cd shimmer/cli
+          cd ~/shimmer/cli
           mix local.hex --force
           mix deps.get
 
@@ -146,10 +159,10 @@ jobs:
           PROMPT_FILE=$(mktemp)
 
           # Add agent identity (from current repo or shimmer)
-          if [ -f "agents/${{ inputs.agent }}.txt" ]; then
-            cat "agents/${{ inputs.agent }}.txt" >> "$PROMPT_FILE"
-          elif [ -f "shimmer/agents/${{ inputs.agent }}.txt" ]; then
-            cat "shimmer/agents/${{ inputs.agent }}.txt" >> "$PROMPT_FILE"
+          if [ -f "$HOME/$REPO_NAME/agents/${{ inputs.agent }}.txt" ]; then
+            cat "$HOME/$REPO_NAME/agents/${{ inputs.agent }}.txt" >> "$PROMPT_FILE"
+          elif [ -f "$HOME/shimmer/agents/${{ inputs.agent }}.txt" ]; then
+            cat "$HOME/shimmer/agents/${{ inputs.agent }}.txt" >> "$PROMPT_FILE"
           else
             echo "Error: Agent identity not found for ${{ inputs.agent }}"
             exit 1
@@ -159,10 +172,10 @@ jobs:
           if [ -n "${{ inputs.job }}" ]; then
             echo "" >> "$PROMPT_FILE"
             echo "" >> "$PROMPT_FILE"
-            if [ -f ".jobs/${{ inputs.job }}.txt" ]; then
-              cat ".jobs/${{ inputs.job }}.txt" >> "$PROMPT_FILE"
-            elif [ -f "shimmer/.jobs/${{ inputs.job }}.txt" ]; then
-              cat "shimmer/.jobs/${{ inputs.job }}.txt" >> "$PROMPT_FILE"
+            if [ -f "$HOME/$REPO_NAME/.jobs/${{ inputs.job }}.txt" ]; then
+              cat "$HOME/$REPO_NAME/.jobs/${{ inputs.job }}.txt" >> "$PROMPT_FILE"
+            elif [ -f "$HOME/shimmer/.jobs/${{ inputs.job }}.txt" ]; then
+              cat "$HOME/shimmer/.jobs/${{ inputs.job }}.txt" >> "$PROMPT_FILE"
             else
               echo "Error: Job not found: ${{ inputs.job }}"
               exit 1
@@ -194,13 +207,14 @@ jobs:
           RUN_TIMEOUT: 540
           AGENT_PASSPHRASE: ${{ secrets.AGENT_PASSPHRASE }}
         run: |
+          cd "$HOME/$REPO_NAME"
           if [ -n "$AGENT_PASSPHRASE" ]; then
-            mise run -C shimmer agent:run "${{ inputs.agent }}" "${{ steps.message.outputs.msg }}" \
+            mise run -C ~/shimmer agent:run "${{ inputs.agent }}" "${{ steps.message.outputs.msg }}" \
               --system-prompt-file "${{ steps.prompt.outputs.file }}" \
               --timeout "$RUN_TIMEOUT" \
               --passphrase "$AGENT_PASSPHRASE"
           else
-            mise run -C shimmer agent:run "${{ inputs.agent }}" "${{ steps.message.outputs.msg }}" \
+            mise run -C ~/shimmer agent:run "${{ inputs.agent }}" "${{ steps.message.outputs.msg }}" \
               --system-prompt-file "${{ steps.prompt.outputs.file }}" \
               --timeout "$RUN_TIMEOUT"
           fi
