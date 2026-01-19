@@ -66,6 +66,17 @@ jobs:
       - name: Install shimmer
         run: cd shimmer && mise trust && mise install
 
+      - name: Setup shimmer command
+        run: |
+          # Create shimmer wrapper script so agents can use `shimmer <task>`
+          mkdir -p "$HOME/.local/bin"
+          cat > "$HOME/.local/bin/shimmer" << EOF
+          #!/bin/bash
+          SHIMMER_CALLER_PWD="\$PWD" mise -C "$GITHUB_WORKSPACE/shimmer" run "\$@"
+          EOF
+          chmod +x "$HOME/.local/bin/shimmer"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
       - name: Setup GPG
         env:
           GPG_PRIVATE_KEY: ${{ secrets.AGENT_GPG_PRIVATE_KEY }}
