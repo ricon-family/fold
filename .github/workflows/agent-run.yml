@@ -96,6 +96,23 @@ jobs:
       - name: Accept Matrix room invites
         run: mise run -C shimmer matrix:invites ${{ inputs.agent }}
 
+      - name: Clone zettelkasten
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
+        run: |
+          ZETTEL_DIR="$HOME/agents/${{ inputs.agent }}/zettelkasten"
+          ZETTEL_REPO="${{ inputs.agent }}-ricon/zettelkasten"
+
+          mkdir -p "$HOME/agents/${{ inputs.agent }}"
+
+          if gh repo view "$ZETTEL_REPO" --json name > /dev/null 2>&1; then
+            echo "Cloning zettelkasten from $ZETTEL_REPO..."
+            git clone "https://x-access-token:${GH_TOKEN}@github.com/${ZETTEL_REPO}.git" "$ZETTEL_DIR"
+            echo "Zettelkasten available at $ZETTEL_DIR"
+          else
+            echo "No zettelkasten found for ${{ inputs.agent }}, skipping"
+          fi
+
       - name: Cache Elixir build
         uses: actions/cache@v4
         with:
