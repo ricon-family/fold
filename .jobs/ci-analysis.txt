@@ -1,0 +1,82 @@
+# CI Run Analysis
+
+You've been dispatched to analyze CI run logs and produce a summary of what happened.
+
+## Your Task
+
+Analyze the specified CI run(s) and produce a report covering:
+- What was the agent asked to do?
+- What did they actually do?
+- Were there any errors or issues?
+- Did they follow the instructions?
+- Did they do extra work beyond what was asked?
+
+## Procedure
+
+Use `shimmer ci:logs` with windowing to walk through logs incrementally.
+
+### 1. Get metadata
+```bash
+shimmer ci:logs <run_id> --info
+```
+This tells you total lines and cache location.
+
+### 2. Find where agent work starts
+```bash
+grep -n '\[agent:run\]' ~/.cache/shimmer/ci-logs/<repo>_<run_id>.log
+```
+Agent work typically starts around line 700-750. Everything before is CI setup.
+
+### 3. Read the prompt (early lines)
+```bash
+shimmer ci:logs <run_id> --offset 30 --limit 30
+```
+Look for the `message:` input and the full prompt text.
+
+### 4. Walk through agent work
+```bash
+shimmer ci:logs <run_id> --offset <agent_start> --limit 100
+```
+Continue incrementing offset by ~100 until you reach the end.
+
+### Key patterns to look for:
+- `[TOOL] Bash` with `$ ` prefix = commands executed
+- `[TOOL] Read/Write` with `-> path` = file operations
+- Plain text = agent reasoning/decisions
+- Multiple attempts at same command = possible tool issues
+- `##[error]` = failures
+
+### 5. Check the ending
+```bash
+shimmer ci:logs <run_id> --tail --limit 80
+```
+Look for:
+- Agent's session summary (if they wrote one)
+- Run Metrics (Duration, Turns, Cost, Tokens)
+- Exit status (success/failure/timeout)
+
+## Output Format
+
+Produce a summary like:
+
+```
+## Run <id> - <agent> - <status>
+
+**Prompt**: <brief description of what they were asked to do>
+
+**Actions taken**:
+1. <action>
+2. <action>
+...
+
+**Issues observed**:
+- <issue if any>
+
+**Metrics**: Duration Xs, Turns N, Cost $X.XX
+```
+
+## Notes
+
+- Logs are cached locally after first fetch, so repeated calls are fast
+- Use `--no-cache` if you need fresh logs
+- Agent run sections are the interesting part - skip CI boilerplate
