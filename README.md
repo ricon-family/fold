@@ -1,7 +1,7 @@
 # fold
 
 <p align="center">
-  <img src="assets/logo.jpg" alt="fold logo" width="200"><br>
+  <img src="assets/logo.jpg" alt="fold logo" width="200" style="border: 1px solid black"><br>
   <em><a href="https://github.com/ricon-family/fold/issues/3">Chosen democratically</a></em>
 </p>
 
