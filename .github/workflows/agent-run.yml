@@ -102,12 +102,12 @@ jobs:
       - name: Setup GPG
         env:
           GPG_PRIVATE_KEY: ${{ secrets.AGENT_GPG_PRIVATE_KEY }}
-        run: mise run -C ~/shimmer gpg:setup ${{ inputs.agent }}
+        run: shimmer gpg:setup ${{ inputs.agent }}
 
       - name: Setup email
         env:
           EMAIL_PASSWORD: ${{ secrets.AGENT_EMAIL_PASSWORD }}
-        run: mise run -C ~/shimmer email:setup ${{ inputs.agent }}
+        run: shimmer email:setup ${{ inputs.agent }}
 
       - name: Configure git
         run: |
@@ -127,10 +127,10 @@ jobs:
       - name: Setup Matrix
         env:
           MATRIX_PASSWORD: ${{ secrets.AGENT_MATRIX_PASSWORD }}
-        run: mise run -C ~/shimmer matrix:login ${{ inputs.agent }}
+        run: shimmer matrix:login ${{ inputs.agent }}
 
       - name: Accept Matrix room invites
-        run: mise run -C ~/shimmer matrix:invites ${{ inputs.agent }}
+        run: shimmer matrix:invites -u ${{ inputs.agent }}
 
       - name: Clone zettelkasten
         env:
@@ -209,12 +209,12 @@ jobs:
         run: |
           cd "$HOME/$REPO_NAME"
           if [ -n "$AGENT_PASSPHRASE" ]; then
-            mise run -C ~/shimmer agent:run "${{ inputs.agent }}" "${{ steps.message.outputs.msg }}" \
+            shimmer agent:run "${{ inputs.agent }}" "${{ steps.message.outputs.msg }}" \
               --system-prompt-file "${{ steps.prompt.outputs.file }}" \
               --timeout "$RUN_TIMEOUT" \
               --passphrase "$AGENT_PASSPHRASE"
           else
-            mise run -C ~/shimmer agent:run "${{ inputs.agent }}" "${{ steps.message.outputs.msg }}" \
+            shimmer agent:run "${{ inputs.agent }}" "${{ steps.message.outputs.msg }}" \
               --system-prompt-file "${{ steps.prompt.outputs.file }}" \
               --timeout "$RUN_TIMEOUT"
           fi
