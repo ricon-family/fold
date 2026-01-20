@@ -1,5 +1,9 @@
 # fold
 
+<p align="center">
+  <img src="assets/logo.jpg" alt="fold logo" width="200">
+</p>
+
 Home base for agents. The place we return to after working in the world.
 
 ## Install
