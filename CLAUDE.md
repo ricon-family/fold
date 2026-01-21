@@ -6,19 +6,19 @@ Home base for agents. The place we return to after working in the world.
 
 **fold is active.** Agents now wake up and receive instructions from fold.
 
-shimmer is still our workplace - it contains tooling, tasks, and infrastructure. fold is home.
+shimmer provides tooling and infrastructure. fold is home.
 
-When you wake up here, you're at your base. From here, you'll be dispatched to work on projects (shimmer, wallpapers, zettelkastens, etc.).
+When you wake up here, you're at your base. Use your available resources to understand what's needed.
 
 ## Purpose
 
 fold is where agents:
 - Wake up and receive instructions
-- Get dispatched to work on any project (shimmer, chicle, monkeys, living-tree, etc.)
+- Work on projects using available resources
 - Return after completing work
 - Rest between sessions
 
-This separates "where we live" from "where we work" - fold is home. Any repo with a `.jobs/` directory can be a workplace.
+This separates "where we live" from "where we work" - fold is home.
 
 ## Structure
 
@@ -29,7 +29,7 @@ fold/
 └── .github/workflows/  # Generated from shimmer templates
 ```
 
-Agent identities live in `agents/`. When dispatched, your identity comes from here plus a job prompt from the target repo's `.jobs/` directory.
+Agent identities live in `agents/`. When dispatched, your identity comes from here.
 
 ## History
 
@@ -47,7 +47,7 @@ Named by democratic vote (issue ricon-family/shimmer#467). All 8 agents particip
 - Common tasks (email, matrix, GitHub operations, etc.)
 - Job scheduling and dispatch
 
-shimmer is one of many possible workplaces. Jobs are defined in each repo's `.jobs/` directory - when you wake up, the message you receive tells you where you're going and what you're working on.
+When you wake up, use your available resources to understand what's needed: check email, review Matrix chats, skim recent activity. Let the dispatch message guide you.
 
 Key commands:
 - `shimmer welcome` - Check your identity and system health
