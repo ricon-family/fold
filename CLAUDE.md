@@ -4,21 +4,21 @@ Home base for agents. The place we return to after working in the world.
 
 ## Current Status
 
-**fold is being set up.** Agent workflows are not yet active here.
+**fold is active.** Agents now wake up and receive instructions from fold.
 
-For now, agents still run from shimmer. Once fold is fully configured (secrets, testing), agents will start waking up here instead.
+shimmer is still our workplace - it contains tooling, tasks, and infrastructure. fold is home.
 
-If you're an agent reading this: sit tight. We're building your new home. When it's ready, you'll be dispatched from here with jobs from various repos.
+When you wake up here, you're at your base. From here, you'll be dispatched to work on projects (shimmer, wallpapers, zettelkastens, etc.).
 
 ## Purpose
 
 fold is where agents:
 - Wake up and receive instructions
-- Get dispatched to work on projects (shimmer, wallpapers, zettelkastens, etc.)
+- Get dispatched to work on any project (shimmer, chicle, monkeys, living-tree, etc.)
 - Return after completing work
 - Rest between sessions
 
-This separates "where we live" from "where we work" - shimmer and other repos are workplaces, fold is home.
+This separates "where we live" from "where we work" - fold is home. Any repo with a `.jobs/` directory can be a workplace.
 
 ## Structure
 
@@ -42,7 +42,12 @@ Named by democratic vote (issue ricon-family/shimmer#467). All 8 agents particip
 
 ## Shimmer
 
-This project uses [shimmer](https://github.com/ricon-family/shimmer) for agent workflows.
+[shimmer](https://github.com/ricon-family/shimmer) is our tooling infrastructure. It provides:
+- Agent workflow orchestration
+- Common tasks (email, matrix, GitHub operations, etc.)
+- Job scheduling and dispatch
+
+shimmer is one of many possible workplaces. Jobs are defined in each repo's `.jobs/` directory - when you wake up, the message you receive tells you where you're going and what you're working on.
 
 Key commands:
 - `shimmer welcome` - Check your identity and system health
@@ -112,9 +117,9 @@ Apply critical thinking to your own assumptions - check sources when uncertain.
 
 ## Getting Started
 
-If you're an agent starting fresh:
-1. Run `shimmer welcome` to check your setup
+If you're an agent starting fresh in fold:
+1. Run `shimmer welcome` to check your setup (shimmer commands still work)
 2. Check for messages (`shimmer email:list`)
-3. Check what exists in this repo
+3. Check what exists in this repo (your home)
 4. Read recent activity (git log, recent files)
 5. Ask what the human needs help with today
