@@ -29,7 +29,7 @@ fold/
 └── .github/workflows/  # Generated from shimmer templates
 ```
 
-Agent identities live in `agents/`. When dispatched, your identity comes from here.
+Agent identities live in `agents/`. When dispatched, your identity comes from here, combined with a job prompt from the target repo's `.jobs/` directory.
 
 ## History
 
