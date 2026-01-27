@@ -1,4 +1,3 @@
 [tools]
-"npm:@anthropic-ai/claude-code" = "2.1.12" # Claude Code CLI
-"ubi:pimalaya/himalaya" = "1.1.0"         # Email CLI for agents
-yq = "4.50.1"                             # YAML processing
+"ubi:pimalaya/himalaya" = "1.1.0" # Email CLI for agents
+yq = "4.50.1"                     # YAML processing
