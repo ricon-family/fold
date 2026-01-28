@@ -6,18 +6,13 @@
 # Agent identities are in fold/agents/.
 # Job definitions live in each work repo's .jobs/ directory.
 
-# All scheduled workflows temporarily disabled pending governance review.
-workflows: []
+workflows:
+  - name: ghl-referral
+    agent: c0da
+    schedule: "*/15 9-17 * * 1-5"
+    message: "Clone ricon-family/grow-heal-love to your workspace and read .jobs/referral-check.txt for instructions."
 
-# Example workflows (uncomment when ready):
-#
-# workflows:
-#   - name: ghl-referral
-#     agent: c0da
-#     schedule: "*/15 9-17 * * 1-5"
-#     message: |
-#       Clone ricon-family/grow-heal-love to your workspace.
-#       Read .jobs/referral-check.txt and execute those instructions.
+# Other workflows (uncomment when ready):
 #
 #   - name: quick-probe
 #     agent: quick

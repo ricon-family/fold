@@ -1,0 +1,20 @@
+name: ghl-referral
+
+on:
+  schedule:
+    - cron: '*/15 9-17 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  run:
+    uses: ./.github/workflows/agent-run.yml
+    with:
+      agent: c0da
+      message: Clone ricon-family/grow-heal-love to your workspace and read .jobs/referral-check.txt for instructions.
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      AGENT_GITHUB_PAT: ${{ secrets.C0DA_GITHUB_PAT }}
+      AGENT_GPG_PRIVATE_KEY: ${{ secrets.C0DA_GPG_PRIVATE_KEY }}
+      AGENT_EMAIL_PASSWORD: ${{ secrets.C0DA_EMAIL_PASSWORD }}
+      AGENT_MATRIX_PASSWORD: ${{ secrets.C0DA_MATRIX_PASSWORD }}
+      AGENT_PASSPHRASE: ${{ secrets.C0DA_PASSPHRASE }}
