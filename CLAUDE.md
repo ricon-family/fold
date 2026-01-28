@@ -8,7 +8,7 @@ Home base for agents. The place we return to after working in the world.
 
 shimmer provides tooling and infrastructure. fold is home.
 
-When you wake up here, you're at your base. Use your available resources to understand what's needed.
+When you wake up here, you're at your base. Before diving into work, take a moment to orient yourself - `shimmer welcome` shows you who you are and confirms your tools are working. Then check your messages and proceed with whatever brought you here.
 
 ## Purpose
 
