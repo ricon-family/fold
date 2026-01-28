@@ -9,16 +9,12 @@ on:
   workflow_call:
     inputs:
       agent:
-        description: 'Agent to run (e.g., quick, brownie)'
+        description: 'Agent to run (e.g., c0da, quick)'
         required: true
         type: string
-      job:
-        description: 'Job to run (e.g., probe, critic). Optional if message is provided.'
-        required: false
-        type: string
       message:
-        description: 'Message to pass to the agent. Required if no job is specified.'
-        required: false
+        description: 'Message/instruction for the agent'
+        required: true
         type: string
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN:
@@ -42,13 +38,6 @@ jobs:
       # Workspace layout: everything in ~/
       REPO_NAME: ${{ github.event.repository.name }}
     steps:
-      - name: Validate inputs
-        run: |
-          if [ -z "${{ inputs.job }}" ] && [ -z "${{ inputs.message }}" ]; then
-            echo "Error: Either job or message must be provided"
-            exit 1
-          fi
-
       - name: Checkout current repo
         uses: actions/checkout@v4
         with:
@@ -168,37 +157,7 @@ jobs:
             exit 1
           fi
 
-          # Add job prompt if specified (from current repo or shimmer)
-          if [ -n "${{ inputs.job }}" ]; then
-            echo "" >> "$PROMPT_FILE"
-            echo "" >> "$PROMPT_FILE"
-            if [ -f "$HOME/$REPO_NAME/.jobs/${{ inputs.job }}.txt" ]; then
-              cat "$HOME/$REPO_NAME/.jobs/${{ inputs.job }}.txt" >> "$PROMPT_FILE"
-            elif [ -f "$HOME/shimmer/.jobs/${{ inputs.job }}.txt" ]; then
-              cat "$HOME/shimmer/.jobs/${{ inputs.job }}.txt" >> "$PROMPT_FILE"
-            else
-              echo "Error: Job not found: ${{ inputs.job }}"
-              exit 1
-            fi
-          fi
-
           echo "file=$PROMPT_FILE" >> $GITHUB_OUTPUT
-
-      - name: Determine message
-        id: message
-        env:
-          INPUT_MESSAGE: ${{ inputs.message }}
-          BRANCH_NAME: ${{ steps.branch.outputs.name }}
-        run: |
-          if [ -z "$INPUT_MESSAGE" ]; then
-            echo "msg=Branch: $BRANCH_NAME" >> $GITHUB_OUTPUT
-          else
-            {
-              echo "msg<<EOF"
-              echo "$INPUT_MESSAGE"
-              echo "EOF"
-            } >> $GITHUB_OUTPUT
-          fi
 
       - name: Run CLI
         env:
@@ -206,15 +165,16 @@ jobs:
           GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
           RUN_TIMEOUT: 540
           AGENT_PASSPHRASE: ${{ secrets.AGENT_PASSPHRASE }}
+          INPUT_MESSAGE: ${{ inputs.message }}
         run: |
           cd "$HOME/$REPO_NAME"
           if [ -n "$AGENT_PASSPHRASE" ]; then
-            shimmer agent:run "${{ inputs.agent }}" "${{ steps.message.outputs.msg }}" \
+            shimmer agent:run "${{ inputs.agent }}" "$INPUT_MESSAGE" \
               --system-prompt-file "${{ steps.prompt.outputs.file }}" \
               --timeout "$RUN_TIMEOUT" \
               --passphrase "$AGENT_PASSPHRASE"
           else
-            shimmer agent:run "${{ inputs.agent }}" "${{ steps.message.outputs.msg }}" \
+            shimmer agent:run "${{ inputs.agent }}" "$INPUT_MESSAGE" \
               --system-prompt-file "${{ steps.prompt.outputs.file }}" \
               --timeout "$RUN_TIMEOUT"
           fi

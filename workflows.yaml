@@ -15,14 +15,13 @@ workflows: []
 #   - name: ghl-referral
 #     agent: c0da
 #     schedule: "*/15 9-17 * * 1-5"
-#     message: "Run referral-check from ricon-family/grow-heal-love"
+#     message: |
+#       Clone ricon-family/grow-heal-love to your workspace.
+#       Read .jobs/referral-check.txt and execute those instructions.
 #
 #   - name: quick-probe
 #     agent: quick
 #     schedule: "0 */4 * * *"
-#     message: "Run probe from ricon-family/shimmer"
-#
-#   - name: rho-triage
-#     agent: rho
-#     schedule: "0 14-22 * * *"
-#     message: "Run triage from ricon-family/shimmer"
+#     message: |
+#       Clone ricon-family/shimmer to your workspace.
+#       Read .jobs/probe.txt and execute those instructions.
