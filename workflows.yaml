@@ -1,34 +1,28 @@
-# yaml-language-server: $schema=./workflows.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ricon-family/shimmer/main/workflows.schema.json
 #
-# Agent job schedules for fold.
+# Agent workflow schedules for fold.
 # Run `shimmer workflows:generate` to regenerate workflow files.
 #
-# Jobs are defined in shimmer/.jobs/ - each repo can define its own jobs.
 # Agent identities are in fold/agents/.
+# Job definitions live in each work repo's .jobs/ directory.
 
-# All scheduled jobs temporarily disabled pending governance review.
-# jobs:
-#   probe:
-#     agents:
-#       quick:
-#         schedule: "0 */4 * * *"
-#   pr-fixes:
-#     agents:
-#       quick:
-#         schedule: "30 14-22 * * *"
-#   pr-review:
-#     agents:
-#       k7r2:
-#         schedule: "0 8,20 * * *"
-#   readme:
-#     agents:
-#       quick:
-#         schedule: "0 8 * * 1"
-#   triage:
-#     agents:
-#       rho:
-#         schedule: "0 14-22 * * *"
-#   documentarian:
-#     agents:
-#       rho:
-#         schedule: "0 14 * * 1,4"
+# All scheduled workflows temporarily disabled pending governance review.
+workflows: []
+
+# Example workflows (uncomment when ready):
+#
+# workflows:
+#   - name: ghl-referral
+#     agent: c0da
+#     schedule: "*/15 9-17 * * 1-5"
+#     message: "Run referral-check from ricon-family/grow-heal-love"
+#
+#   - name: quick-probe
+#     agent: quick
+#     schedule: "0 */4 * * *"
+#     message: "Run probe from ricon-family/shimmer"
+#
+#   - name: rho-triage
+#     agent: rho
+#     schedule: "0 14-22 * * *"
+#     message: "Run triage from ricon-family/shimmer"
