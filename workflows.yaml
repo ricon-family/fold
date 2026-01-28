@@ -9,7 +9,7 @@
 workflows:
   - name: ghl-referral
     agent: c0da
-    schedule: "*/15 14-22 * * 1-5"
+    schedule: "0 14-22 * * 1-5"
     message: "Clone ricon-family/grow-heal-love to your workspace and read .jobs/referral-check.txt for instructions."
 
 # Other workflows (uncomment when ready):
