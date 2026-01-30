@@ -168,6 +168,7 @@ jobs:
           INPUT_MESSAGE: ${{ inputs.message }}
         run: |
           cd "$HOME/$REPO_NAME"
+          echo "### AGENT SESSION START ###"
           if [ -n "$AGENT_PASSPHRASE" ]; then
             shimmer agent:run "${{ inputs.agent }}" "$INPUT_MESSAGE" \
               --system-prompt-file "${{ steps.prompt.outputs.file }}" \
@@ -178,3 +179,4 @@ jobs:
               --system-prompt-file "${{ steps.prompt.outputs.file }}" \
               --timeout "$RUN_TIMEOUT"
           fi
+          echo "### AGENT SESSION END ###"
