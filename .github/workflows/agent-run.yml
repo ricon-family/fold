@@ -175,18 +175,18 @@ jobs:
           cd "$HOME/$REPO_NAME"
           echo "### AGENT SESSION START ###"
 
-          # Build optional flags
-          OPTIONAL_FLAGS=""
+          # Build command with optional flags using array to preserve quoting
+          CMD=(shimmer agent:run "${{ inputs.agent }}" "$INPUT_MESSAGE"
+            --system-prompt-file "${{ steps.prompt.outputs.file }}"
+            --timeout "$RUN_TIMEOUT")
+
           if [ -n "$AGENT_PASSPHRASE" ]; then
-            OPTIONAL_FLAGS="$OPTIONAL_FLAGS --passphrase $AGENT_PASSPHRASE"
+            CMD+=(--passphrase "$AGENT_PASSPHRASE")
           fi
           if [ -n "$INPUT_MODEL" ]; then
-            OPTIONAL_FLAGS="$OPTIONAL_FLAGS --model $INPUT_MODEL"
+            CMD+=(--model "$INPUT_MODEL")
           fi
 
-          shimmer agent:run "${{ inputs.agent }}" "$INPUT_MESSAGE" \
-            --system-prompt-file "${{ steps.prompt.outputs.file }}" \
-            --timeout "$RUN_TIMEOUT" \
-            $OPTIONAL_FLAGS
+          "${CMD[@]}"
 
           echo "### AGENT SESSION END ###"
