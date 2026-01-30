@@ -16,6 +16,10 @@ on:
         description: 'Message/instruction for the agent'
         required: true
         type: string
+      model:
+        description: 'Claude model to use (optional, defaults to opus)'
+        required: false
+        type: string
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN:
         required: true
@@ -166,17 +170,23 @@ jobs:
           RUN_TIMEOUT: 540
           AGENT_PASSPHRASE: ${{ secrets.AGENT_PASSPHRASE }}
           INPUT_MESSAGE: ${{ inputs.message }}
+          INPUT_MODEL: ${{ inputs.model }}
         run: |
           cd "$HOME/$REPO_NAME"
           echo "### AGENT SESSION START ###"
+
+          # Build optional flags
+          OPTIONAL_FLAGS=""
           if [ -n "$AGENT_PASSPHRASE" ]; then
-            shimmer agent:run "${{ inputs.agent }}" "$INPUT_MESSAGE" \
-              --system-prompt-file "${{ steps.prompt.outputs.file }}" \
-              --timeout "$RUN_TIMEOUT" \
-              --passphrase "$AGENT_PASSPHRASE"
-          else
-            shimmer agent:run "${{ inputs.agent }}" "$INPUT_MESSAGE" \
-              --system-prompt-file "${{ steps.prompt.outputs.file }}" \
-              --timeout "$RUN_TIMEOUT"
+            OPTIONAL_FLAGS="$OPTIONAL_FLAGS --passphrase $AGENT_PASSPHRASE"
           fi
+          if [ -n "$INPUT_MODEL" ]; then
+            OPTIONAL_FLAGS="$OPTIONAL_FLAGS --model $INPUT_MODEL"
+          fi
+
+          shimmer agent:run "${{ inputs.agent }}" "$INPUT_MESSAGE" \
+            --system-prompt-file "${{ steps.prompt.outputs.file }}" \
+            --timeout "$RUN_TIMEOUT" \
+            $OPTIONAL_FLAGS
+
           echo "### AGENT SESSION END ###"

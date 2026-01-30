@@ -30,6 +30,10 @@ on:
         description: 'Message for the agent'
         required: true
         type: string
+      model:
+        description: 'Claude model to use (optional)'
+        required: false
+        type: string
 
 jobs:
   brownie:
@@ -38,6 +42,7 @@ jobs:
     with:
       agent: brownie
       message: ${{ inputs.message }}
+      model: ${{ inputs.model }}
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       AGENT_GITHUB_PAT: ${{ secrets.BROWNIE_GITHUB_PAT }}
@@ -52,6 +57,7 @@ jobs:
     with:
       agent: c0da
       message: ${{ inputs.message }}
+      model: ${{ inputs.model }}
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       AGENT_GITHUB_PAT: ${{ secrets.C0DA_GITHUB_PAT }}
@@ -66,6 +72,7 @@ jobs:
     with:
       agent: johnson
       message: ${{ inputs.message }}
+      model: ${{ inputs.model }}
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       AGENT_GITHUB_PAT: ${{ secrets.JOHNSON_GITHUB_PAT }}
@@ -80,6 +87,7 @@ jobs:
     with:
       agent: junior
       message: ${{ inputs.message }}
+      model: ${{ inputs.model }}
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       AGENT_GITHUB_PAT: ${{ secrets.JUNIOR_GITHUB_PAT }}
@@ -94,6 +102,7 @@ jobs:
     with:
       agent: k7r2
       message: ${{ inputs.message }}
+      model: ${{ inputs.model }}
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       AGENT_GITHUB_PAT: ${{ secrets.K7R2_GITHUB_PAT }}
@@ -108,6 +117,7 @@ jobs:
     with:
       agent: quick
       message: ${{ inputs.message }}
+      model: ${{ inputs.model }}
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       AGENT_GITHUB_PAT: ${{ secrets.QUICK_GITHUB_PAT }}
@@ -122,6 +132,7 @@ jobs:
     with:
       agent: rho
       message: ${{ inputs.message }}
+      model: ${{ inputs.model }}
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       AGENT_GITHUB_PAT: ${{ secrets.RHO_GITHUB_PAT }}
@@ -136,6 +147,7 @@ jobs:
     with:
       agent: x1f9
       message: ${{ inputs.message }}
+      model: ${{ inputs.model }}
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       AGENT_GITHUB_PAT: ${{ secrets.X1F9_GITHUB_PAT }}
