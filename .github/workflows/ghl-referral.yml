@@ -2,7 +2,7 @@ name: ghl-referral
 
 on:
   schedule:
-    - cron: '0 14-22 * * 1-5'
+    - cron: '*/30 14-22 * * 1-5'
   workflow_dispatch:
 
 jobs:
