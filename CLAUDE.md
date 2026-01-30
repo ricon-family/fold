@@ -71,7 +71,7 @@ When working on any repository, clone it to your workspace first:
 
 ```bash
 cd ~/agents/<your-name>/
-git clone <repo-url>
+gh repo clone <owner>/<repo>
 cd <repo-name>
 # now work here
 ```
