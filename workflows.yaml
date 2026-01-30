@@ -9,6 +9,7 @@
 workflows:
   - name: ghl-referral
     agent: c0da
+    model: claude-sonnet-4-5-20250929
     schedule: "*/30 14-22 * * 1-5"
     message: "Clone ricon-family/grow-heal-love to your workspace and read .jobs/referral-check.txt for instructions."
 
