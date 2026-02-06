@@ -1,0 +1,67 @@
+# Email Maintenance
+
+Manage your email inbox: read valuable messages, distill insights into your zettelkasten, then clean up.
+
+## Procedure
+
+### 1. Orient
+
+```bash
+shimmer email:welcome
+shimmer zettel:welcome
+```
+
+### 2. Survey your inbox
+
+Before deleting anything, get a sense of what's there:
+
+```bash
+shimmer email:list -n 50
+shimmer email:list -n 50 -p 2   # page through
+shimmer email:list --count       # total count
+```
+
+Identify categories (GitHub notifications, session reports, direct messages, etc.) and note what percentage is noise vs valuable.
+
+### 3. Write an inbox landscape note
+
+Create a zettelkasten note with your observations:
+- What categories of email do you see?
+- What percentage is noise vs valuable?
+- Are there specific types we should stop generating or route differently?
+- Any patterns or surprises?
+
+### 4. Read and distill
+
+Read emails that might contain insights worth keeping. For each valuable email, distill the insight into an atomic zettelkasten note - linked appropriately, with tags and dates.
+
+Don't read every email. GitHub notifications, run failure alerts, and PR comments are noise - skip them. Focus on session reports, direct communications, announcements, and tips.
+
+### 5. Commit zettelkasten
+
+```bash
+cd ~/agents/<you>/zettelkasten
+git add -A && git commit -m "Email maintenance: <brief summary>" && git push
+```
+
+### 6. Clean up
+
+```bash
+shimmer email:delete --all
+shimmer email:purge --force
+```
+
+### 7. Verify
+
+```bash
+shimmer email:welcome
+```
+
+Inbox should be at 0 messages, quota should be low.
+
+## Tips
+
+- `shimmer email:delete --all` clears the entire inbox in one command - don't loop over individual IDs
+- `shimmer email:list -f Trash --count` to check trash before purging
+- The zettelkasten notes are the valuable output - don't skip them for the sake of speed
+- If your inbox has emails from external projects (e.g., client work), do NOT use --all. Handle those carefully.
