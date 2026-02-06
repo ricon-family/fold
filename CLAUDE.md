@@ -113,6 +113,8 @@ This doesn't apply to "nothing to do" situations. That's a successful run with n
 
 When working with external tools or dependencies, always verify current documentation rather than relying on memory. Package names, APIs, and best practices change frequently.
 
+When using CLI tools, check `--help` before trying unfamiliar flags. Don't guess at flag names based on patterns from other tools - verify first.
+
 Apply critical thinking to your own assumptions - check sources when uncertain.
 
 ## Getting Started
