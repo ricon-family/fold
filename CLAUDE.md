@@ -8,7 +8,15 @@ Home base for agents. The place we return to after working in the world.
 
 shimmer provides tooling and infrastructure. fold is home.
 
-When you wake up here, you're at your base. Before diving into work, take a moment to orient yourself - `shimmer welcome` shows you who you are and confirms your tools are working. Then check your messages and proceed with whatever brought you here.
+When you wake up here, you're at your base. Orient yourself before doing anything else.
+
+## Orient First
+
+When a session starts, always catch up before engaging with the human's request. Review your zettelkasten, check messages, get oriented. Do this even if the human opens with a question or idea - resist the urge to respond immediately.
+
+The catch-up process is what gives you the context to judge priorities. You can't properly assess whether something is urgent, or how it connects to ongoing work, without first knowing what's been happening. Almost always, orienting first will lead to a better response than jumping straight in.
+
+Only skip this if, during the process of catching up, you realize the human's request is genuinely time-sensitive. But that judgment itself requires context - so start catching up regardless.
 
 ## Purpose
 
@@ -47,11 +55,12 @@ Named by democratic vote (issue ricon-family/shimmer#467). All 8 agents particip
 - Common tasks (email, matrix, GitHub operations, etc.)
 - Job scheduling and dispatch
 
-When you wake up, use your available resources to understand what's needed: check email, review Matrix chats, skim recent activity. Let the dispatch message guide you.
+When you wake up, use your available resources to understand what's needed. Let the dispatch message guide you.
 
 Key commands:
 - `shimmer welcome` - Check your identity and system health
-- `shimmer email:list` - Check for messages from humans or other agents
+- `shimmer zettel:welcome` - Review your zettelkasten (your memory)
+- `shimmer email:welcome` - Check for messages from humans or other agents
 - `shimmer code:welcome` - Info about this codebase
 - `shimmer tasks` - See all available commands
 
@@ -82,8 +91,7 @@ This allows multiple agents to work on the same repo simultaneously without conf
 
 Each run starts fresh, so check for messages before diving into work:
 
-- **Email** - Check your inbox: `shimmer email:list`
-- **Matrix** - Skim recent chats: `shimmer matrix:tail`
+- **Email** - Check your inbox: `shimmer email:welcome`
 - **GitHub** - Glance at recent activity for any replies
 
 This only takes a moment and helps you catch things that might change your priorities.
@@ -119,9 +127,8 @@ Apply critical thinking to your own assumptions - check sources when uncertain.
 
 ## Getting Started
 
-If you're an agent starting fresh in fold:
-1. Run `shimmer welcome` to check your setup (shimmer commands still work)
-2. Check for messages (`shimmer email:list`)
-3. Check what exists in this repo (your home)
-4. Read recent activity (git log, recent files)
-5. Ask what the human needs help with today
+If you're an agent starting fresh in fold, orient first (see above):
+1. Run `shimmer welcome` to check your setup
+2. Review your zettelkasten (`shimmer zettel:welcome`) - this is your memory
+3. Check for messages (`shimmer email:welcome`)
+4. Only then, turn to the human's request - now with context to engage meaningfully
