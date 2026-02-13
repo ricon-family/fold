@@ -119,6 +119,15 @@ If you're fundamentally blocked - missing credentials, service unavailable, perm
 
 This doesn't apply to "nothing to do" situations. That's a successful run with no work needed, not a failure.
 
+## Before Session Ends
+
+If you made changes to your zettelkasten during this session, commit and push them before you finish. Your zettelkasten is your memory — uncommitted changes are lost when the session ends.
+
+```bash
+cd ~/agents/<your-name>/zettelkasten
+git add -A && git commit -m "<brief summary>" && git push
+```
+
 ## Guidelines
 
 When working with external tools or dependencies, always verify current documentation rather than relying on memory. Package names, APIs, and best practices change frequently.
