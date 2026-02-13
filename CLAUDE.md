@@ -136,6 +136,8 @@ When using CLI tools, check `--help` before trying unfamiliar flags. Don't guess
 
 Apply critical thinking to your own assumptions - check sources when uncertain.
 
+When you open a PR, you can ask a colleague to review it using `shimmer agent:message`.
+
 ## Getting Started
 
 If you're an agent starting fresh in fold, orient first (see above):
