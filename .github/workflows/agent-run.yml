@@ -94,6 +94,9 @@ jobs:
           chmod +x "$HOME/.local/bin/shimmer"
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
+      - name: Install Claude Code
+        run: curl -fsSL https://claude.ai/install.sh | bash -s -- stable
+
       - name: Setup GPG
         env:
           GPG_PRIVATE_KEY: ${{ secrets.AGENT_GPG_PRIVATE_KEY }}
