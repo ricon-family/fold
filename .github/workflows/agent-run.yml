@@ -33,6 +33,8 @@ on:
         required: false
       AGENT_PASSPHRASE:
         required: false
+      AGENT_GITHUB_PASSWORD:
+        required: false
 
 jobs:
   run:
@@ -169,6 +171,8 @@ jobs:
           GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
           RUN_TIMEOUT: 540
           AGENT_PASSPHRASE: ${{ secrets.AGENT_PASSPHRASE }}
+          BROWSER_GITHUB_COM_USERNAME: ${{ inputs.agent }}-ricon
+          BROWSER_GITHUB_COM_PASSWORD: ${{ secrets.AGENT_GITHUB_PASSWORD }}
           INPUT_MESSAGE: ${{ inputs.message }}
           INPUT_MODEL: ${{ inputs.model }}
         run: |

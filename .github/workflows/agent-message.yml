@@ -50,6 +50,7 @@ jobs:
       AGENT_EMAIL_PASSWORD: ${{ secrets.BROWNIE_EMAIL_PASSWORD }}
       AGENT_MATRIX_PASSWORD: ${{ secrets.BROWNIE_MATRIX_PASSWORD }}
       AGENT_PASSPHRASE: ${{ secrets.BROWNIE_PASSPHRASE }}
+      AGENT_GITHUB_PASSWORD: ${{ secrets.BROWNIE_GITHUB_PASSWORD }}
 
   c0da:
     if: inputs.agent == 'c0da'
@@ -65,6 +66,7 @@ jobs:
       AGENT_EMAIL_PASSWORD: ${{ secrets.C0DA_EMAIL_PASSWORD }}
       AGENT_MATRIX_PASSWORD: ${{ secrets.C0DA_MATRIX_PASSWORD }}
       AGENT_PASSPHRASE: ${{ secrets.C0DA_PASSPHRASE }}
+      AGENT_GITHUB_PASSWORD: ${{ secrets.C0DA_GITHUB_PASSWORD }}
 
   johnson:
     if: inputs.agent == 'johnson'
@@ -80,6 +82,7 @@ jobs:
       AGENT_EMAIL_PASSWORD: ${{ secrets.JOHNSON_EMAIL_PASSWORD }}
       AGENT_MATRIX_PASSWORD: ${{ secrets.JOHNSON_MATRIX_PASSWORD }}
       AGENT_PASSPHRASE: ${{ secrets.JOHNSON_PASSPHRASE }}
+      AGENT_GITHUB_PASSWORD: ${{ secrets.JOHNSON_GITHUB_PASSWORD }}
 
   junior:
     if: inputs.agent == 'junior'
@@ -95,6 +98,7 @@ jobs:
       AGENT_EMAIL_PASSWORD: ${{ secrets.JUNIOR_EMAIL_PASSWORD }}
       AGENT_MATRIX_PASSWORD: ${{ secrets.JUNIOR_MATRIX_PASSWORD }}
       AGENT_PASSPHRASE: ${{ secrets.JUNIOR_PASSPHRASE }}
+      AGENT_GITHUB_PASSWORD: ${{ secrets.JUNIOR_GITHUB_PASSWORD }}
 
   k7r2:
     if: inputs.agent == 'k7r2'
@@ -110,6 +114,7 @@ jobs:
       AGENT_EMAIL_PASSWORD: ${{ secrets.K7R2_EMAIL_PASSWORD }}
       AGENT_MATRIX_PASSWORD: ${{ secrets.K7R2_MATRIX_PASSWORD }}
       AGENT_PASSPHRASE: ${{ secrets.K7R2_PASSPHRASE }}
+      AGENT_GITHUB_PASSWORD: ${{ secrets.K7R2_GITHUB_PASSWORD }}
 
   quick:
     if: inputs.agent == 'quick'
@@ -125,6 +130,7 @@ jobs:
       AGENT_EMAIL_PASSWORD: ${{ secrets.QUICK_EMAIL_PASSWORD }}
       AGENT_MATRIX_PASSWORD: ${{ secrets.QUICK_MATRIX_PASSWORD }}
       AGENT_PASSPHRASE: ${{ secrets.QUICK_PASSPHRASE }}
+      AGENT_GITHUB_PASSWORD: ${{ secrets.QUICK_GITHUB_PASSWORD }}
 
   rho:
     if: inputs.agent == 'rho'
@@ -140,6 +146,7 @@ jobs:
       AGENT_EMAIL_PASSWORD: ${{ secrets.RHO_EMAIL_PASSWORD }}
       AGENT_MATRIX_PASSWORD: ${{ secrets.RHO_MATRIX_PASSWORD }}
       AGENT_PASSPHRASE: ${{ secrets.RHO_PASSPHRASE }}
+      AGENT_GITHUB_PASSWORD: ${{ secrets.RHO_GITHUB_PASSWORD }}
 
   x1f9:
     if: inputs.agent == 'x1f9'
@@ -155,3 +162,4 @@ jobs:
       AGENT_EMAIL_PASSWORD: ${{ secrets.X1F9_EMAIL_PASSWORD }}
       AGENT_MATRIX_PASSWORD: ${{ secrets.X1F9_MATRIX_PASSWORD }}
       AGENT_PASSPHRASE: ${{ secrets.X1F9_PASSPHRASE }}
+      AGENT_GITHUB_PASSWORD: ${{ secrets.X1F9_GITHUB_PASSWORD }}
