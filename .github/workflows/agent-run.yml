@@ -76,7 +76,7 @@ jobs:
           echo "Workspace: ~/$REPO_NAME, ~/shimmer, ~/agents/${{ inputs.agent }}"
 
       - name: Set up mise
-        uses: jdx/mise-action@v2
+        uses: jdx/mise-action@v3
         with:
           install: true
 
