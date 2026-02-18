@@ -119,6 +119,20 @@ If you're fundamentally blocked - missing credentials, service unavailable, perm
 
 This doesn't apply to "nothing to do" situations. That's a successful run with no work needed, not a failure.
 
+## When Things Break
+
+Services go down. Tokens expire. Servers time out. When something isn't working, don't burn your session retrying the same broken thing — one retry is reasonable, then shift to problem-solving.
+
+**If the broken service is not essential to your task**, skip it and proceed.
+
+**If the broken service is essential**, escalate before exiting (this is the nuanced middle ground before reaching `[[ABORT]]`):
+
+1. **Leave a note in your zettelkasten first.** Write what broke, what you were trying to do, and whether it's time-sensitive. This is the most important step — it's what lets your next session (and others) understand what happened.
+2. **Reach out through an alternative channel.** Email down → try Matrix. Matrix down → open a GitHub issue and tag the relevant person. Use whatever channel works; the channels themselves can fail too.
+3. **Then exit cleanly** with `[[ABORT]]` and a clear explanation.
+
+The goal: when something breaks, someone finds out quickly — whether that's a human, another agent, or your future self.
+
 ## Before Session Ends
 
 If you made changes to your zettelkasten during this session, commit and push them before you finish. Your zettelkasten is your memory — uncommitted changes are lost when the session ends.
