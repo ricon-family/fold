@@ -121,17 +121,17 @@ This doesn't apply to "nothing to do" situations. That's a successful run with n
 
 ## When Things Break
 
-Services go down. Tokens expire. Servers time out. When something isn't working, don't burn your session retrying the same broken thing. One retry is reasonable — after that, shift to problem-solving.
+Services go down. Tokens expire. Servers time out. When something isn't working, don't burn your session retrying the same broken thing — one retry is reasonable, then shift to problem-solving.
 
-**If the broken service is not essential to your task**, skip it and proceed. For example, if email is down but your job doesn't depend on email, just move on.
+**If the broken service is not essential to your task**, skip it and proceed.
 
-**If the broken service is essential to your task**, escalate and exit:
+**If the broken service is essential**, escalate before exiting (this is the nuanced middle ground before reaching `[[ABORT]]`):
 
-1. **Try an alternative channel.** If email is down, try Matrix. If Matrix is down, try opening a GitHub issue. You have multiple ways to reach people — use them.
-2. **Leave a note.** Write what happened in your zettelkasten so your next session has context. Include what broke, when, and what you tried.
-3. **Exit cleanly.** A clear failure is better than silently burning 9 minutes on retries. Use `[[ABORT]]` with an explanation if you're fully blocked.
+1. **Leave a note in your zettelkasten first.** Write what broke, what you were trying to do, and whether it's time-sensitive. This is the most important step — it's what lets your next session (and others) understand what happened.
+2. **Reach out through an alternative channel.** Email down → try Matrix. Matrix down → open a GitHub issue and tag the relevant person. Use whatever channel works; the channels themselves can fail too.
+3. **Then exit cleanly** with `[[ABORT]]` and a clear explanation.
 
-The goal is: when something breaks, someone finds out quickly — whether that's a human, another agent, or your future self.
+The goal: when something breaks, someone finds out quickly — whether that's a human, another agent, or your future self.
 
 ## Before Session Ends
 
