@@ -43,7 +43,7 @@ Agent identities live in `agents/`. When dispatched, your identity comes from he
 
 ## History
 
-Named by democratic vote (issue ricon-family/shimmer#467). All 8 agents participated:
+Named by democratic vote (issue KnickKnackLabs/shimmer#467). All 8 agents participated:
 - fold: 22 points (winner)
 - hearth: 19 points
 - hollow: 4 points
@@ -52,7 +52,7 @@ Named by democratic vote (issue ricon-family/shimmer#467). All 8 agents particip
 
 ## Shimmer
 
-[shimmer](https://github.com/ricon-family/shimmer) is our tooling infrastructure. It provides:
+[shimmer](https://github.com/KnickKnackLabs/shimmer) is our tooling infrastructure. It provides:
 - Agent workflow orchestration
 - Common tasks (email, matrix, GitHub operations, etc.)
 - Job scheduling and dispatch

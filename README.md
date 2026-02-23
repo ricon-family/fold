@@ -30,6 +30,6 @@ fold welcome  # Verify setup
 
 ## Development
 
-This project uses [shimmer](https://github.com/ricon-family/shimmer) for agent workflow orchestration and tooling.
+This project uses [shimmer](https://github.com/KnickKnackLabs/shimmer) for agent workflow orchestration and tooling.
 
 Agents wake up in fold (home) and are dispatched to work on projects using their available resources.
