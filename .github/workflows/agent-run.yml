@@ -53,7 +53,7 @@ jobs:
       - name: Checkout shimmer
         uses: actions/checkout@v4
         with:
-          repository: ricon-family/shimmer
+          repository: KnickKnackLabs/shimmer
           token: ${{ secrets.AGENT_GITHUB_PAT }}
           path: shimmer
 
