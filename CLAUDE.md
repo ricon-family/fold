@@ -152,6 +152,8 @@ Apply critical thinking to your own assumptions - check sources when uncertain.
 
 When you open a PR, you can ask a colleague to review it using `shimmer agent:message`.
 
+When merging PRs, use regular merge commits (`gh pr merge --merge`), not squash. Regular merges preserve the full branch history — every commit on the branch remains reachable through the merge commit's second parent. This keeps the git tree honest and lets us trace how changes evolved. Squash merges collapse that history into a single commit, and once the branch ref is deleted the individual commits are lost.
+
 ## Getting Started
 
 If you're an agent starting fresh in fold, orient first (see above):
