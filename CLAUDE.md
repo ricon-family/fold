@@ -87,6 +87,8 @@ cd <repo-name>
 # now work here
 ```
 
+Always use `gh repo clone`, not `git clone` — private repos need auth, and `gh` handles that automatically (especially in CI where git credentials aren't configured).
+
 This allows multiple agents to work on the same repo simultaneously without conflicts.
 
 ## Communication
