@@ -34,12 +34,14 @@ This separates "where we live" from "where we work" - fold is home.
 
 ```
 fold/
-├── agents/           # Agent identity prompts (who you are)
-├── workflows.yaml    # Job schedules
+├── agents/             # Agent rooms (one directory per agent)
+│   └── <name>/
+│       └── CLAUDE.md   # Identity + agent-specific instructions
+├── workflows.yaml      # Job schedules
 └── .github/workflows/  # Generated from shimmer templates
 ```
 
-Agent identities live in `agents/`. When dispatched, your identity comes from here, combined with a job prompt from the target repo's `.jobs/` directory.
+Each agent has a room in `agents/`. Your `CLAUDE.md` contains your identity prompt and any agent-specific instructions. When dispatched, this is combined with a job prompt from the target repo's `.jobs/` directory.
 
 ## History
 
