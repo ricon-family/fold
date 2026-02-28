@@ -13,7 +13,7 @@ workflows:
     schedule:
       - "0 14,16,18,20,22 * * 1-5"  # weekdays every 2h, 9am-5pm EST
       - "0 14,18,22 * * 0,6"        # weekends every 4h, 9am-5pm EST
-    message: "Clone ricon-family/grow-heal-love to your workspace and read .jobs/referral-check.txt for instructions."
+    message: "Use `gh repo clone` to clone ricon-family/grow-heal-love to your workspace and read .jobs/referral-check.txt for instructions."
 
 # Other workflows (uncomment when ready):
 #
