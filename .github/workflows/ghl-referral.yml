@@ -11,7 +11,7 @@ jobs:
     uses: ./.github/workflows/agent-run.yml
     with:
       agent: c0da
-      message: Clone ricon-family/grow-heal-love to your workspace and read .jobs/referral-check.txt for instructions.
+      message: Use `gh repo clone` to clone ricon-family/grow-heal-love to your workspace and read .jobs/referral-check.txt for instructions.
       model: claude-sonnet-4-5-20250929
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

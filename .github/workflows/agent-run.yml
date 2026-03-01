@@ -89,7 +89,7 @@ jobs:
           mkdir -p "$HOME/.local/bin"
           cat > "$HOME/.local/bin/shimmer" << 'EOF'
           #!/bin/bash
-          SHIMMER_CALLER_PWD="$PWD" mise -C "$HOME/shimmer" run "$@"
+          CALLER_PWD="$PWD" mise -C "$HOME/shimmer" run "$@"
           EOF
           chmod +x "$HOME/.local/bin/shimmer"
           echo "$HOME/.local/bin" >> $GITHUB_PATH
@@ -156,18 +156,19 @@ jobs:
         run: |
           PROMPT_FILE=$(mktemp)
 
-          # Add agent identity (directory-based, then flat file fallback)
+          # Add agent identity
           if [ -f "$HOME/$REPO_NAME/agents/${{ inputs.agent }}/CLAUDE.md" ]; then
             cat "$HOME/$REPO_NAME/agents/${{ inputs.agent }}/CLAUDE.md" >> "$PROMPT_FILE"
-          elif [ -f "$HOME/$REPO_NAME/agents/${{ inputs.agent }}.txt" ]; then
-            cat "$HOME/$REPO_NAME/agents/${{ inputs.agent }}.txt" >> "$PROMPT_FILE"
-          elif [ -f "$HOME/shimmer/agents/${{ inputs.agent }}/CLAUDE.md" ]; then
-            cat "$HOME/shimmer/agents/${{ inputs.agent }}/CLAUDE.md" >> "$PROMPT_FILE"
-          elif [ -f "$HOME/shimmer/agents/${{ inputs.agent }}.txt" ]; then
-            cat "$HOME/shimmer/agents/${{ inputs.agent }}.txt" >> "$PROMPT_FILE"
           else
-            echo "Error: Agent identity not found for ${{ inputs.agent }}"
+            echo "Error: Agent identity not found: agents/${{ inputs.agent }}/CLAUDE.md"
             exit 1
+          fi
+
+          # Add dispatch context (who triggered this run)
+          if [ -n "$GITHUB_TRIGGERING_ACTOR" ]; then
+            echo "" >> "$PROMPT_FILE"
+            echo "## Dispatch Context" >> "$PROMPT_FILE"
+            echo "This session was triggered by: $GITHUB_TRIGGERING_ACTOR" >> "$PROMPT_FILE"
           fi
 
           echo "file=$PROMPT_FILE" >> $GITHUB_OUTPUT
