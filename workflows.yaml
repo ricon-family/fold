@@ -17,7 +17,8 @@ workflows:
 
   - name: junior-daily-checkin
     agent: junior
-    schedule: "0 15 * * *"  # 10am EST daily
+    schedule:
+      - "0 15 * * *"  # 10am EST daily
     message: "Check your zettelkasten for job instructions at jobs/dc-checkin.txt and execute them."
 
 # Other workflows (uncomment when ready):

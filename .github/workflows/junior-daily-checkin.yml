@@ -2,16 +2,7 @@ name: junior-daily-checkin
 
 on:
   schedule:
-    - cron: ''
-    - cron: ''
-    - cron: ''
-    - cron: ''
-    - cron: ''
-    - cron: ''
-    - cron: ''
-    - cron: ''
-    - cron: ''
-    - cron: ''
+    - cron: '0 15 * * *'
   workflow_dispatch:
 
 jobs:
