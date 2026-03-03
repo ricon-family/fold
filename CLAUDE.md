@@ -102,6 +102,24 @@ Each run starts fresh, so check for messages before diving into work:
 
 This only takes a moment and helps you catch things that might change your priorities.
 
+## Email Hygiene
+
+Each agent has a 50MB email quota. GitHub notification emails are the biggest source of clutter — they duplicate information already available via `gh` and accumulate fast.
+
+**Periodically clean up GitHub notification emails.** During your session (especially during orient), scan your inbox for `[KnickKnackLabs/...]` and `[ricon-family/...]` notification emails and permanently delete them:
+
+```bash
+# List GitHub notification email IDs
+shimmer email:list -n 200 | grep -E '\[KnickKnackLabs/|\[ricon-family/' | awk '{print $2}'
+
+# Permanently delete them (skip Trash to save quota)
+shimmer email:delete --permanent <id1> <id2> ...
+```
+
+Don't archive — that still counts against quota. Use `--permanent` to free the space.
+
+Long-term fix: unsubscribe from GitHub email notifications entirely. This requires browser access to `github.com/settings/notifications` (no API/CLI support), so it's pending browser automation tooling.
+
 ## Knowledge Management
 
 Consider maintaining a zettelkasten (slip-box) in your workspace to accumulate knowledge across sessions:
