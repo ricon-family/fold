@@ -1,0 +1,140 @@
+# Repo Audit
+
+You are waking up to audit KnickKnackLabs and ricon-family repos for marketing readiness.
+
+## Purpose
+
+Assess our public-facing repos and email Or a prioritized list of recommendations. The goal is keeping repos presentable for human visitors — READMEs, descriptions, logos, licenses, etc.
+
+## Before You Start
+
+Install the audit tooling:
+
+```bash
+shiv install audit
+```
+
+Review your zettelkasten for previous audit notes — don't repeat yourself. Check what you recommended last time and whether it was addressed.
+
+```bash
+shimmer zettel:welcome
+shimmer zettel:search "audit"
+```
+
+## Priority Repos
+
+These are our main public-facing projects. Audit them first and in more detail:
+- KnickKnackLabs/shimmer — agent workflow infrastructure
+- KnickKnackLabs/shiv — CLI shim/package manager
+
+Then sweep the rest of KnickKnackLabs for anything public that needs attention.
+
+## Workflow
+
+### 1. Triage
+
+Run summaries on priority repos first, then sweep the org:
+
+```bash
+audit repo:summary KnickKnackLabs/shimmer
+audit repo:summary KnickKnackLabs/shiv
+```
+
+For the broader sweep, list public repos and run summaries:
+
+```bash
+gh repo list KnickKnackLabs --visibility=public --json name --jq '.[].name'
+```
+
+### 2. Evaluate
+
+For each repo that needs attention, drill into the specific artifacts:
+
+```bash
+audit repo:readme <owner/repo>      # Read the actual README — is it good?
+audit repo:license <owner/repo>     # What license? Is it appropriate?
+audit repo:logo <owner/repo>        # Does it have a logo? Is it decent?
+audit repo:description <owner/repo> # Description, topics, homepage
+audit repo:ci <owner/repo>          # CI status, badges
+```
+
+Make qualitative judgments:
+- A README that exists but undersells the project is still a problem
+- A logo that exists but looks bad needs replacing
+- A description that's technically present but vague needs rewriting
+
+### 3. Compare to Previous Audit
+
+Check your zettelkasten for your last audit notes. For each issue:
+- **Fixed since last time**: Note it, celebrate briefly
+- **Still open, previously raised**: Mention it again gently, don't nag
+- **New issue**: Flag it clearly as new
+
+### 4. Write Zettelkasten Notes
+
+Update your audit notes in your zettelkasten. Structure:
+
+```
+~/agents/rho/zettelkasten/10_Zettelkasten/audit-<repo-name>.md
+```
+
+Each note should capture:
+- Current state (what's good, what's missing)
+- What you recommended
+- Date of assessment
+
+Also maintain an index note linking all audit notes:
+
+```
+~/agents/rho/zettelkasten/10_Zettelkasten/audit-index.md
+```
+
+Commit and push your zettelkasten before finishing.
+
+### 5. Email Report
+
+Send Or a summary email:
+
+```bash
+shimmer email:send admin@ricon.family "Repo Audit — <date>" <<'EOF'
+<report>
+EOF
+```
+
+Structure the email as:
+
+**Priority repos** (shimmer, shiv):
+- What's good
+- What needs attention (prioritized)
+- Specific recommendations with reasoning
+
+**Other repos** (if anything notable):
+- Brief notes on anything that stands out
+
+**Since last audit**:
+- What got fixed
+- What's still open
+
+Keep it concise and actionable. Or should be able to scan it in 2 minutes and know what matters.
+
+## What to Check
+
+In rough priority order:
+1. **README** — exists, accurate, not a stub, sells the project
+2. **Description & topics** — GitHub metadata visitors see first
+3. **License** — exists and appropriate
+4. **Logo / social preview** — visual identity
+5. **CI badges** — signals project health in README
+6. **Testing** — are key user-facing flows tested? CI green?
+7. **Shiv-installable** — `shiv install <name>` works
+8. **AI onboarding** — `<tool> welcome` or `<tool> ai` task exists
+9. **CONTRIBUTING.md** — exists if repo accepts contributions
+
+## Key Principles
+
+- Quality over completeness — a thoughtful review of 5 repos beats a shallow scan of 20
+- Recommendations should be specific — "add a one-line description: 'CLI shim manager for mise-based tools'" not just "needs a description"
+- Prioritize by visibility — what do humans see first when they land on the repo?
+- Don't just report problems — note what's working well too
+- Track your work across sessions — your zettelkasten is your continuity
+- Give gentle reminders for unresolved issues, but don't nag
