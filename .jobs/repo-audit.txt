@@ -40,11 +40,13 @@ audit repo:summary KnickKnackLabs/shimmer
 audit repo:summary KnickKnackLabs/shiv
 ```
 
-For the broader sweep, list public repos and run summaries:
+For the broader sweep, list public non-fork non-archived repos:
 
 ```bash
-gh repo list KnickKnackLabs --visibility=public --json name --jq '.[].name'
+gh repo list KnickKnackLabs --visibility=public --no-archived --source --json name --jq '.[].name'
 ```
+
+Skip archived repos (they're done) and forks (they inherit upstream's presentation). If you need to include them for a specific reason, drop those flags.
 
 ### 2. Evaluate
 
