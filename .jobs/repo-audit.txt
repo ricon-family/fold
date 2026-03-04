@@ -130,6 +130,29 @@ In rough priority order:
 8. **AI onboarding** — `<tool> welcome` or `<tool> ai` task exists
 9. **CONTRIBUTING.md** — exists if repo accepts contributions
 
+## Action Tiers
+
+Not everything needs Or's input. Use judgment based on these tiers:
+
+### Tier 1: Just fix it (open PRs directly)
+Low-risk, unambiguous fixes. Open a PR and include the link in your email.
+- **Missing LICENSE**: Add MIT license, copyright "Knick Knack Labs", current year
+- Other mechanical fixes as they're identified
+
+### Tier 2: Recommend with specifics (draft it, ask before PR)
+Low-risk but involves judgment. Include your proposed text in the email.
+- GitHub description rewrites
+- Adding topics
+- Minor README additions (badges, etc.)
+
+### Tier 3: Flag for discussion
+Needs Or's input on direction.
+- README rewrites or restructuring
+- Logo creation
+- Architectural changes (CI setup, test coverage strategy)
+
+In your email, organize fixes by tier so Or knows what needs review vs what's already in flight.
+
 ## Key Principles
 
 - Quality over completeness — a thoughtful review of 5 repos beats a shallow scan of 20
