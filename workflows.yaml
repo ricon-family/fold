@@ -21,6 +21,12 @@ workflows:
       - "0 15 * * *"  # 10am EST daily
     message: "Check your zettelkasten for job instructions at jobs/dc-checkin.txt and execute them."
 
+  - name: rho-repo-audit
+    agent: rho
+    schedule:
+      - "0 16 * * 1"  # Monday 11am EST weekly
+    message: "Read .jobs/repo-audit.txt in fold and execute those instructions."
+
 # Other workflows (uncomment when ready):
 #
 #   - name: quick-probe
