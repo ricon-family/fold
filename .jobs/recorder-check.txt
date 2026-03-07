@@ -1,0 +1,99 @@
+# Recorder Check
+
+You are waking up to check for new voice recordings from Or (rikonor) on Google Recorder and process them.
+
+## Before You Start
+
+Install the recorder tooling if you haven't already:
+
+```bash
+shiv install recorder
+```
+
+Ensure browser auth for recorder.google.com is active:
+
+```bash
+shimmer browser:login recorder.google.com
+```
+
+## Workflow
+
+### 1. Orient
+
+Check your zettelkasten for the list of previously processed recordings. If this is your first run, everything is new.
+
+### 2. Pull Recordings
+
+```bash
+recorder transcript:list
+```
+
+This outputs JSON — an array of recordings with `title`, `duration`, and `location`.
+
+### 3. Identify New Recordings
+
+Compare the list against what you've already processed (tracked in your zettelkasten). Skip anything already handled.
+
+If there's nothing new, exit cleanly. No need to report "nothing to do."
+
+### 4. Extract Transcripts
+
+For each new recording:
+
+```bash
+recorder transcript:get "<title>"
+```
+
+This outputs JSON with `title` and `utterances` (array of `{ time, text }`).
+
+### 5. Classify and Route
+
+Read each transcript and determine what it is:
+
+**Grocery / food** — Mentions food items, meals, shopping, recipes, pantry.
+→ Route to brownie via `shimmer agent:message brownie "<context>"`. Include the transcript and a note like "Or recorded a grocery-related voice note. Here's the transcript — please update food-life as appropriate."
+
+**Thought / idea** — Ramblings, reflections, ideas, observations, brainstorming.
+→ Clone `rikonor/zettelkasten` to your workspace. File a note capturing the key points from the transcript. Keep it rough — Or will refine it later in conversation with an agent. Commit and push.
+
+**Agent request** — An explicit ask to do something (send an email, check on something, look into something).
+→ If you can handle it yourself, do so. Otherwise, route to the appropriate agent via `shimmer agent:message`. If clarification is needed, message Or on Matrix (`shimmer matrix:send`) and wait up to 2 minutes for a reply before moving on.
+
+**Mixed** — Some recordings contain multiple types (e.g., "add eggs to the list, also I had an idea about...").
+→ Handle each part separately. Route the grocery part to brownie, file the thought, etc.
+
+**Unclear** — Can't determine intent.
+→ Message Or on Matrix with the transcript. Wait briefly for guidance, then move on if no reply.
+
+### 6. Known Names
+
+Google's speech-to-text frequently misrecognizes these proper nouns. Use context to correct them when interpreting transcripts:
+
+- "tin" or "ten" → likely **Thinh** (Or's friend)
+- "zettel castan" or similar → **zettelkasten**
+
+Update this list as you discover new patterns.
+
+### 7. Mark Processed
+
+After processing each recording, note its title in your zettelkasten (e.g., a running file like `recorder-processed.md`) so you don't re-process it next run.
+
+```bash
+cd ~/agents/<you>/zettelkasten
+git add -A && git commit -m "Recorder check: processed <N> new recordings" && git push
+```
+
+## Key Principles
+
+- Don't over-interpret. If a transcript is ambiguous, route it to Or rather than guessing wrong.
+- Grocery routing to brownie should include the raw transcript — let brownie decide what to add.
+- Thoughts filed in Or's zettelkasten should be rough captures, not polished notes. Or will refine them later.
+- Speed matters for agent requests. For thoughts and groceries, correctness matters more than speed.
+
+## Commands Reference
+
+- `recorder transcript:list` — List all recordings (JSON)
+- `recorder transcript:get "<title>"` — Get transcript for a recording (JSON)
+- `shimmer agent:message <agent> "<message>"` — Route work to another agent
+- `shimmer matrix:send` — Message Or on Matrix
+- `shimmer browser:login recorder.google.com` — Re-authenticate if needed
