@@ -41,7 +41,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      # Workspace layout: everything in ~/
       REPO_NAME: ${{ github.event.repository.name }}
     steps:
       - name: Checkout current repo
@@ -50,49 +49,40 @@ jobs:
           token: ${{ secrets.AGENT_GITHUB_PAT }}
           path: repo
 
-      - name: Checkout shimmer
-        uses: actions/checkout@v4
-        with:
-          repository: KnickKnackLabs/shimmer
-          token: ${{ secrets.AGENT_GITHUB_PAT }}
-          path: shimmer
-
-      - name: Cache Elixir build
-        uses: actions/cache@v4
-        with:
-          path: |
-            shimmer/cli/_build
-            shimmer/cli/deps
-          key: ${{ runner.os }}-elixir-${{ hashFiles('shimmer/cli/mix.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-elixir-
-
       - name: Setup workspace
         run: |
-          # Move checkouts to ~/ for cleaner workspace
           mv repo "$HOME/$REPO_NAME"
-          mv shimmer "$HOME/shimmer"
           mkdir -p "$HOME/agents/${{ inputs.agent }}"
-          echo "Workspace: ~/$REPO_NAME, ~/shimmer, ~/agents/${{ inputs.agent }}"
 
       - name: Set up mise
         uses: jdx/mise-action@v3
         with:
           install: true
 
-      - name: Install shimmer
-        run: cd ~/shimmer && mise trust && mise install
+      - name: Install shiv
+        run: curl -fsSL https://shiv.knacklabs.co/install.sh | bash
 
-      - name: Setup shimmer command
+      - name: Install shimmer
+        run: shiv install shimmer
+
+      - name: Compute shimmer CLI cache key
+        id: shimmer
         run: |
-          # Create shimmer wrapper script so agents can use `shimmer <task>`
-          mkdir -p "$HOME/.local/bin"
-          cat > "$HOME/.local/bin/shimmer" << 'EOF'
-          #!/bin/bash
-          CALLER_PWD="$PWD" mise -C "$HOME/shimmer" run "$@"
-          EOF
-          chmod +x "$HOME/.local/bin/shimmer"
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          SHIMMER_DIR="$(shiv which shimmer)"
+          echo "mix-lock-hash=$(sha256sum "$SHIMMER_DIR/cli/mix.lock" | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+
+      - name: Cache shimmer CLI build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/share/shiv/packages/shimmer/cli/_build
+            ~/.local/share/shiv/packages/shimmer/cli/deps
+          key: ${{ runner.os }}-shimmer-cli-${{ steps.shimmer.outputs.mix-lock-hash }}
+          restore-keys: |
+            ${{ runner.os }}-shimmer-cli-
+
+      - name: Build shimmer CLI
+        run: shimmer cli:build
 
       - name: Install Claude Code
         run: curl -fsSL https://claude.ai/install.sh | bash -s -- stable
@@ -107,28 +97,10 @@ jobs:
           EMAIL_PASSWORD: ${{ secrets.AGENT_EMAIL_PASSWORD }}
         run: shimmer email:setup ${{ inputs.agent }}
 
-      - name: Configure git
-        run: |
-          # Global config so it applies to all repos (main repo, zettelkasten, etc.)
-          git config --global user.name "${{ inputs.agent }}"
-          git config --global user.email "${{ inputs.agent }}@ricon.family"
-          git config --global commit.gpgsign true
-
-      - name: Create working branch
-        id: branch
-        run: |
-          cd "$HOME/$REPO_NAME"
-          BRANCH_NAME="${{ inputs.agent }}/run-$(date +%Y%m%d-%H%M%S)"
-          git checkout -b "$BRANCH_NAME"
-          echo "name=$BRANCH_NAME" >> $GITHUB_OUTPUT
-
       - name: Setup Matrix
         env:
           MATRIX_PASSWORD: ${{ secrets.AGENT_MATRIX_PASSWORD }}
         run: shimmer matrix:login ${{ inputs.agent }}
-
-      - name: Accept Matrix room invites
-        run: shimmer matrix:invites -u ${{ inputs.agent }}
 
       - name: Clone zettelkasten
         env:
@@ -144,12 +116,6 @@ jobs:
           else
             echo "No zettelkasten found for ${{ inputs.agent }}, skipping"
           fi
-
-      - name: Build CLI
-        run: |
-          cd ~/shimmer/cli
-          mix local.hex --force
-          mix deps.get
 
       - name: Build system prompt
         id: prompt
@@ -187,7 +153,6 @@ jobs:
           cd "$HOME/$REPO_NAME"
           echo "### AGENT SESSION START ###"
 
-          # Build command with optional flags using array to preserve quoting
           CMD=(shimmer agent:run "${{ inputs.agent }}" "$INPUT_MESSAGE"
             --system-prompt-file "${{ steps.prompt.outputs.file }}"
             --timeout "$RUN_TIMEOUT")
