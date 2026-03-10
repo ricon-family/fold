@@ -63,6 +63,8 @@ jobs:
         run: curl -fsSL https://shiv.knacklabs.co/install.sh | bash
 
       - name: Install shimmer
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
         run: shiv install shimmer
 
       - name: Compute shimmer CLI cache key
