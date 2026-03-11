@@ -145,6 +145,11 @@ jobs:
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
+          GIT_AUTHOR_NAME: ${{ inputs.agent }}
+          GIT_COMMITTER_NAME: ${{ inputs.agent }}
+          GIT_AUTHOR_EMAIL: ${{ inputs.agent }}@ricon.family
+          GIT_COMMITTER_EMAIL: ${{ inputs.agent }}@ricon.family
+          AGENT_HOME: $HOME/${{ github.event.repository.name }}
           RUN_TIMEOUT: 540
           AGENT_PASSPHRASE: ${{ secrets.AGENT_PASSPHRASE }}
           BROWSER_GITHUB_COM_USERNAME: ${{ inputs.agent }}-ricon
