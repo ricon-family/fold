@@ -35,6 +35,14 @@ on:
         required: false
       AGENT_GITHUB_PASSWORD:
         required: false
+      AGENT_B2_ENDPOINT:
+        required: false
+      AGENT_B2_KEY_ID:
+        required: false
+      AGENT_B2_APPLICATION_KEY:
+        required: false
+      AGENT_B2_BUCKET:
+        required: false
 
 jobs:
   run:
@@ -104,6 +112,18 @@ jobs:
           MATRIX_PASSWORD: ${{ secrets.AGENT_MATRIX_PASSWORD }}
         run: shimmer matrix:login ${{ inputs.agent }}
 
+      - name: Setup blob storage
+        env:
+          B2_ENDPOINT: ${{ secrets.AGENT_B2_ENDPOINT }}
+          B2_KEY_ID: ${{ secrets.AGENT_B2_KEY_ID }}
+          B2_APPLICATION_KEY: ${{ secrets.AGENT_B2_APPLICATION_KEY }}
+        run: |
+          if [ -n "$B2_ENDPOINT" ] && [ -n "$B2_KEY_ID" ] && [ -n "$B2_APPLICATION_KEY" ]; then
+            shimmer blob:setup ${{ inputs.agent }}
+          else
+            echo "B2 credentials not configured, skipping blob storage setup"
+          fi
+
       - name: Clone zettelkasten
         env:
           GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
@@ -153,6 +173,7 @@ jobs:
           GIT_AUTHOR_NAME: ${{ inputs.agent }}
           GIT_COMMITTER_EMAIL: ${{ inputs.agent }}@ricon.family
           GIT_COMMITTER_NAME: ${{ inputs.agent }}
+          B2_BUCKET: ${{ secrets.AGENT_B2_BUCKET }}
           INPUT_MESSAGE: ${{ inputs.message }}
           INPUT_MODEL: ${{ inputs.model }}
           RUN_TIMEOUT: 900
