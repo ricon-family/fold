@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+#MISE description="List configured Claude Code hooks"
+#USAGE flag "--scope <scope>" default="user" help="Settings scope: user, project, or local"
+#USAGE flag "--event <event>" help="Filter by event name (e.g., SessionStart)"
+#USAGE flag "--json" help="Output raw JSON"
+
+set -eu
+
+SCOPE="${usage_scope:-user}"
+EVENT="${usage_event:-}"
+JSON="${usage_json:-false}"
+
+case "$SCOPE" in
+  user)    SETTINGS_FILE="$HOME/.claude/settings.json" ;;
+  project) SETTINGS_FILE="${CALLER_PWD:-.}/.claude/settings.json" ;;
+  local)   SETTINGS_FILE="${CALLER_PWD:-.}/.claude/settings.local.json" ;;
+  *)       echo "Error: scope must be user, project, or local" >&2; exit 1 ;;
+esac
+
+if [ ! -f "$SETTINGS_FILE" ]; then
+  echo "No settings file at $SETTINGS_FILE" >&2
+  exit 0
+fi
+
+HAS_HOOKS=$(jq -e '.hooks // empty | keys | length > 0' "$SETTINGS_FILE" 2>/dev/null) || true
+if [ "$HAS_HOOKS" != "true" ]; then
+  echo "No hooks configured in $SETTINGS_FILE"
+  exit 0
+fi
+
+if [ "$JSON" = "true" ]; then
+  if [ -n "$EVENT" ]; then
+    jq --arg event "$EVENT" '.hooks[$event] // empty' "$SETTINGS_FILE"
+  else
+    jq '.hooks' "$SETTINGS_FILE"
+  fi
+  exit 0
+fi
+
+# Human-readable output
+if [ -n "$EVENT" ]; then
+  EVENTS="$EVENT"
+else
+  EVENTS=$(jq -r '.hooks | keys[]' "$SETTINGS_FILE")
+fi
+
+for event in $EVENTS; do
+  echo "$event:"
+  jq -r --arg e "$event" '
+    .hooks[$e][]? |
+    .matcher as $m |
+    .hooks[]? |
+    "  \(.type): \(.command // .url // .prompt // "?")" +
+    (if $m != "" then " [matcher: \($m)]" else "" end)
+  ' "$SETTINGS_FILE"
+  echo ""
+done

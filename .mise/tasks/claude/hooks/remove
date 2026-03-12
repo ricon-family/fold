@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+#MISE description="Remove a Claude Code hook"
+#USAGE arg "<event>" help="Hook event (e.g., SessionStart, PreToolUse, Stop)"
+#USAGE arg "<command>" help="Shell command to match for removal"
+#USAGE flag "--matcher <matcher>" help="Matcher regex to narrow removal"
+#USAGE flag "--scope <scope>" default="user" help="Settings scope: user, project, or local"
+
+set -eu
+
+EVENT="$usage_event"
+COMMAND="$usage_command"
+MATCHER="${usage_matcher:-}"
+SCOPE="${usage_scope:-user}"
+
+case "$SCOPE" in
+  user)    SETTINGS_FILE="$HOME/.claude/settings.json" ;;
+  project) SETTINGS_FILE="${CALLER_PWD:-.}/.claude/settings.json" ;;
+  local)   SETTINGS_FILE="${CALLER_PWD:-.}/.claude/settings.local.json" ;;
+  *)       echo "Error: scope must be user, project, or local" >&2; exit 1 ;;
+esac
+
+if [ ! -f "$SETTINGS_FILE" ]; then
+  echo "No settings file at $SETTINGS_FILE" >&2
+  exit 1
+fi
+
+# Check it exists
+EXISTING=$(jq --arg event "$EVENT" --arg matcher "$MATCHER" --arg cmd "$COMMAND" '
+  .hooks[$event] // [] | .[] |
+  select(.matcher == $matcher) |
+  .hooks[] | select(.command == $cmd)
+' "$SETTINGS_FILE" 2>/dev/null)
+
+if [ -z "$EXISTING" ]; then
+  echo "No matching hook found for $EVENT (matcher: \"$MATCHER\", command: \"$COMMAND\")" >&2
+  exit 1
+fi
+
+# Remove the hook handler, then clean up empty matcher groups and events
+jq --arg event "$EVENT" \
+   --arg matcher "$MATCHER" \
+   --arg cmd "$COMMAND" '
+  # Remove the command from matching groups
+  .hooks[$event] = [
+    .hooks[$event][] |
+    if .matcher == $matcher then
+      .hooks = [.hooks[] | select(.command != $cmd)]
+    else . end
+  ] |
+  # Remove empty matcher groups
+  .hooks[$event] = [.hooks[$event][] | select((.hooks | length) > 0)] |
+  # Remove empty events
+  if (.hooks[$event] | length) == 0 then del(.hooks[$event]) else . end |
+  # Remove empty hooks object
+  if (.hooks | length) == 0 then del(.hooks) else . end
+' "$SETTINGS_FILE" > "${SETTINGS_FILE}.tmp" \
+  && mv "${SETTINGS_FILE}.tmp" "$SETTINGS_FILE"
+
+echo "Removed $EVENT hook: $COMMAND" >&2

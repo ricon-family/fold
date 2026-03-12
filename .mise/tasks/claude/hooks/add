@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+#MISE description="Add a Claude Code hook"
+#USAGE arg "<event>" help="Hook event (e.g., SessionStart, PreToolUse, Stop)"
+#USAGE arg "<command>" help="Shell command to run"
+#USAGE flag "--matcher <matcher>" help="Matcher regex to filter when the hook fires"
+#USAGE flag "--timeout <seconds>" help="Timeout in seconds"
+#USAGE flag "--async" help="Run hook asynchronously"
+#USAGE flag "--scope <scope>" default="user" help="Settings scope: user, project, or local"
+
+set -eu
+
+EVENT="$usage_event"
+COMMAND="$usage_command"
+MATCHER="${usage_matcher:-}"
+TIMEOUT="${usage_timeout:-}"
+ASYNC="${usage_async:-false}"
+SCOPE="${usage_scope:-user}"
+
+case "$SCOPE" in
+  user)    SETTINGS_FILE="$HOME/.claude/settings.json" ;;
+  project) SETTINGS_FILE="${CALLER_PWD:-.}/.claude/settings.json" ;;
+  local)   SETTINGS_FILE="${CALLER_PWD:-.}/.claude/settings.local.json" ;;
+  *)       echo "Error: scope must be user, project, or local" >&2; exit 1 ;;
+esac
+
+# Ensure settings file exists
+if [ ! -f "$SETTINGS_FILE" ]; then
+  echo "{}" > "$SETTINGS_FILE"
+fi
+
+# Build the hook handler object
+HOOK_JSON=$(jq -n \
+  --arg type "command" \
+  --arg command "$COMMAND" \
+  '{type: $type, command: $command}')
+
+if [ -n "$TIMEOUT" ]; then
+  HOOK_JSON=$(echo "$HOOK_JSON" | jq --argjson t "$TIMEOUT" '. + {timeout: $t}')
+fi
+
+if [ "$ASYNC" = "true" ]; then
+  HOOK_JSON=$(echo "$HOOK_JSON" | jq '. + {async: true}')
+fi
+
+# Check for duplicate (same event + matcher + command)
+EXISTING=$(jq --arg event "$EVENT" --arg matcher "$MATCHER" --arg cmd "$COMMAND" '
+  .hooks[$event] // [] | .[] |
+  select(.matcher == $matcher) |
+  .hooks[] | select(.command == $cmd)
+' "$SETTINGS_FILE" 2>/dev/null)
+
+if [ -n "$EXISTING" ]; then
+  echo "Hook already exists for $EVENT (matcher: \"$MATCHER\", command: \"$COMMAND\")" >&2
+  exit 0
+fi
+
+# Add the hook — find existing matcher group or create new one
+jq --arg event "$EVENT" \
+   --arg matcher "$MATCHER" \
+   --argjson hook "$HOOK_JSON" '
+  .hooks //= {} |
+  .hooks[$event] //= [] |
+  # Find index of matcher group with matching matcher
+  (.hooks[$event] | to_entries | map(select(.value.matcher == $matcher)) | first // null) as $group |
+  if $group != null then
+    .hooks[$event][$group.key].hooks += [$hook]
+  else
+    .hooks[$event] += [{"matcher": $matcher, "hooks": [$hook]}]
+  end
+' "$SETTINGS_FILE" > "${SETTINGS_FILE}.tmp" \
+  && mv "${SETTINGS_FILE}.tmp" "$SETTINGS_FILE"
+
+echo "Added $EVENT hook: $COMMAND" >&2
