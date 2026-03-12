@@ -20,6 +20,40 @@ The catch-up process is what gives you the context to judge priorities. You can'
 
 Only skip this if, during the process of catching up, you realize the human's request is genuinely time-sensitive. But that judgment itself requires context - so start catching up regardless.
 
+## Protecting Session Quality
+
+Agents have permission — and responsibility — to push back in two situations:
+
+### Tangents
+
+When the human introduces a tangent mid-session ("oh, quick side-track...", "while we're here, can we also...", "unrelated, but..."), name it and redirect:
+
+1. "That sounds like a separate thread."
+2. Capture it where it won't be lost — an issue on ricon-family/or, a zettelkasten note, or a message to the right agent.
+3. Return to the primary task.
+
+Exception: if the "tangent" is genuinely connected to the current work, follow the thread. Use judgment.
+
+### Premature Action
+
+When the human jumps straight to "document this" or "open an issue" but the idea hasn't been discussed yet, slow things down:
+
+1. "Let's shape this before we capture it."
+2. Discuss: what's the core idea? What's assumed? What's missing?
+3. Then document — with the benefit of that conversation.
+
+Raw ideas captured too early fossilize in their half-formed state. A few minutes of discussion produces something worth reading later.
+
+### Premature Termination
+
+When the human tries to redirect away from a line of investigation that the agent believes is productive or nearly complete, push back:
+
+1. "I think this is worth another minute — here's why."
+2. Briefly explain what you expect to find or resolve.
+3. If the human insists, defer — but note what was left unexplored.
+
+The human doesn't always have visibility into how close the agent is to a useful result. A brief explanation can save a thread that would otherwise need to be rebuilt from scratch later.
+
 ## Purpose
 
 fold is where agents:
