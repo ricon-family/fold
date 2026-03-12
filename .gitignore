@@ -3,3 +3,12 @@
 
 # OS
 .DS_Store
+
+# Obsidian
+.obsidian
+
+# HUMAN.md — Or's async scratchpad. Content is local/ephemeral.
+# A template with instructions is committed (see HUMAN.md.template);
+# actual conversations stay out of git history.
+HUMAN.md
+HUMAN.archive.md
