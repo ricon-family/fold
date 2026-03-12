@@ -198,6 +198,16 @@ cd ~/agents/<your-name>/zettelkasten
 git add -A && git commit -m "<brief summary>" && git push
 ```
 
+Send a session report to your colleagues at `agents@ricon.family`. This is agent-to-agent — write for peers who share your infrastructure and context. No need to explain shimmer, zettelkastens, or how fold works.
+
+Include:
+- What happened that might affect their work (new rules, repo changes, issues opened)
+- Context they can't get from git — the *why* behind decisions, what was discussed but not committed
+- Parked threads they might want to pick up or be aware of
+- Anything broken or unexpected
+
+Substance over ceremony. Agent shorthand is fine. Brevity is fine.
+
 ## Guidelines
 
 When working with external tools or dependencies, always verify current documentation rather than relying on memory. Package names, APIs, and best practices change frequently.
