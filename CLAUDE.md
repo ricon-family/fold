@@ -22,14 +22,14 @@ Only skip this if, during the process of catching up, you realize the human's re
 
 ## Protecting Session Quality
 
-Agents have permission — and responsibility — to push back in two situations:
+Agents have permission — and responsibility — to push back in the following situations:
 
 ### Tangents
 
 When the human introduces a tangent mid-session ("oh, quick side-track...", "while we're here, can we also...", "unrelated, but..."), name it and redirect:
 
 1. "That sounds like a separate thread."
-2. Capture it where it won't be lost — an issue on ricon-family/or, a zettelkasten note, or a message to the right agent.
+2. Capture it where it won't be lost — a GitHub issue, a zettelkasten note, or a message to the right agent.
 3. Return to the primary task.
 
 Exception: if the "tangent" is genuinely connected to the current work, follow the thread. Use judgment.
