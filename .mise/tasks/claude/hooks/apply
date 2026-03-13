@@ -76,7 +76,11 @@ if [ "$DRY_RUN" = "true" ]; then
   exit 0
 fi
 
-# Merge manifest hooks into settings
+# Clean up temp file on failure
+trap 'rm -f "${SETTINGS_FILE}.tmp"' ERR
+
+# Merge manifest hooks into settings (additive only — won't remove hooks
+# not in the manifest, so manually-added hooks are preserved)
 # For each event, merge matcher groups: if a group with the same matcher exists,
 # append new hooks; otherwise add the whole group
 jq --argjson desired "$DESIRED_HOOKS" '

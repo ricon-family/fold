@@ -54,6 +54,9 @@ if [ -n "$EXISTING" ]; then
   exit 0
 fi
 
+# Clean up temp file on failure
+trap 'rm -f "${SETTINGS_FILE}.tmp"' ERR
+
 # Add the hook — find existing matcher group or create new one
 jq --arg event "$EVENT" \
    --arg matcher "$MATCHER" \

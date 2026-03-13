@@ -5,7 +5,7 @@
       "hooks": [
         {
           "type": "command",
-          "command": "bash -c 'SID=$(jq -r .session_id); [ -n \"$CLAUDE_ENV_FILE\" ] && echo \"export CLAUDE_CODE_SESSION_ID=$SID\" >> \"$CLAUDE_ENV_FILE\"'"
+          "command": "bash -c 'SID=$(jq -r .session_id); [ -n \"$SID\" ] && [ \"$SID\" != \"null\" ] && [ -n \"$CLAUDE_ENV_FILE\" ] && echo \"export CLAUDE_CODE_SESSION_ID=$SID\" >> \"$CLAUDE_ENV_FILE\"'"
         }
       ]
     }

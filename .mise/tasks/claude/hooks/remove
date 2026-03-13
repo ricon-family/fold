@@ -36,6 +36,9 @@ if [ -z "$EXISTING" ]; then
   exit 1
 fi
 
+# Clean up temp file on failure
+trap 'rm -f "${SETTINGS_FILE}.tmp"' ERR
+
 # Remove the hook handler, then clean up empty matcher groups and events
 jq --arg event "$EVENT" \
    --arg matcher "$MATCHER" \
