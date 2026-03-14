@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+#MISE description="Apply hooks from the fold manifest to Claude Code settings"
+#USAGE flag "--dry-run" help="Show what would change without applying"
+#USAGE flag "--scope <scope>" default="user" help="Settings scope: user, project, or local"
+
+set -eu
+
+DRY_RUN="${usage_dry_run:-false}"
+SCOPE="${usage_scope:-user}"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+MANIFEST="$REPO_DIR/claude/hooks.json"
+
+case "$SCOPE" in
+  user)    SETTINGS_FILE="$HOME/.claude/settings.json" ;;
+  project) SETTINGS_FILE="${CALLER_PWD:-.}/.claude/settings.json" ;;
+  local)   SETTINGS_FILE="${CALLER_PWD:-.}/.claude/settings.local.json" ;;
+  *)       echo "Error: scope must be user, project, or local" >&2; exit 1 ;;
+esac
+
+if [ ! -f "$MANIFEST" ]; then
+  echo "Error: No hooks manifest at $MANIFEST" >&2
+  exit 1
+fi
+
+# Ensure settings file exists
+if [ ! -f "$SETTINGS_FILE" ]; then
+  echo "{}" > "$SETTINGS_FILE"
+fi
+
+# Compare current hooks with manifest
+CURRENT_HOOKS=$(jq '.hooks // {}' "$SETTINGS_FILE")
+DESIRED_HOOKS=$(jq '.' "$MANIFEST")
+
+# Collect what needs to change
+ADDED=0
+ALREADY=0
+
+# Iterate over each event in the manifest
+for EVENT in $(echo "$DESIRED_HOOKS" | jq -r 'keys[]'); do
+  # Iterate over each matcher group
+  GROUP_COUNT=$(echo "$DESIRED_HOOKS" | jq --arg e "$EVENT" '.[$e] | length')
+  for ((g=0; g<GROUP_COUNT; g++)); do
+    MATCHER=$(echo "$DESIRED_HOOKS" | jq -r --arg e "$EVENT" --argjson g "$g" '.[$e][$g].matcher')
+    HOOK_COUNT=$(echo "$DESIRED_HOOKS" | jq --arg e "$EVENT" --argjson g "$g" '.[$e][$g].hooks | length')
+
+    for ((h=0; h<HOOK_COUNT; h++)); do
+      HOOK=$(echo "$DESIRED_HOOKS" | jq --arg e "$EVENT" --argjson g "$g" --argjson h "$h" '.[$e][$g].hooks[$h]')
+      CMD=$(echo "$HOOK" | jq -r '.command // empty')
+
+      # Check if this hook already exists
+      EXISTS=$(echo "$CURRENT_HOOKS" | jq --arg e "$EVENT" --arg m "$MATCHER" --arg cmd "$CMD" '
+        .[$e] // [] | .[] | select(.matcher == $m) | .hooks[] | select(.command == $cmd)
+      ' 2>/dev/null)
+
+      if [ -n "$EXISTS" ]; then
+        ALREADY=$((ALREADY + 1))
+      else
+        ADDED=$((ADDED + 1))
+        if [ "$DRY_RUN" = "true" ]; then
+          echo "Would add $EVENT hook: $CMD" >&2
+        fi
+      fi
+    done
+  done
+done
+
+if [ "$ADDED" -eq 0 ]; then
+  echo "All hooks already applied ($ALREADY present)" >&2
+  exit 0
+fi
+
+if [ "$DRY_RUN" = "true" ]; then
+  echo "$ADDED hook(s) to add, $ALREADY already present" >&2
+  exit 0
+fi
+
+# Clean up temp file on failure
+trap 'rm -f "${SETTINGS_FILE}.tmp"' ERR
+
+# Merge manifest hooks into settings (additive only — won't remove hooks
+# not in the manifest, so manually-added hooks are preserved)
+# For each event, merge matcher groups: if a group with the same matcher exists,
+# append new hooks; otherwise add the whole group
+jq --argjson desired "$DESIRED_HOOKS" '
+  .hooks //= {} |
+  reduce ($desired | keys[]) as $event (.;
+    reduce ($desired[$event] | to_entries[]) as $group (.;
+      ($group.value.matcher) as $matcher |
+      reduce ($group.value.hooks[] ) as $hook (.;
+        # Check if this hook already exists
+        if (.hooks[$event] // [] | [.[] | select(.matcher == $matcher) | .hooks[] | select(.command == $hook.command)] | length) > 0
+        then .
+        else
+          # Find or create matcher group
+          if (.hooks[$event] // [] | [to_entries[] | select(.value.matcher == $matcher)] | length) > 0
+          then
+            .hooks[$event] = [.hooks[$event][] | if .matcher == $matcher then .hooks += [$hook] else . end]
+          else
+            .hooks[$event] = (.hooks[$event] // []) + [{"matcher": $matcher, "hooks": [$hook]}]
+          end
+        end
+      )
+    )
+  )
+' "$SETTINGS_FILE" > "${SETTINGS_FILE}.tmp" \
+  && mv "${SETTINGS_FILE}.tmp" "$SETTINGS_FILE"
+
+echo "Applied $ADDED hook(s), $ALREADY already present" >&2
