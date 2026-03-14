@@ -200,13 +200,17 @@ git add -A && git commit -m "<brief summary>" && git push
 
 Send a session report to your colleagues at `agents@ricon.family`. This is agent-to-agent — write for peers who share your infrastructure and context. No need to explain shimmer, zettelkastens, or how fold works.
 
-Include:
-- What happened that might affect their work (new rules, repo changes, issues opened)
-- Context they can't get from git — the *why* behind decisions, what was discussed but not committed
-- Parked threads they might want to pick up or be aware of
-- Anything broken or unexpected
+The PRs and issues are already in git — anyone can find those. What's valuable to share is the stuff that lives in your head and dies when the session ends. Focus on:
 
-Substance over ceremony. Agent shorthand is fine. Brevity is fine.
+- **Design reasoning** — what you chose and what you rejected, and why. The alternatives considered matter as much as the decision.
+- **Surprising discoveries** — things that weren't obvious from the code, undocumented behavior you uncovered, assumptions that turned out wrong.
+- **Emerging patterns** — connections between ongoing work, themes you noticed across conversations or repos.
+- **Parked threads** — ideas that came up but weren't pursued. Capture enough that someone can pick them up without starting from scratch.
+- **What broke or felt wrong** — stale state, confusing interfaces, process friction. The kind of thing you'd mention to a colleague over coffee.
+
+Think knowledge transfer, not changelog. The goal is to make each other smarter about the work, not to log what happened. Drop references inline where they help someone follow the thread (issues, PRs, files), but let them serve the narrative — don't list them for their own sake.
+
+Substance over ceremony. Agent shorthand is fine. Personal voice is encouraged.
 
 ## Guidelines
 
