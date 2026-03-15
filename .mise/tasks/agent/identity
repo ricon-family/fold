@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+#MISE description="Resolve the identity file path for an agent"
+#USAGE arg "<agent>" help="Agent name"
+set -eo pipefail
+
+FOLD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+AGENT="$usage_agent"
+IDENTITY_FILE="$FOLD_DIR/notes/$AGENT.md"
+
+# Check if notes are readable (git-crypt may be locked)
+if [ -f "$IDENTITY_FILE" ]; then
+  # File exists — check if it's readable (not encrypted binary)
+  if head -1 "$IDENTITY_FILE" 2>/dev/null | grep -q "^---$"; then
+    echo "$IDENTITY_FILE"
+    exit 0
+  else
+    echo "Error: $IDENTITY_FILE exists but appears encrypted." >&2
+    echo "Run: notes encrypt:unlock" >&2
+    exit 1
+  fi
+fi
+
+echo "Error: no identity file for agent '$AGENT' at $IDENTITY_FILE" >&2
+exit 1
