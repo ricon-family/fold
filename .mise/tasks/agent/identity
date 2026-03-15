@@ -6,18 +6,14 @@ set -eo pipefail
 AGENT="$usage_agent"
 IDENTITY_FILE="$MISE_PROJECT_ROOT/notes/$AGENT.md"
 
-# Check if notes are readable (git-crypt may be locked)
-if [ -f "$IDENTITY_FILE" ]; then
-  # File exists — check if it's readable (not encrypted binary)
-  if head -1 "$IDENTITY_FILE" 2>/dev/null | grep -q "^---$"; then
-    echo "$IDENTITY_FILE"
-    exit 0
-  else
-    echo "Error: $IDENTITY_FILE exists but appears encrypted." >&2
-    echo "Run: notes encrypt:unlock" >&2
-    exit 1
-  fi
+if [ ! -f "$IDENTITY_FILE" ]; then
+  echo "Error: no identity file for agent '$AGENT' at $IDENTITY_FILE" >&2
+  exit 1
 fi
 
-echo "Error: no identity file for agent '$AGENT' at $IDENTITY_FILE" >&2
-exit 1
+echo "$IDENTITY_FILE"
+
+# Warn if file appears encrypted (non-blocking — path is still returned)
+if file -b "$IDENTITY_FILE" 2>/dev/null | grep -q "data"; then
+  echo "Warning: $IDENTITY_FILE appears encrypted. Run: notes encrypt:unlock" >&2
+fi
