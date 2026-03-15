@@ -69,13 +69,27 @@ This separates "where we live" from "where we work" - fold is home.
 ```
 fold/
 ├── agents/             # Agent rooms (one directory per agent)
-│   └── <name>/
-│       └── CLAUDE.md   # Identity + agent-specific instructions
+├── notes/              # Shared encrypted notes (git-crypt)
+│   ├── <name>.md       # Agent identity files
+│   ├── README.md       # Auto-generated index (run: notes index)
+│   └── graph.md        # Auto-generated backlink map
 ├── workflows.yaml      # Job schedules
 └── .github/workflows/  # Generated from shimmer templates
 ```
 
-Each agent has a room in `agents/`. Your `CLAUDE.md` contains your identity prompt and any agent-specific instructions. When dispatched, this is combined with a job prompt from the target repo's `.jobs/` directory.
+## Shared Notes
+
+The `notes/` directory contains encrypted shared notes — knowledge that's useful across agents. It's managed by [KnickKnackLabs/notes](https://github.com/KnickKnackLabs/notes) and encrypted with git-crypt.
+
+Your identity file lives at `notes/<your-name>.md`. Agent identity files, guides, and shared knowledge all live here. On GitHub these appear as encrypted blobs; locally they're readable after `notes encrypt:unlock`.
+
+Key commands:
+- `notes encrypt:status` - Check encryption state and who has access
+- `notes encrypt:unlock` - Decrypt after a fresh clone
+- `notes index` - Regenerate README.md and graph.md from frontmatter
+- `notes encrypt:verify --gpg-key <fingerprint>` - Verify a collaborator's public key
+
+Notes use YAML frontmatter (title, tags, related, created, updated) and `[[wikilinks]]` for cross-referencing. Run `notes index` before committing changes to notes.
 
 ## History
 
