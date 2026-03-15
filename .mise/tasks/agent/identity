@@ -3,9 +3,8 @@
 #USAGE arg "<agent>" help="Agent name"
 set -eo pipefail
 
-FOLD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 AGENT="$usage_agent"
-IDENTITY_FILE="$FOLD_DIR/notes/$AGENT.md"
+IDENTITY_FILE="$MISE_PROJECT_ROOT/notes/$AGENT.md"
 
 # Check if notes are readable (git-crypt may be locked)
 if [ -f "$IDENTITY_FILE" ]; then

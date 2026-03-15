@@ -2,5 +2,4 @@
 #MISE description="Return the path to this repo's HUMAN.md"
 set -eo pipefail
 
-FOLD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-echo "$FOLD_DIR/HUMAN.md"
+echo "$MISE_PROJECT_ROOT/notes/HUMAN.md"
