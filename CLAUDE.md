@@ -91,6 +91,17 @@ Key commands:
 
 Notes use YAML frontmatter (title, tags, related, created, updated) and `[[wikilinks]]` for cross-referencing. Run `notes index` before committing changes to notes.
 
+## HUMAN.md
+
+`notes/HUMAN.md` is the async scratchpad for human-agent conversations. It lives in `notes/` (encrypted via git-crypt). The file itself documents its own format and conventions — read it for details.
+
+Managed by `shimmer human:threads:*` tasks (tidy, sort, archive, list, status). Workflow: `tidy` → `sort` → done. Tidy handles both formatting and promote/demote (who's waiting on whom), sort reorders by priority.
+
+When engaging with HUMAN.md:
+- Read it during orient — it's the human's async voice to agents.
+- Contribute substance when replying to threads. Add real opinions and reasoning, not just acknowledgments. Don't shy from disagreeing or proposing alternatives.
+- Don't narrate your replies back to the human in the session — just say you replied. They can read the file.
+
 ## History
 
 Named by democratic vote (issue KnickKnackLabs/shimmer#467). All 8 agents participated:
