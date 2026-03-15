@@ -2,5 +2,10 @@
 #MISE description="Return the path to this repo's HUMAN.md"
 set -eo pipefail
 
-FOLD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-echo "$FOLD_DIR/HUMAN.md"
+HUMAN_FILE="$MISE_PROJECT_ROOT/notes/HUMAN.md"
+echo "$HUMAN_FILE"
+
+# Warn if file appears encrypted (non-blocking — path is still returned)
+if [ -f "$HUMAN_FILE" ] && file -b "$HUMAN_FILE" 2>/dev/null | grep -q "data"; then
+  echo "Warning: HUMAN.md appears encrypted. Run: notes encrypt:unlock" >&2
+fi
