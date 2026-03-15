@@ -139,16 +139,25 @@ jobs:
             echo "No zettelkasten found for ${{ inputs.agent }}, skipping"
           fi
 
+      - name: Unlock encrypted files
+        run: |
+          if [ -d "$HOME/$REPO_NAME/.git/git-crypt" ]; then
+            notes encrypt:install 2>/dev/null || true
+            git -C "$HOME/$REPO_NAME" crypt unlock || echo "Warning: git-crypt unlock failed — encrypted files may not be readable"
+          fi
+
       - name: Build system prompt
         id: prompt
         run: |
           PROMPT_FILE=$(mktemp)
 
-          # Add agent identity
-          if [ -f "$HOME/$REPO_NAME/agents/${{ inputs.agent }}/CLAUDE.md" ]; then
-            cat "$HOME/$REPO_NAME/agents/${{ inputs.agent }}/CLAUDE.md" >> "$PROMPT_FILE"
+          # Add agent identity — resolve via the home's agent:identity task
+          AGENT_IDENTITY_FILE=$(mise -C "$HOME/$REPO_NAME" run -q agent:identity "${{ inputs.agent }}" 2>/dev/null) || true
+          if [ -n "$AGENT_IDENTITY_FILE" ] && [ -f "$AGENT_IDENTITY_FILE" ]; then
+            cat "$AGENT_IDENTITY_FILE" >> "$PROMPT_FILE"
           else
-            echo "Error: Agent identity not found: agents/${{ inputs.agent }}/CLAUDE.md"
+            echo "Error: could not resolve agent identity for '${{ inputs.agent }}'."
+            echo "Does $REPO_NAME provide an agent:identity task?"
             exit 1
           fi
 
