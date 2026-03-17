@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+#MISE description="List agents in this home"
+set -eo pipefail
+
+NOTES_DIR="$MISE_CONFIG_ROOT/notes"
+
+# Find identity files by scanning for "identity" in the tags frontmatter line
+for f in "$NOTES_DIR"/*.md; do
+  [ ! -f "$f" ] && continue
+  in_fm=false
+  while IFS= read -r line; do
+    if [[ "$line" == "---" ]]; then
+      if $in_fm; then break; else in_fm=true; continue; fi
+    fi
+    $in_fm || continue
+    if [[ "$line" == tags:* ]] && [[ "$line" == *"identity"* ]]; then
+      basename "$f" .md
+      break
+    fi
+  done < "$f"
+done
