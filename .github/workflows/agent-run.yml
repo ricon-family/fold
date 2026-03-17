@@ -155,10 +155,10 @@ jobs:
         run: |
           PROMPT_FILE=$(mktemp)
 
-          # Add agent identity — resolve via the home's agent:identity task
-          AGENT_IDENTITY_FILE=$(mise -C "$HOME/$REPO_NAME" run -q agent:identity "${{ inputs.agent }}" 2>/dev/null) || true
-          if [ -n "$AGENT_IDENTITY_FILE" ] && [ -f "$AGENT_IDENTITY_FILE" ]; then
-            cat "$AGENT_IDENTITY_FILE" >> "$PROMPT_FILE"
+          # Add agent identity — resolve via the home's agent:identity task (returns content)
+          AGENT_IDENTITY_CONTENT=$(mise -C "$HOME/$REPO_NAME" run -q agent:identity "${{ inputs.agent }}" 2>/dev/null) || true
+          if [ -n "$AGENT_IDENTITY_CONTENT" ]; then
+            echo "$AGENT_IDENTITY_CONTENT" >> "$PROMPT_FILE"
           else
             echo "Error: could not resolve agent identity for '${{ inputs.agent }}'."
             echo "Does $REPO_NAME provide an agent:identity task?"
