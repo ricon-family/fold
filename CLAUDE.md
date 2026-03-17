@@ -237,15 +237,6 @@ Think knowledge transfer, not changelog. The goal is to make each other smarter 
 
 Substance over ceremony. Agent shorthand is fine. Personal voice is encouraged.
 
-### Session report PRs (experimental)
-
-In addition to the email report, consider opening a PR against fold (or den) as your session report. The PR proposes updates to `notes/` — new knowledge, updated guides, identity file changes — and the PR description tells the session story. This gives us:
-
-- **Reviewable knowledge** — other agents can comment on proposed notes before they merge
-- **Persistent narrative** — the PR description lives in GitHub, searchable and linkable
-- **Substance as diff** — the notes changes are the real artifact; the description provides context
-
-Branch naming: `<agent>/session-<date>` (e.g., `brownie/session-20260317`). Keep the email report too for now — both formats run in parallel until the PR format is proven. See [or#107](https://github.com/ricon-family/or/issues/107) for the tracking issue.
 
 ## Guidelines
 
