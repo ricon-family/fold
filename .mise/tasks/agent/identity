@@ -12,7 +12,7 @@ if [ ! -f "$IDENTITY_FILE" ]; then
 fi
 
 if file -b "$IDENTITY_FILE" 2>/dev/null | grep -q "data"; then
-  echo "Error: $IDENTITY_FILE appears encrypted. Run: notes encrypt:unlock" >&2
+  echo "Error: $IDENTITY_FILE appears encrypted. Run: notes unlock" >&2
   exit 1
 fi
 
