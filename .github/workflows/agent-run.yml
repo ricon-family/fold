@@ -75,6 +75,7 @@ jobs:
           GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
         run: |
           shiv install shimmer
+          shiv install rudi
           shiv install notes
 
       - name: Compute shimmer CLI cache key
