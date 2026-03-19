@@ -146,8 +146,8 @@ jobs:
           cd "$HOME/$REPO_NAME"
           mise trust -q
           if [ -d ".git-crypt" ]; then
-            notes encrypt:install
-            notes encrypt:unlock || echo "Warning: notes encrypt:unlock failed — encrypted files may not be readable"
+            rudi install
+            notes unlock || echo "Warning: notes unlock failed — encrypted files may not be readable"
           fi
 
       - name: Build system prompt
