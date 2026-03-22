@@ -1,21 +1,128 @@
 #!/usr/bin/env bash
-#MISE description="Welcome message and setup verification"
+#MISE description="Fold overview — residents, threads, chat, notes, repo status"
+set -eo pipefail
 
-REPO_DIR="$MISE_PROJECT_ROOT"
+FOLD_DIR="$MISE_CONFIG_ROOT"
 
+# Colors
+HEADING=212   # pink
+SUBHEAD=81    # blue
+DIM=240       # gray
+
+# Section heading helper
+section() {
+  echo ""
+  gum style --bold --foreground "$HEADING" "$1"
+}
+
+# ━━━ Header ━━━
 echo ""
-echo "Welcome to fold!"
-echo ""
-echo "Home base for agents. The place we return to after working in the world."
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Commands:"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-echo "  fold welcome    This message"
-echo "  fold tasks      List all available tasks"
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-echo "Location: $REPO_DIR"
+gum style --bold --foreground "$HEADING" --border double --border-foreground "$DIM" \
+  --padding "0 2" "🏠 The Fold"
+gum style --faint "$(date '+%A, %B %-d, %Y · %-I:%M %p')"
+
+# ━━━ Residents ━━━
+section "Residents"
+if command -v fold &>/dev/null; then
+  agents=$(cd "$FOLD_DIR" && mise run -q agent:list 2>/dev/null || true)
+  if [ -n "$agents" ]; then
+    agent_rows=""
+    while IFS= read -r name; do
+      [ -z "$name" ] && continue
+      last_activity=$(cd "$FOLD_DIR" && git log -1 --format='%ar' --author="$name" 2>/dev/null || echo "unknown")
+      agent_rows+="${name},${last_activity}"$'\n'
+    done <<< "$agents"
+    printf "Agent,Last Active\n%s" "$agent_rows" \
+      | gum table --print --separator "," --border rounded \
+          --border.foreground "$DIM" --header.foreground "$SUBHEAD"
+  fi
+fi
+
+# ━━━ HUMAN.md ━━━
+HUMAN_FILE="$FOLD_DIR/notes/HUMAN.md"
+if [ -f "$HUMAN_FILE" ]; then
+  thread_summary=$(cd "$FOLD_DIR" && shimmer human:threads:status 2>/dev/null || echo "")
+  section "📝 HUMAN.md  ($thread_summary)"
+  (cd "$FOLD_DIR" && shimmer human:threads:list 2>/dev/null || true)
+fi
+
+# ━━━ Chat ━━━
+section "💬 Chat"
+if command -v chat &>/dev/null; then
+  chat list 2>/dev/null || gum style --faint "(no chat channels)"
+
+  # Quick reference — detect agent name from env (set by shimmer)
+  _agent="${AGENT_NAME:-${GIT_AUTHOR_NAME:-}}"
+  if [ -n "$_agent" ]; then
+    _agent_lower=$(echo "$_agent" | tr '[:upper:]' '[:lower:]')
+    echo ""
+    (
+      printf 'Action\tCommand\n'
+      printf 'Read new messages (all)\tchat read\n'
+      printf 'Read only @%s mentions\tchat read --as %s\n' "$_agent_lower" "$_agent_lower"
+      printf 'Send a message\tchat send --as %s <msg>\n' "$_agent_lower"
+      printf 'Wait until @mentioned\tchat wait --as %s\n' "$_agent_lower"
+      printf 'Peek without marking read\tchat read --peek\n'
+      printf 'Send to specific channel\tchat send --as %s --chat <channel> <msg>\n' "$_agent_lower"
+      printf 'List all channels\tchat list\n'
+    ) | gum table --print --separator "	" --border rounded \
+          --border.foreground "$DIM" --header.foreground "$DIM"
+  fi
+else
+  gum style --faint "(chat not installed — run: shiv install chat)"
+fi
+
+# ━━━ Notes ━━━
+NOTES_DIR="$FOLD_DIR/notes"
+if [ -d "$NOTES_DIR" ]; then
+  note_count=$(cd "$FOLD_DIR" && notes list -- --json 2>/dev/null | python3 -c "import sys, json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "?")
+  section "📓 Notes  (${note_count} notes)"
+  (cd "$FOLD_DIR" && notes list -- --recent 5 2>/dev/null || true)
+fi
+
+# ━━━ Repo & Status ━━━
+section "📦 Repo"
+cd "$FOLD_DIR"
+branch=$(git branch --show-current 2>/dev/null)
+dirty=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+
+if [ "$dirty" -gt 0 ]; then
+  branch_status="$branch ($dirty uncommitted)"
+else
+  branch_status="$branch (clean)"
+fi
+
+tracking=$(git rev-parse --abbrev-ref '@{upstream}' 2>/dev/null || echo "")
+sync_status=""
+if [ -n "$tracking" ]; then
+  ahead=$(git rev-list "$tracking..HEAD" --count 2>/dev/null || echo "0")
+  behind=$(git rev-list "HEAD..$tracking" --count 2>/dev/null || echo "0")
+  [ "$ahead" -gt 0 ] && sync_status+="↑${ahead} ahead "
+  [ "$behind" -gt 0 ] && sync_status+="↓${behind} behind "
+  [ -z "$sync_status" ] && sync_status="up to date"
+fi
+
+repo_rows="Branch,${branch_status}"$'\n'
+[ -n "$sync_status" ] && repo_rows+="Remote,${sync_status}"$'\n'
+
+# Open issues
+issue_count=$(GH_HOST=github.com gh issue list --repo ricon-family/fold --state open --json number --jq 'length' 2>/dev/null || echo "?")
+repo_rows+="Issues,${issue_count} open"$'\n'
+
+# Encryption
+if [ ! -d "$FOLD_DIR/.git/git-crypt" ]; then
+  enc_status="⚠ not set up → notes setup"
+elif ! command -v git-crypt &>/dev/null; then
+  enc_status="⚠ git-crypt not installed"
+elif git -C "$FOLD_DIR" crypt status -e &>/dev/null; then
+  enc_status="✓ unlocked"
+else
+  enc_status="⚠ locked → notes unlock"
+fi
+repo_rows+="Encryption,${enc_status}"
+
+printf "Property,Status\n%s\n" "$repo_rows" \
+  | gum table --print --separator "," --border rounded \
+      --border.foreground "$DIM" --header.foreground "$SUBHEAD"
+
 echo ""
