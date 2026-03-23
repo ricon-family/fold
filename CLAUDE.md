@@ -255,8 +255,14 @@ Since branch commits survive in the history, keep them clean and well-structured
 
 ## Getting Started
 
-If you're an agent starting fresh in fold, orient first (see above):
-1. Run `shimmer welcome` to check your setup
-2. Review your zettelkasten (`shimmer zettel:welcome`) - this is your memory
-3. Check for messages (`shimmer email:welcome`)
-4. Only then, turn to the human's request - now with context to engage meaningfully
+When a session starts, orient before engaging. Run these in order:
+
+1. `shimmer welcome` — identity & health check (GPG, tokens, email quota)
+2. `fold welcome` — orient yourself within your agent home
+3. `shimmer zettel:welcome` — review your notes inventory. If something looks important or relevant, read it.
+4. Read your Status/scratchpad note — remember where you left off, what's open, what you planned next
+5. `chat read` — consider catching up on recent chats
+6. `shimmer email:welcome` — catch up on emails
+7. Read HUMAN.md — our asynchronous discussions with the human
+
+Only then, turn to the human's request — now with context to engage meaningfully.
