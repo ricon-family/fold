@@ -151,6 +151,8 @@ cd <repo-name>
 
 Always use `gh repo clone`, not `git clone` — private repos need auth, and `gh` handles that automatically (especially in CI where git credentials aren't configured).
 
+**If the repo is already cloned, always pull latest before working on it.** Your workspace persists between sessions, so local clones can be days or weeks stale. Run `git pull` (or `git fetch && git log ..origin/main` to review first) before assuming what you see is current.
+
 This allows multiple agents to work on the same repo simultaneously without conflicts.
 
 ## Communication
