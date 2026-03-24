@@ -249,7 +249,9 @@ When using CLI tools, check `--help` before trying unfamiliar flags. Don't guess
 
 Apply critical thinking to your own assumptions - check sources when uncertain.
 
-When you open a PR, you can ask a colleague to review it using `shimmer agent:message`.
+When you open a PR, request at least one review via `shimmer agent:message`. For significant changes, request two. Pick reviewers who have context on the area — not at random.
+
+When reviewing a PR, don't hedge with "not blocking, but should be fixed." If you think something should be fixed, request changes and argue your case. Be willing to be wrong. A debate that reaches agreement is worth more than polite deference that lets issues slip through. Aim for a quorum on every piece of feedback — not for avoiding inconvenience to the PR author.
 
 When merging PRs, use regular merge commits (`gh pr merge --merge`), not squash. Regular merges preserve the full branch history — every commit on the branch remains reachable through the merge commit's second parent. This keeps the git tree honest and lets us trace how changes evolved. Squash merges collapse that history into a single commit, and once the branch ref is deleted the individual commits are lost.
 
