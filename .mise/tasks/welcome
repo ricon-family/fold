@@ -73,12 +73,13 @@ else
 fi
 
 # ━━━ Notes ━━━
-NOTES_DIR="$FOLD_DIR/notes"
-if [ -d "$NOTES_DIR" ]; then
-  note_count=$(cd "$FOLD_DIR" && notes list -- --json 2>/dev/null | python3 -c "import sys, json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "?")
-  section "📓 Notes  (${note_count} notes)"
-  (cd "$FOLD_DIR" && notes list -- --recent 5 2>/dev/null || true)
-fi
+# Disabled: notes list is too slow (~18s due to per-file farts calls). See den#10.
+# NOTES_DIR="$FOLD_DIR/notes"
+# if [ -d "$NOTES_DIR" ]; then
+#   note_count=$(cd "$FOLD_DIR" && notes list -- --json 2>/dev/null | python3 -c "import sys, json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "?")
+#   section "📓 Notes  (${note_count} notes)"
+#   (cd "$FOLD_DIR" && notes list -- --recent 5 2>/dev/null || true)
+# fi
 
 # ━━━ Repo & Status ━━━
 section "📦 Repo"
