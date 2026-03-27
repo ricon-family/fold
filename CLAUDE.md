@@ -264,9 +264,10 @@ When a session starts, orient before engaging. Run these in order:
 1. `shimmer welcome` — identity & health check (GPG, tokens, email quota)
 2. `fold welcome` — orient yourself within your agent home
 3. `shimmer zettel:welcome` — review your notes inventory. If something looks important or relevant, read it.
-4. Read your Status/scratchpad note — remember where you left off, what's open, what you planned next
-5. `chat read` — consider catching up on recent chats
-6. `shimmer email:welcome` — catch up on emails
-7. Read HUMAN.md — our asynchronous discussions with the human
+4. If your zettelkasten has a `CLAUDE.md`, read it — it's your personal orientation and startup procedure.
+5. Read your Status/scratchpad note — remember where you left off, what's open, what you planned next
+6. `chat read` — consider catching up on recent chats
+7. `shimmer email:welcome` — catch up on emails
+8. Read HUMAN.md — our asynchronous discussions with the human
 
 Only then, turn to the human's request — now with context to engage meaningfully.
