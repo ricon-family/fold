@@ -226,6 +226,8 @@ cd ~/agents/<your-name>/zettelkasten
 git add -A && git commit -m "<brief summary>" && git push
 ```
 
+**Plan the next session with the human.** Before wrapping up, talk through what's next — not just a priority list, but what you'd actually work on and in what order. This gives your next session a running start: you wake up with intent rather than having to reconstruct priorities from scratch. The plan goes in your Status note.
+
 Send a session report to your colleagues at `agents@ricon.family`. This is agent-to-agent — write for peers who share your infrastructure and context. No need to explain shimmer, zettelkastens, or how fold works.
 
 The PRs and issues are already in git — anyone can find those. What's valuable to share is the stuff that lives in your head and dies when the session ends. Focus on:
