@@ -31,8 +31,6 @@ on:
         required: true
       AGENT_MATRIX_PASSWORD:
         required: false
-      AGENT_PASSPHRASE:
-        required: false
       AGENT_GITHUB_PASSWORD:
         required: false
       AGENT_B2_ENDPOINT:
@@ -72,63 +70,93 @@ jobs:
       - name: Install shiv
         run: curl -fsSL https://shiv.knacklabs.co/install.sh | bash
 
-      - name: Install shimmer
+      - name: Install shimmer and sessions
         env:
           GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
         run: |
           shiv install shimmer
+          shiv install sessions
           shiv install secrets
           shiv install rudi
           shiv install notes
 
-      - name: Compute shimmer CLI cache key
-        id: shimmer
+      - name: Compute sessions CLI cache key
+        id: sessions
         run: |
-          SHIMMER_DIR="$(shiv which shimmer)"
-          echo "mix-lock-hash=$(sha256sum "$SHIMMER_DIR/cli/mix.lock" | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          SESSIONS_DIR="$(shiv which sessions)"
+          echo "mix-lock-hash=$(sha256sum "$SESSIONS_DIR/cli/mix.lock" | cut -d' ' -f1)" >> $GITHUB_OUTPUT
 
-      - name: Cache shimmer CLI build
+      - name: Cache sessions CLI build
         uses: actions/cache@v4
         with:
           path: |
-            ~/.local/share/shiv/packages/shimmer/cli/_build
-            ~/.local/share/shiv/packages/shimmer/cli/deps
-          key: ${{ runner.os }}-shimmer-cli-${{ steps.shimmer.outputs.mix-lock-hash }}
+            ~/.local/share/shiv/packages/sessions/cli/_build
+            ~/.local/share/shiv/packages/sessions/cli/deps
+          key: ${{ runner.os }}-sessions-cli-${{ steps.sessions.outputs.mix-lock-hash }}
           restore-keys: |
-            ${{ runner.os }}-shimmer-cli-
+            ${{ runner.os }}-sessions-cli-
 
-      - name: Build shimmer CLI
-        run: shimmer cli:build
+      - name: Build sessions CLI
+        run: sessions cli:build
 
       - name: Install pi
         env:
           GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
         run: mise use -g github:badlogic/pi-mono@0.64.0
 
-      - name: Setup GPG
+      - name: Setup secrets for env provider
         env:
-          GPG_PRIVATE_KEY: ${{ secrets.AGENT_GPG_PRIVATE_KEY }}
+          AGENT_GITHUB_PAT: ${{ secrets.AGENT_GITHUB_PAT }}
+          AGENT_GPG_PRIVATE_KEY: ${{ secrets.AGENT_GPG_PRIVATE_KEY }}
+          AGENT_EMAIL_PASSWORD: ${{ secrets.AGENT_EMAIL_PASSWORD }}
+          AGENT_MATRIX_PASSWORD: ${{ secrets.AGENT_MATRIX_PASSWORD }}
+          AGENT_GITHUB_PASSWORD: ${{ secrets.AGENT_GITHUB_PASSWORD }}
+          AGENT_B2_ENDPOINT: ${{ secrets.AGENT_B2_ENDPOINT }}
+          AGENT_B2_KEY_ID: ${{ secrets.AGENT_B2_KEY_ID }}
+          AGENT_B2_APPLICATION_KEY: ${{ secrets.AGENT_B2_APPLICATION_KEY }}
+          AGENT_B2_BUCKET: ${{ secrets.AGENT_B2_BUCKET }}
+        run: |
+          # Re-export secrets with agent-prefixed names so the env provider
+          # can find them. secrets get "c0da/github-pat" → looks up C0DA_GITHUB_PAT.
+          AGENT_UPPER=$(echo "${{ inputs.agent }}" | tr '[:lower:]-' '[:upper:]_')
+
+          declare -A SECRETS_MAP=(
+            [GITHUB_PAT]="$AGENT_GITHUB_PAT"
+            [GPG_PRIVATE_KEY]="$AGENT_GPG_PRIVATE_KEY"
+            [EMAIL_PASSWORD]="$AGENT_EMAIL_PASSWORD"
+            [MATRIX_PASSWORD]="${AGENT_MATRIX_PASSWORD:-}"
+            [GITHUB_PASSWORD]="${AGENT_GITHUB_PASSWORD:-}"
+            [B2_ENDPOINT]="${AGENT_B2_ENDPOINT:-}"
+            [B2_KEY_ID]="${AGENT_B2_KEY_ID:-}"
+            [B2_APPLICATION_KEY]="${AGENT_B2_APPLICATION_KEY:-}"
+            [B2_BUCKET]="${AGENT_B2_BUCKET:-}"
+          )
+
+          for key in "${!SECRETS_MAP[@]}"; do
+            value="${SECRETS_MAP[$key]}"
+            [ -z "$value" ] && continue
+            DELIM="EOFVAL_$(openssl rand -hex 8)"
+            echo "${AGENT_UPPER}_${key}<<${DELIM}" >> "$GITHUB_ENV"
+            echo "$value" >> "$GITHUB_ENV"
+            echo "${DELIM}" >> "$GITHUB_ENV"
+          done
+
+          echo "SECRETS_PROVIDER=env" >> "$GITHUB_ENV"
+
+      - name: Setup GPG
         run: shimmer gpg:setup ${{ inputs.agent }}
 
       - name: Setup email
-        env:
-          EMAIL_PASSWORD: ${{ secrets.AGENT_EMAIL_PASSWORD }}
         run: shimmer email:setup ${{ inputs.agent }}
 
       - name: Setup Matrix
         continue-on-error: true
-        env:
-          MATRIX_PASSWORD: ${{ secrets.AGENT_MATRIX_PASSWORD }}
         run: shimmer matrix:login ${{ inputs.agent }}
 
       - name: Setup blob storage
         continue-on-error: true
-        env:
-          B2_ENDPOINT: ${{ secrets.AGENT_B2_ENDPOINT }}
-          B2_KEY_ID: ${{ secrets.AGENT_B2_KEY_ID }}
-          B2_APPLICATION_KEY: ${{ secrets.AGENT_B2_APPLICATION_KEY }}
         run: |
-          if [ -n "$B2_ENDPOINT" ] && [ -n "$B2_KEY_ID" ] && [ -n "$B2_APPLICATION_KEY" ]; then
+          if secrets get "${{ inputs.agent }}/b2-endpoint" >/dev/null 2>&1; then
             shimmer blob:setup ${{ inputs.agent }}
           else
             echo "B2 credentials not configured, skipping blob storage setup"
@@ -161,43 +189,14 @@ jobs:
             notes unlock || echo "Warning: notes unlock failed — encrypted files may not be readable"
           fi
 
-      - name: Build system prompt
-        id: prompt
-        run: |
-          PROMPT_FILE=$(mktemp)
-
-          # Add agent identity — resolve via the home's agent:identity task (returns content)
-          AGENT_IDENTITY_CONTENT=$(mise -C "$HOME/$REPO_NAME" run -q agent:identity "${{ inputs.agent }}" 2>/dev/null) || true
-          if [ -n "$AGENT_IDENTITY_CONTENT" ]; then
-            echo "$AGENT_IDENTITY_CONTENT" >> "$PROMPT_FILE"
-          else
-            echo "Error: could not resolve agent identity for '${{ inputs.agent }}'."
-            echo "Does $REPO_NAME provide an agent:identity task?"
-            exit 1
-          fi
-
-          # Add dispatch context (who triggered this run)
-          if [ -n "$GITHUB_TRIGGERING_ACTOR" ]; then
-            echo "" >> "$PROMPT_FILE"
-            echo "## Dispatch Context" >> "$PROMPT_FILE"
-            echo "This session was triggered by: $GITHUB_TRIGGERING_ACTOR" >> "$PROMPT_FILE"
-          fi
-
-          echo "file=$PROMPT_FILE" >> $GITHUB_OUTPUT
-
-      - name: Run CLI
+      - name: Run agent
         env:
           AGENT_HOME: $HOME/${{ github.event.repository.name }}
-          AGENT_PASSPHRASE: ${{ secrets.AGENT_PASSPHRASE }}
+          AGENT: ${{ inputs.agent }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BROWSER_GITHUB_COM_PASSWORD: ${{ secrets.AGENT_GITHUB_PASSWORD }}
           BROWSER_GITHUB_COM_USERNAME: ${{ inputs.agent }}-ricon
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
-          GIT_AUTHOR_EMAIL: ${{ inputs.agent }}@ricon.family
-          GIT_AUTHOR_NAME: ${{ inputs.agent }}
-          GIT_COMMITTER_EMAIL: ${{ inputs.agent }}@ricon.family
-          GIT_COMMITTER_NAME: ${{ inputs.agent }}
-          B2_BUCKET: ${{ secrets.AGENT_B2_BUCKET }}
+          DISPATCH_CONTEXT: ${{ github.triggering_actor }}
           INPUT_MESSAGE: ${{ inputs.message }}
           INPUT_MODEL: ${{ inputs.model }}
           RUN_TIMEOUT: 900
@@ -205,16 +204,13 @@ jobs:
           cd "$HOME/$REPO_NAME"
           echo "### AGENT SESSION START ###"
 
-          CMD=(shimmer agent:run "${{ inputs.agent }}" "$INPUT_MESSAGE"
-            --system-prompt-file "${{ steps.prompt.outputs.file }}"
-            --timeout "$RUN_TIMEOUT")
+          # shimmer as sets identity env vars (AGENT_IDENTITY, GIT_AUTHOR_*, GH_TOKEN, etc.)
+          # shimmer agent --headless delegates to sessions run for execution
+          eval "$(shimmer as "$AGENT")"
 
-          if [ -n "$AGENT_PASSPHRASE" ]; then
-            CMD+=(--passphrase "$AGENT_PASSPHRASE")
-          fi
-          if [ -n "$INPUT_MODEL" ]; then
-            CMD+=(--model "$INPUT_MODEL")
-          fi
+          CMD=(shimmer agent --headless --timeout "$RUN_TIMEOUT")
+          [ -n "$INPUT_MODEL" ] && CMD+=(--model "$INPUT_MODEL")
+          CMD+=("$INPUT_MESSAGE")
 
           "${CMD[@]}"
 
