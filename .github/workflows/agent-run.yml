@@ -66,6 +66,8 @@ jobs:
         uses: jdx/mise-action@v3
         with:
           install: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
 
       - name: Install shiv
         run: curl -fsSL https://shiv.knacklabs.co/install.sh | bash
@@ -112,11 +114,13 @@ jobs:
         run: shimmer email:setup ${{ inputs.agent }}
 
       - name: Setup Matrix
+        continue-on-error: true
         env:
           MATRIX_PASSWORD: ${{ secrets.AGENT_MATRIX_PASSWORD }}
         run: shimmer matrix:login ${{ inputs.agent }}
 
       - name: Setup blob storage
+        continue-on-error: true
         env:
           B2_ENDPOINT: ${{ secrets.AGENT_B2_ENDPOINT }}
           B2_KEY_ID: ${{ secrets.AGENT_B2_KEY_ID }}
@@ -143,10 +147,13 @@ jobs:
             echo "No zettelkasten found for ${{ inputs.agent }}, skipping"
           fi
 
-      - name: Unlock encrypted files
+      - name: Install project dependencies and unlock
+        env:
+          GITHUB_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
         run: |
           cd "$HOME/$REPO_NAME"
-          mise trust -q
+          mise trust
+          mise install
           if [ -d ".git-crypt" ]; then
             rudi install
             notes unlock || echo "Warning: notes unlock failed — encrypted files may not be readable"
@@ -210,3 +217,28 @@ jobs:
           "${CMD[@]}"
 
           echo "### AGENT SESSION END ###"
+
+      - name: Post-failure diagnostics
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
+        run: |
+          echo "=== Diagnostics ==="
+          echo ""
+          echo "--- GitHub API rate limit ---"
+          gh api rate_limit --jq '.resources.core | "Used: \(.used)/\(.limit) | Remaining: \(.remaining) | Resets: \(.reset | todate)"' 2>/dev/null || echo "(unavailable)"
+          echo ""
+          echo "--- Disk usage ---"
+          df -h / | tail -1
+          du -sh "$HOME/$REPO_NAME" 2>/dev/null || true
+          du -sh "$HOME/agents" 2>/dev/null || true
+          echo ""
+          echo "--- mise status ---"
+          mise doctor 2>/dev/null | head -30 || echo "(mise doctor unavailable)"
+          echo ""
+          echo "--- Installed tools ---"
+          mise ls 2>/dev/null || echo "(mise ls unavailable)"
+          echo ""
+          echo "--- Network connectivity ---"
+          curl -so /dev/null -w "github.com: HTTP %{http_code} (%{time_total}s)\n" https://github.com 2>/dev/null || echo "github.com: unreachable"
+          curl -so /dev/null -w "api.github.com: HTTP %{http_code} (%{time_total}s)\n" https://api.github.com 2>/dev/null || echo "api.github.com: unreachable"
