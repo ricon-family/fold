@@ -23,7 +23,7 @@ jobs:
       message: ${{ inputs.message }}
       model: ${{ inputs.model }}
     secrets:
-      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       AGENT_GITHUB_PAT: ${{ secrets.QUICK_GITHUB_PAT }}
       AGENT_GPG_PRIVATE_KEY: ${{ secrets.QUICK_GPG_PRIVATE_KEY }}
       AGENT_EMAIL_PASSWORD: ${{ secrets.QUICK_EMAIL_PASSWORD }}
