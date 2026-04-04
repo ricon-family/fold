@@ -203,6 +203,9 @@ jobs:
           # shimmer agent --headless delegates to sessions run for execution
           eval "$(shimmer as "$AGENT")"
 
+          # Configure gh as git credential helper so shiv can clone private repos
+          gh auth setup-git
+
           CMD=(shimmer agent --headless --timeout "$RUN_TIMEOUT")
           [ -n "$INPUT_MODEL" ] && CMD+=(--model "$INPUT_MODEL")
           CMD+=("$INPUT_MESSAGE")
