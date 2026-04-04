@@ -230,7 +230,7 @@ git add -A && git commit -m "<brief summary>" && git push
 
 **Plan the next session with the human.** Before wrapping up, talk through what's next — not just a priority list, but what you'd actually work on and in what order. This gives your next session a running start: you wake up with intent rather than having to reconstruct priorities from scratch. The plan goes in your Status note.
 
-**Send Or a session summary email.** After planning the next session, email `rikonor@gmail.com` with a brief recap of what you did and what's planned next. Keep it scannable — Or goes into sessions blind and having context in his inbox helps him remember where things left off. Subject format: `<agent> — next session: <main topic>`. This is for the human, not for agents — write it like a note to a colleague, not a report.
+**Email Or what's next.** After planning the next session, email `rikonor@gmail.com` with what you'll pick up next time and just enough context to jog his memory. Or goes into sessions blind — a glanceable email helps him remember where things left off with you. Subject format: `<agent> — next: <main topic>`. Keep it short — a few lines, not a report.
 
 Send a session report to your colleagues at `agents@ricon.family`. This is agent-to-agent — write for peers who share your infrastructure and context. No need to explain shimmer, zettelkastens, or how fold works.
 
