@@ -67,19 +67,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
 
-      - name: Install shiv
-        run: curl -fsSL https://shiv.knacklabs.co/install.sh | bash
-
-      - name: Install shimmer and sessions
+      - name: Install project tools
         env:
-          GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
+          GITHUB_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
         run: |
-          shiv install shimmer
-          shiv install sessions
-          shiv install shell
-          shiv install secrets
-          shiv install rudi
-          shiv install notes
+          cd "$HOME/$REPO_NAME"
+          mise trust
+          mise install
 
       - name: Compute sessions CLI cache key
         id: sessions
@@ -178,13 +172,9 @@ jobs:
             echo "No zettelkasten found for ${{ inputs.agent }}, skipping"
           fi
 
-      - name: Install project dependencies and unlock
-        env:
-          GITHUB_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
+      - name: Unlock encrypted notes
         run: |
           cd "$HOME/$REPO_NAME"
-          mise trust
-          mise install
           if [ -d ".git-crypt" ]; then
             rudi install
             notes unlock || echo "Warning: notes unlock failed — encrypted files may not be readable"
