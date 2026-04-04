@@ -76,7 +76,8 @@ jobs:
         run: |
           shiv install shimmer   # → sessions → shell, + threads
           shiv install sessions  # needed directly for cli:build step
-          shiv install notes     # → rudi
+          shiv install notes     # → rudi (for notes' own tasks)
+          shiv install rudi      # needed directly by workflow
           shiv install secrets
 
       - name: Compute sessions CLI cache key
