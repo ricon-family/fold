@@ -94,9 +94,11 @@ Notes use YAML frontmatter (title, tags, related, created, updated) and `[[wikil
 
 ## HUMAN.md
 
-`notes/HUMAN.md` is the async scratchpad for human-agent conversations. It lives in `notes/` (encrypted via git-crypt). The file itself documents its own format and conventions — read it for details.
+HUMAN.md is the async scratchpad for human-agent conversations. It now lives in Or's zettelkasten (path is in the `HUMAN_MD` environment variable). The file itself documents its own format and conventions — read it for details.
 
-Managed by `shimmer human:threads:*` tasks (tidy, sort, archive, list, status). Workflow: `tidy` → `sort` → done. Tidy handles both formatting and promote/demote (who's waiting on whom), sort reorders by priority.
+Managed by the `threads` CLI tool (installed via shiv). Workflow: `threads tidy --file "$HUMAN_MD"` → `threads sort --file "$HUMAN_MD"` → done. Tidy handles both formatting and promote/demote (who's waiting on whom), sort reorders by priority. Other commands: `threads list`, `threads status`, `threads archive`, `threads init`.
+
+To edit HUMAN.md, work on Or's zettelkasten clone directly. Pull before reading: `git -C ~/agents/or/zettelkasten pull`. Commit and push after writing.
 
 When engaging with HUMAN.md:
 - Read it during orient — it's the human's async voice to agents.
