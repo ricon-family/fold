@@ -5,13 +5,14 @@ experimental = true
 shiv = "https://github.com/KnickKnackLabs/vfox-shiv"
 
 [tools]
-"ubi:pimalaya/himalaya" = "1.1.0"         # Email CLI for agents
-usage = "1"                               # CLI arg parsing for tasks
-yq = "4.50.1"                             # YAML processing
-"shiv:shiv" = "0.1.0"                      # Package manager (self-hosted via vfox-shiv)
-"shiv:shimmer" = "latest"                 # Agent orchestration + identity
-"shiv:sessions" = "0.2.0"                 # Session transcripts (+ transitive: shell)
-"shiv:notes" = "0.3.0"                    # Encrypted shared notes (+ transitive: rudi)
-"shiv:rudi" = "0.2.0"                     # git-crypt wrapper (called directly by workflow)
-"shiv:secrets" = "0.1.0"                  # Provider-based secret management
-"shiv:shell" = "0.1.0"                    # Persistent terminal sessions
+"ubi:pimalaya/himalaya" = "1.1.0"
+usage = "1"
+yq = "4.50.1"
+"shiv:shiv" = "0.1.0"
+"shiv:shimmer" = "latest"
+"shiv:sessions" = "0.2.0"
+"shiv:notes" = "0.3.0"
+"shiv:rudi" = "0.2.0"
+"shiv:secrets" = "0.1.0"
+"shiv:shell" = "0.1.0"
+"shiv:emails" = "0.1.0"
