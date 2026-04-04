@@ -74,11 +74,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
         run: |
-          shiv install shimmer   # → sessions → shell, + threads
-          shiv install sessions  # needed directly for cli:build step
-          shiv install notes     # → rudi (for notes' own tasks)
-          shiv install rudi      # needed directly by workflow
+          shiv install shimmer
+          shiv install sessions
+          shiv install shell
           shiv install secrets
+          shiv install rudi
+          shiv install notes
 
       - name: Compute sessions CLI cache key
         id: sessions
