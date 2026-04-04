@@ -123,7 +123,19 @@ elif git -C "$FOLD_DIR" crypt status -e &>/dev/null; then
 else
   enc_status="⚠ locked → notes unlock"
 fi
-repo_rows+="Encryption,${enc_status}"
+repo_rows+="Encryption,${enc_status}"$'\n'
+
+# Obfuscation
+obf_status="n/a"
+if [ -f "$FOLD_DIR/notes/.manifest" ]; then
+  first_name=$(head -1 "$FOLD_DIR/notes/.manifest" | cut -f2)
+  if [ -n "$first_name" ] && [ -f "$FOLD_DIR/notes/$first_name" ]; then
+    obf_status="✓ deobfuscated"
+  else
+    obf_status="obfuscated"
+  fi
+fi
+repo_rows+="Notes,${obf_status}"
 
 printf "Property,Status\n%s\n" "$repo_rows" \
   | gum table --print --separator "," --border rounded \
