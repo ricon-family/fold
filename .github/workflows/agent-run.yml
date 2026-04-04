@@ -76,6 +76,7 @@ jobs:
         run: |
           shiv install shimmer
           shiv install sessions
+          shiv install shell
           shiv install secrets
           shiv install rudi
           shiv install notes
