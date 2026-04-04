@@ -1,3 +1,6 @@
+[settings]
+experimental = true
+
 [plugins]
 shiv = "https://github.com/KnickKnackLabs/vfox-shiv"
 
