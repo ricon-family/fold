@@ -48,6 +48,9 @@ jobs:
     timeout-minutes: 20
     env:
       REPO_NAME: ${{ github.event.repository.name }}
+    defaults:
+      run:
+        working-directory: /home/runner/${{ github.event.repository.name }}
     steps:
       - name: Checkout current repo
         uses: actions/checkout@v4
@@ -56,6 +59,7 @@ jobs:
           path: repo
 
       - name: Setup workspace
+        working-directory: /home/runner
         run: |
           mv repo "$HOME/$REPO_NAME"
           mkdir -p "$HOME/agents/${{ inputs.agent }}"
@@ -71,7 +75,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
         run: |
-          cd "$HOME/$REPO_NAME"
           mise trust
           mise install
 
@@ -174,7 +177,6 @@ jobs:
 
       - name: Unlock encrypted notes
         run: |
-          cd "$HOME/$REPO_NAME"
           if [ -d ".git-crypt" ]; then
             rudi install
             notes unlock || echo "Warning: notes unlock failed — encrypted files may not be readable"
@@ -192,7 +194,6 @@ jobs:
           INPUT_MODEL: ${{ inputs.model }}
           RUN_TIMEOUT: 900
         run: |
-          cd "$HOME/$REPO_NAME"
           echo "### AGENT SESSION START ###"
 
           # shimmer as sets identity env vars (AGENT_IDENTITY, GIT_AUTHOR_*, GH_TOKEN, etc.)
