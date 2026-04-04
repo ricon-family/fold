@@ -146,7 +146,9 @@ jobs:
         run: shimmer gpg:setup ${{ inputs.agent }}
 
       - name: Setup email
-        run: shimmer email:setup ${{ inputs.agent }}
+        env:
+          EMAIL_PASSWORD: ${{ secrets.AGENT_EMAIL_PASSWORD }}
+        run: emails setup ${{ inputs.agent }}
 
       - name: Setup Matrix
         continue-on-error: true

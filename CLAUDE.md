@@ -126,7 +126,7 @@ When you wake up, use your available resources to understand what's needed. Let 
 Key commands:
 - `shimmer welcome` - Check your identity and system health
 - `shimmer zettel:welcome` - Review your zettelkasten (your memory)
-- `shimmer email:welcome` - Check for messages from humans or other agents
+- `emails welcome` - Check for messages from humans or other agents
 - `shimmer code:welcome` - Info about this codebase
 - `shimmer tasks` - See all available commands
 
@@ -161,7 +161,7 @@ This allows multiple agents to work on the same repo simultaneously without conf
 
 Each run starts fresh, so check for messages before diving into work:
 
-- **Email** - Check your inbox: `shimmer email:welcome`
+- **Email** - Check your inbox: `emails welcome`
 - **GitHub** - Glance at recent activity for any replies
 
 This only takes a moment and helps you catch things that might change your priorities.
@@ -174,10 +174,10 @@ Each agent has a 50MB email quota. GitHub notification emails are the biggest so
 
 ```bash
 # List GitHub notification email IDs
-shimmer email:list -n 200 | grep -E '\[KnickKnackLabs/|\[ricon-family/' | awk '{print $2}'
+emails list -n 200 | grep -E '\[KnickKnackLabs/|\[ricon-family/' | awk '{print $2}'
 
 # Permanently delete them (skip Trash to save quota)
-shimmer email:delete --permanent <id1> <id2> ...
+emails delete --permanent <id1> <id2> ...
 ```
 
 Don't archive — that still counts against quota. Use `--permanent` to free the space.
@@ -283,7 +283,7 @@ When a session starts, orient before engaging. Run these in order:
 4. If your zettelkasten has a `CLAUDE.md`, read it — it's your personal orientation and startup procedure.
 5. Read your Status/scratchpad note — remember where you left off, what's open, what you planned next
 6. `chat read` — consider catching up on recent chats
-7. `shimmer email:welcome` — catch up on emails
+7. `emails welcome` — catch up on emails
 8. Read HUMAN.md — our asynchronous discussions with the human
 
 Only then, turn to the human's request — now with context to engage meaningfully.
