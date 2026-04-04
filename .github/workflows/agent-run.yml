@@ -82,15 +82,15 @@ jobs:
       - name: Compute sessions CLI cache key
         id: sessions
         run: |
-          SESSIONS_DIR="$(shiv which sessions)"
+          SESSIONS_DIR="$(mise where shiv:sessions)/packages/sessions"
           echo "mix-lock-hash=$(sha256sum "$SESSIONS_DIR/cli/mix.lock" | cut -d' ' -f1)" >> $GITHUB_OUTPUT
 
       - name: Cache sessions CLI build
         uses: actions/cache@v4
         with:
           path: |
-            ~/.local/share/shiv/packages/sessions/cli/_build
-            ~/.local/share/shiv/packages/sessions/cli/deps
+            ~/.local/share/mise/installs/shiv-sessions/*/packages/sessions/cli/_build
+            ~/.local/share/mise/installs/shiv-sessions/*/packages/sessions/cli/deps
           key: ${{ runner.os }}-sessions-cli-${{ steps.sessions.outputs.mix-lock-hash }}
           restore-keys: |
             ${{ runner.os }}-sessions-cli-
