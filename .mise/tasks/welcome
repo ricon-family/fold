@@ -39,11 +39,14 @@ if command -v fold &>/dev/null; then
 fi
 
 # ━━━ HUMAN.md ━━━
-HUMAN_FILE="$FOLD_DIR/notes/HUMAN.md"
-if [ -f "$HUMAN_FILE" ]; then
-  thread_summary=$(cd "$FOLD_DIR" && shimmer human:threads:status 2>/dev/null || echo "")
+HUMAN_FILE=$(cd "$FOLD_DIR" && mise run -q human 2>/dev/null)
+if [ -n "$HUMAN_FILE" ] && [ -f "$HUMAN_FILE" ]; then
+  thread_summary=$(threads status --file "$HUMAN_FILE" 2>/dev/null || echo "")
   section "📝 HUMAN.md  ($thread_summary)"
-  (cd "$FOLD_DIR" && shimmer human:threads:list 2>/dev/null || true)
+  threads list --file "$HUMAN_FILE" 2>/dev/null || true
+else
+  section "📝 HUMAN.md"
+  gum style --faint "(HUMAN_MD not set — see: mise run human)"
 fi
 
 # ━━━ Chat ━━━
