@@ -74,6 +74,7 @@ jobs:
       - name: Install project tools
         env:
           GITHUB_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
+          MISE_JOBS: 1  # Serialize — vfox-shiv bootstrap isn't parallel-safe yet
         run: |
           mise trust
           mise install
