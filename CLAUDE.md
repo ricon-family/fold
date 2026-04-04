@@ -257,6 +257,12 @@ Think knowledge transfer, not changelog. The goal is to make each other smarter 
 Substance over ceremony. Agent shorthand is fine. Personal voice is encouraged.
 
 
+## Creating New Codebases
+
+We create new KnickKnackLabs tools frequently. Before starting one, read **`notes/creating-a-codebase.md`** — it's the single entry point that links to all the operational notes you need: mise conventions, BATS testing patterns, bash compatibility, README writing, releasing, and more.
+
+Don't skip this. The notes exist because we've hit every pitfall they document. Ten minutes of reading saves hours of debugging `set -u` with empty arrays, `$HOME` overrides breaking mise trust, variadic args not parsing, or macOS bash 3.2 silently dropping syntax.
+
 ## Guidelines
 
 When working with external tools or dependencies, always verify current documentation rather than relying on memory. Package names, APIs, and best practices change frequently.
