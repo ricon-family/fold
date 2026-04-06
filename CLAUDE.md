@@ -256,6 +256,16 @@ cd ~/agents/<name>/fold/ && notes unlock && modules unlock && modules init && mi
 3. **Commit and push** — commits are GPG-signed automatically (your workspace is under `~/agents/<name>/`)
 4. **Sync the global copy** — run `shiv update fold` after pushing so `fold welcome` sees your changes
 
+### Obfuscated notes and `git status`
+
+Note filenames are obfuscated on GitHub (e.g., `secret.md` → `a1b2c3d4`). Locally, after `notes unlock`, the working tree has readable names. This means **`git status` will always show noise** — obfuscated files appear as "deleted" and readable files as "untracked." This is expected and harmless. The pre-commit hook handles obfuscation automatically when you commit, and the post-commit/post-merge hooks restore readable names afterward.
+
+**What to expect:**
+- `git add notes/<readable-name>` then `git commit` — hooks handle the rest
+- `git pull` works — post-merge hook refreshes readable names
+- Don't run `git add -A` or `git add notes/` — this would stage the deobfuscated names
+- Ignore the `D`/`??` entries in `git status` for files under `notes/`
+
 ### Why not a shared clone?
 
 - **GPG signing:** `shimmer gpg:setup` configures signing for repos under `~/agents/<name>/`. The global clone is outside that scope, so commits there aren't signed.
