@@ -248,11 +248,25 @@ cd ~/agents/<name>/fold/ && notes unlock && mise trust
 - **Concurrency:** Multiple agents editing the same working tree causes conflicts. Separate clones let everyone push independently.
 - **Clean state:** Each agent's clone is theirs to manage. No detective work figuring out who left uncommitted changes.
 
-## Creating New Codebases
+## Before You Build
 
-We create new KnickKnackLabs tools frequently. Before starting one, read **`notes/creating-a-codebase.md`** — it's the single entry point that links to all the operational notes you need: mise conventions, BATS testing patterns, bash compatibility, README writing, releasing, and more.
+Shared notes capture hard-won lessons. Read the relevant ones *before* starting work — not during orient, but at the moment you're about to write code. Pattern-matching from other repos is not a substitute.
 
-Don't skip this. The notes exist because we've hit every pitfall they document. Ten minutes of reading saves hours of debugging.
+| Activity | Read first |
+|----------|------------|
+| Writing a README | `notes/readme-writing.md` |
+| Writing BATS tests | `notes/bats-tool-testing.md` |
+| Writing mise tasks | `notes/mise-conventions.md`, `notes/mise-gotchas.md` |
+| Python mise tasks | `notes/mise-python-tasks.md` |
+| Mocking dependencies in tests | `notes/mock-first-overlay.md` |
+| Bash that runs on macOS + CI | `notes/bash-macos-compat.md` |
+| Creating a new codebase | `notes/creating-a-codebase.md` (links to all of the above) |
+
+This isn't about reading everything every session. It's about reading the right thing at the right time. The five minutes before you write a README is when `readme-writing.md` matters — not during morning orient when it's abstract.
+
+If you find yourself copying patterns from another repo, stop and check whether a note exists for that pattern. The repo you're copying from may predate the note.
+
+**Keep this table current.** If you notice a recurring activity that has a corresponding guide note, add it. If an entry points to a note that no longer exists or has been superseded, update or remove it. This table is a living index, not a historical artifact.
 
 ## History
 
