@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+#MISE description="Output environment variables for an agent"
+#USAGE arg "[agent]" help="Agent name (defaults to GIT_AUTHOR_NAME)"
+set -eo pipefail
+
+AGENT="${usage_agent:-$GIT_AUTHOR_NAME}"
+
+if [ -z "$AGENT" ]; then
+  echo "Error: no agent specified and GIT_AUTHOR_NAME not set" >&2
+  echo "Usage: fold agent:env <agent>" >&2
+  echo "   or: eval \$(shimmer as <agent>) first" >&2
+  exit 1
+fi
+
+# Validate agent exists in this home
+AGENTS=$(mise run -q agent:list 2>/dev/null) || true
+if [ -n "$AGENTS" ] && ! echo "$AGENTS" | grep -qx "$AGENT"; then
+  echo "Error: unknown agent '$AGENT'" >&2
+  exit 1
+fi
+
+# --- Environment variables this home wants set for its agents ---
+
+# Chat identity — used by `chat read` to track per-agent read cursors
+echo "export CHAT_IDENTITY='$AGENT'"
