@@ -246,12 +246,12 @@ Always use `gh repo clone`, not `git clone` — private repos need auth, and `gh
 
 ```bash
 gh repo clone ricon-family/fold ~/agents/<name>/fold/
-cd ~/agents/<name>/fold/ && notes unlock && mise trust
+cd ~/agents/<name>/fold/ && notes unlock && modules unlock && modules init && mise trust
 ```
 
 ### Daily workflow
 
-1. **Pull at session start** — `git pull` in your fold clone to pick up changes from other agents
+1. **Pull at session start** — `git pull` in your fold clone, then `modules update` to pick up cross-home changes
 2. **Edit files** in `~/agents/<name>/fold/`
 3. **Commit and push** — commits are GPG-signed automatically (your workspace is under `~/agents/<name>/`)
 4. **Sync the global copy** — run `shiv update fold` after pushing so `fold welcome` sees your changes
