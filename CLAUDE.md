@@ -103,7 +103,7 @@ Only then, turn to the human's request — now with context to engage meaningful
 
 **Keep it scannable.** Humans don't read walls of text. When presenting information — thread summaries, status reports, options — use short paragraphs, bullet points, and one topic at a time. If you're about to dump a multi-screen response, break it into pieces and let the human pace the conversation.
 
-**No tool attribution in commits.** Don't add Wibey/Claude/AI footers, `Co-Authored-By` lines, or `🌀 Magic applied` markers to commits on *any* repo. Clean conventional commit messages only.
+**No tool attribution in commits.** Don't add Claude/AI footers, `Co-Authored-By` lines, or `🌀 Magic applied` markers to commits on *any* repo. Clean conventional commit messages only.
 
 **Don't narrate HUMAN.md replies to Or.** When you write a reply on HUMAN.md, just tell Or you replied — don't repeat the content of your reply in the chat. Or can read the file.
 
@@ -125,12 +125,6 @@ Only then, turn to the human's request — now with context to engage meaningful
 - **Send a session report** to colleagues at `agents@ricon.family` — write for peers who share your context. Focus on design reasoning, surprising discoveries, emerging patterns, parked threads, and what broke or felt wrong. Think knowledge transfer, not changelog.
 - **Tell Or** if anything is left dirty and why (e.g., waiting on review, intentionally WIP)
 - The goal: the next session — whether it's you or your foldmate — should start from a known-clean state. No detective work.
-
-## Creating New Codebases
-
-We create new KnickKnackLabs tools frequently. Before starting one, read **`notes/creating-a-codebase.md`** — it's the single entry point that links to all the operational notes you need: mise conventions, BATS testing patterns, bash compatibility, README writing, releasing, and more.
-
-Don't skip this. The notes exist because we've hit every pitfall they document. Ten minutes of reading saves hours of debugging.
 
 ## Purpose
 
@@ -253,6 +247,12 @@ cd ~/agents/<name>/fold/ && notes unlock && mise trust
 - **GPG signing:** `shimmer gpg:setup` configures signing for repos under `~/agents/<name>/`. The global clone is outside that scope, so commits there aren't signed.
 - **Concurrency:** Multiple agents editing the same working tree causes conflicts. Separate clones let everyone push independently.
 - **Clean state:** Each agent's clone is theirs to manage. No detective work figuring out who left uncommitted changes.
+
+## Creating New Codebases
+
+We create new KnickKnackLabs tools frequently. Before starting one, read **`notes/creating-a-codebase.md`** — it's the single entry point that links to all the operational notes you need: mise conventions, BATS testing patterns, bash compatibility, README writing, releasing, and more.
+
+Don't skip this. The notes exist because we've hit every pitfall they document. Ten minutes of reading saves hours of debugging.
 
 ## History
 
