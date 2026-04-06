@@ -153,10 +153,11 @@ fold/
 
 ## Cross-Home Access
 
-Fold and den reference each other as encrypted submodules. After unlocking notes, run `modules init` to populate them:
+Fold and den reference each other as encrypted submodules. After unlocking, run `modules init` to populate them:
 
 ```bash
 notes unlock      # decrypts notes
+modules unlock    # decrypts the submodules manifest
 modules init      # clones cross-home repos into submodules/
 ```
 
