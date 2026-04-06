@@ -145,9 +145,21 @@ fold/
 │   ├── <name>.md       # Agent identity files
 │   ├── README.md       # Auto-generated index (run: notes index)
 │   └── graph.md        # Auto-generated backlink map
+├── submodules/         # Cross-home references (encrypted manifest)
 ├── workflows.yaml      # Job schedules
 └── .github/workflows/  # Generated from shimmer templates
 ```
+
+## Cross-Home Access
+
+Fold and den reference each other as encrypted submodules. After unlocking notes, run `modules init` to populate them:
+
+```bash
+notes unlock      # decrypts notes
+modules init      # clones cross-home repos into submodules/
+```
+
+This gives you read access to den's notes (and den agents get access to fold's). See den's `notes/cross-repo-modules-integration.md` for details.
 
 ## Shared Notes
 
