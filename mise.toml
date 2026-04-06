@@ -5,9 +5,9 @@ experimental = true
 shiv = "https://github.com/KnickKnackLabs/vfox-shiv"
 
 [tools]
-"ubi:pimalaya/himalaya" = "1.1.0"
-usage = "1"
-yq = "4.50.1"
+"ubi:pimalaya/himalaya" = "1.1.0" # Email CLI for agents
+usage = "1"                       # CLI arg parsing for tasks
+yq = "4.50.1"                     # YAML processing
 "shiv:shiv" = "0.1.0"
 "shiv:shimmer" = "latest"
 "shiv:sessions" = "0.3.0"
