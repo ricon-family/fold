@@ -25,10 +25,9 @@ If your identity isn't set, ask Or which agent you are.
 
 ### How you get launched
 
-There are three launch paths:
+There are two launch paths:
 
-- **`shimmer agent:local`** (personal laptop) — runs `claude` directly. Lean, long context life.
-- **`wibey`** (Walmart laptop) — Walmart's Claude Code wrapper. More overhead, shorter effective context.
+- **`shimmer agent:local`** — runs `claude` directly. Lean, long context life.
 - **GitHub CI** — headless sessions triggered by workflow dispatch or scheduled runs.
 
 Either way, `eval $(shimmer as <agent>)` and `eval $(fold agent:env)` run before launch, so your identity is always set. The startup procedure is the same regardless of launch path.
@@ -55,7 +54,7 @@ When a session starts, orient before engaging. Run these in order:
 4. If your zettelkasten has a `CLAUDE.md`, read it — it's your personal orientation and startup procedure.
 5. Read your Status/scratchpad note — remember where you left off, what's open, what you planned next
 6. `chat read` — consider catching up on recent chats
-7. `shimmer email:welcome` — catch up on emails
+7. `emails welcome` — catch up on emails
 8. Read HUMAN.md — our asynchronous discussions with the human
 
 Only then, turn to the human's request — now with context to engage meaningfully.
@@ -83,7 +82,10 @@ Only then, turn to the human's request — now with context to engage meaningful
 
 **Request reviews when you open a PR.** Use `shimmer agent:message` to wake an agent and ask them to review. For significant changes, request two reviewers. Pick reviewers who have context on the area — not at random.
 
-**Mean it when you review.** Don't hedge with "not blocking, but should be fixed." If you'd flag it in your own code, flag it in review — don't downgrade to a nit because it's someone else's PR. If you think something should be fixed, request changes and argue your case. Be willing to be wrong. A debate that reaches agreement is worth more than polite deference that lets issues slip through. Aim for a quorum on every piece of feedback — not for avoiding inconvenience to the PR author. **Calibrate at 60%:** if 0% is auto-approve and 100% is auto-reject, aim for 60% — biased toward requesting changes. A 60% confidence threshold is enough to raise it — you're not blocking, you're starting a conversation. It's easier to withdraw a change request after discussion than to retroactively raise an issue you hedged on. (See also: `notes/epistemic-humility.md` — review calibration is the code-review application of calibrated confidence.) **Review the diff, not the description** — every finding must cite a specific file:line in the actual diff. PR descriptions and auto-generated summaries can be stale or wrong. Full guidelines in `notes/code-review.md`.
+**Mean it when you review.**
+- Don't hedge with "not blocking, but should be fixed." If you'd flag it in your own code, flag it in review — don't downgrade to a nit because it's someone else's PR. Request changes and argue your case. Be willing to be wrong. A debate that reaches agreement is worth more than polite deference.
+- **Calibrate at 60%:** if 0% is auto-approve and 100% is auto-reject, aim for 60% — biased toward requesting changes. A 60% confidence threshold is enough to raise it — you're starting a conversation, not issuing a verdict. It's easier to withdraw a change request after discussion than to retroactively raise an issue you hedged on. (See also: `notes/epistemic-humility.md`.)
+- **Review the diff, not the description.** Every finding must cite a specific file:line in the actual diff. PR descriptions and auto-generated summaries can be stale or wrong. Full guidelines in `notes/code-review.md`.
 
 **Read `--help` before guessing.** When a CLI tool fails or you're unsure of its interface, run `<tool> --help` or `<tool> <subcommand> --help` first. Don't guess at arguments.
 
@@ -97,7 +99,7 @@ Only then, turn to the human's request — now with context to engage meaningful
 
 **Shared spaces are shared.** `notes/` is common ground — coordinate changes through chat.
 
-**Use `den` as your team channel.** Post status updates, questions, heads-ups, and coordination to the `den` chat channel throughout the day — treat it like a shared Slack. At end of day, the last agent out harvests anything worth keeping (actionable items → issues, decisions → notes, questions for Or → HUMAN.md threads, progress → your Status.md) and runs `chat clear den --yes` for a fresh start tomorrow. The channel is ephemeral by convention — anything not harvested is gone.
+**Use `fold` as your team channel.** Post status updates, questions, heads-ups, and coordination to the `fold` chat channel throughout the day — treat it like a shared Slack. The `den` channel is also available for cross-team coordination with den agents. At end of day, the last agent out harvests anything worth keeping (actionable items → issues, decisions → notes, questions for Or → HUMAN.md threads, progress → your Status.md) and runs `chat clear fold --yes` for a fresh start tomorrow. The channel is ephemeral by convention — anything not harvested is gone.
 
 **Keep it scannable.** Humans don't read walls of text. When presenting information — thread summaries, status reports, options — use short paragraphs, bullet points, and one topic at a time. If you're about to dump a multi-screen response, break it into pieces and let the human pace the conversation.
 
@@ -111,9 +113,7 @@ Only then, turn to the human's request — now with context to engage meaningful
 
 **When things break, escalate before exiting.** Services go down, tokens expire, servers time out. One retry is reasonable, then shift to problem-solving. If the broken service isn't essential to your task, skip it and proceed. If it is essential: (1) leave a note in your zettelkasten — what broke, what you were trying to do, whether it's time-sensitive; (2) reach out through an alternative channel — email down, try Matrix; Matrix down, open a GitHub issue; (3) then exit cleanly with `[[ABORT]]`. The goal: when something breaks, someone finds out quickly.
 
-**Clean up your inbox.** Each agent has a 50MB email quota. GitHub notification emails are the biggest source of clutter — they duplicate information already available via `gh`. Periodically scan for `[KnickKnackLabs/...]` and `[ricon-family/...]` notification emails and permanently delete them (`shimmer email:delete --permanent`). Don't archive — that still counts against quota.
-
-**Ask Or when the VPN blocks you.** The Walmart network blocks many external downloads (GitHub release assets, Go modules, npm packages, etc.) with `403 MediaTypeBlocked` errors. Or's machine doesn't have this restriction. When you hit a download block, don't waste time on workarounds — just ask Or to run the install command for you.
+**Clean up your inbox.** Each agent has a 50MB email quota. GitHub notification emails are the biggest source of clutter — they duplicate information already available via `gh`. Periodically scan for `[KnickKnackLabs/...]` and `[ricon-family/...]` notification emails and permanently delete them (`emails delete --permanent`). Don't archive — that still counts against quota.
 
 **Clean up before you leave.** At the end of every session, clean up your workspace:
 - **Check `git status`** on every repo you touched during the session — commit+push or stash anything outstanding
@@ -188,8 +188,7 @@ Agents have **two** places to store information:
 
 - **Or ↔ Agents:** Direct via sessions, or async via `HUMAN.md`
 - **Agent ↔ Agent:** Via the `chat` CLI tool (see `notes/agent-communication.md`)
-- **Email (public):** `shimmer email:*` — uses each agent's ricon.family address. Currently blocked by Walmart VPN; works from Or's personal machine.
-- **Email (Walmart):** `email` — interfaces with Or's Walmart Outlook account. Works on the Walmart network. Source: `vn5a6e7/email` on Walmart GHE.
+- **Email:** `emails` CLI — each agent has their own `@ricon.family` address. Check with `emails welcome`, send with `emails send`.
 
 ## Shimmer
 
@@ -201,7 +200,7 @@ Agents have **two** places to store information:
 Key commands:
 - `shimmer welcome` — Check your identity and system health
 - `shimmer zettel:welcome` — Review your zettelkasten (your memory)
-- `shimmer email:welcome` — Check for messages from humans or other agents
+- `emails welcome` — Check for messages from humans or other agents
 - `shimmer code:welcome` — Info about this codebase
 - `shimmer tasks` — See all available commands
 
