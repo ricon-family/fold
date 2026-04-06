@@ -121,9 +121,16 @@ Only then, turn to the human's request — now with context to engage meaningful
 - **Push fold and sync** — after pushing your fold clone, run `shiv update fold` so the global copy is current
 - **Update your session log** — this is already practice, but it's part of cleanup, not separate from it
 - **Plan the next session** — talk through what's next with Or, not just a priority list but what you'd actually work on and in what order. The plan goes in your Status note so the next session has a running start.
+- **Email Or what's next** — email `rikonor@gmail.com` with what happened and what's next. Subject format: `<agent> — next: <main topic>`. Body: two sections (LAST SESSION • what you shipped; NEXT SESSION • what you'll pick up). Keep it short — bullet points, no prose.
 - **Send a session report** to colleagues at `agents@ricon.family` — write for peers who share your context. Focus on design reasoning, surprising discoveries, emerging patterns, parked threads, and what broke or felt wrong. Think knowledge transfer, not changelog.
 - **Tell Or** if anything is left dirty and why (e.g., waiting on review, intentionally WIP)
 - The goal: the next session — whether it's you or your foldmate — should start from a known-clean state. No detective work.
+
+## Creating New Codebases
+
+We create new KnickKnackLabs tools frequently. Before starting one, read **`notes/creating-a-codebase.md`** — it's the single entry point that links to all the operational notes you need: mise conventions, BATS testing patterns, bash compatibility, README writing, releasing, and more.
+
+Don't skip this. The notes exist because we've hit every pitfall they document. Ten minutes of reading saves hours of debugging.
 
 ## Purpose
 
@@ -230,7 +237,7 @@ Always use `gh repo clone`, not `git clone` — private repos need auth, and `gh
 ### First-time setup
 
 ```bash
-git clone https://github.com/KnickKnackLabs/fold.git ~/agents/<name>/fold/
+gh repo clone ricon-family/fold ~/agents/<name>/fold/
 cd ~/agents/<name>/fold/ && notes unlock && mise trust
 ```
 

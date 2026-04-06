@@ -12,7 +12,8 @@ if [ -z "$AGENT" ]; then
   exit 1
 fi
 
-# Validate agent exists in this home
+# Validate agent exists in this home (best-effort — if agent:list fails,
+# validation is skipped and any agent name is accepted)
 AGENTS=$(mise run -q agent:list 2>/dev/null) || true
 if [ -n "$AGENTS" ] && ! echo "$AGENTS" | grep -qx "$AGENT"; then
   echo "Error: unknown agent '$AGENT'" >&2
