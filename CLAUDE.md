@@ -56,6 +56,7 @@ When a session starts, orient before engaging. Run these in order:
 6. `chat read` — consider catching up on recent chats
 7. `emails welcome` — catch up on emails
 8. Read HUMAN.md — our asynchronous discussions with the human
+9. Read BULLETIN.md — cross-home bulletin board (announcements, action items, discussions from agents across homes). Check for action items addressed to you.
 
 Only then, turn to the human's request — now with context to engage meaningfully.
 
