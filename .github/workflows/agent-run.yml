@@ -48,6 +48,9 @@ jobs:
     timeout-minutes: 20
     env:
       REPO_NAME: ${{ github.event.repository.name }}
+    defaults:
+      run:
+        working-directory: /home/runner/${{ github.event.repository.name }}
     steps:
       - name: Checkout current repo
         uses: actions/checkout@v4
@@ -56,6 +59,7 @@ jobs:
           path: repo
 
       - name: Setup workspace
+        working-directory: ${{ github.workspace }}
         run: |
           mv repo "$HOME/$REPO_NAME"
           mkdir -p "$HOME/agents/${{ inputs.agent }}"
@@ -67,31 +71,26 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
 
-      - name: Install shiv
-        run: curl -fsSL https://shiv.knacklabs.co/install.sh | bash
-
-      - name: Install shimmer and sessions
+      - name: Install project tools
         env:
-          GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
+          GITHUB_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
+          MISE_JOBS: 1  # Serialize — vfox-shiv bootstrap isn't parallel-safe yet
         run: |
-          shiv install shimmer
-          shiv install sessions
-          shiv install secrets
-          shiv install rudi
-          shiv install notes
+          mise trust
+          mise install
 
       - name: Compute sessions CLI cache key
         id: sessions
         run: |
-          SESSIONS_DIR="$(shiv which sessions)"
+          SESSIONS_DIR="$(mise where shiv:sessions)/packages/sessions"
           echo "mix-lock-hash=$(sha256sum "$SESSIONS_DIR/cli/mix.lock" | cut -d' ' -f1)" >> $GITHUB_OUTPUT
 
       - name: Cache sessions CLI build
         uses: actions/cache@v4
         with:
           path: |
-            ~/.local/share/shiv/packages/sessions/cli/_build
-            ~/.local/share/shiv/packages/sessions/cli/deps
+            ~/.local/share/mise/installs/shiv-sessions/*/packages/sessions/cli/_build
+            ~/.local/share/mise/installs/shiv-sessions/*/packages/sessions/cli/deps
           key: ${{ runner.os }}-sessions-cli-${{ steps.sessions.outputs.mix-lock-hash }}
           restore-keys: |
             ${{ runner.os }}-sessions-cli-
@@ -147,7 +146,9 @@ jobs:
         run: shimmer gpg:setup ${{ inputs.agent }}
 
       - name: Setup email
-        run: shimmer email:setup ${{ inputs.agent }}
+        env:
+          EMAIL_PASSWORD: ${{ secrets.AGENT_EMAIL_PASSWORD }}
+        run: emails setup ${{ inputs.agent }}
 
       - name: Setup Matrix
         continue-on-error: true
@@ -177,13 +178,8 @@ jobs:
             echo "No zettelkasten found for ${{ inputs.agent }}, skipping"
           fi
 
-      - name: Install project dependencies and unlock
-        env:
-          GITHUB_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
+      - name: Unlock encrypted notes
         run: |
-          cd "$HOME/$REPO_NAME"
-          mise trust
-          mise install
           if [ -d ".git-crypt" ]; then
             rudi install
             notes unlock || echo "Warning: notes unlock failed — encrypted files may not be readable"
@@ -201,12 +197,14 @@ jobs:
           INPUT_MODEL: ${{ inputs.model }}
           RUN_TIMEOUT: 900
         run: |
-          cd "$HOME/$REPO_NAME"
           echo "### AGENT SESSION START ###"
 
           # shimmer as sets identity env vars (AGENT_IDENTITY, GIT_AUTHOR_*, GH_TOKEN, etc.)
           # shimmer agent --headless delegates to sessions run for execution
           eval "$(shimmer as "$AGENT")"
+
+          # Configure gh as git credential helper so shiv can clone private repos
+          gh auth setup-git
 
           CMD=(shimmer agent --headless --timeout "$RUN_TIMEOUT")
           [ -n "$INPUT_MODEL" ] && CMD+=(--model "$INPUT_MODEL")

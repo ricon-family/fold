@@ -1,8 +1,19 @@
+[settings]
+experimental = true
+
 [plugins]
 shiv = "https://github.com/KnickKnackLabs/vfox-shiv"
 
 [tools]
-"shiv:shell" = "0.1.0"
 "ubi:pimalaya/himalaya" = "1.1.0" # Email CLI for agents
 usage = "1"                       # CLI arg parsing for tasks
 yq = "4.50.1"                     # YAML processing
+"shiv:shiv" = "0.1.0"
+"shiv:shimmer" = "latest"
+"shiv:sessions" = "0.3.0"
+"shiv:modules" = "0.4.1"
+"shiv:notes" = "0.3.0"
+"shiv:rudi" = "0.5.0"
+"shiv:secrets" = "0.1.0"
+"shiv:shell" = "0.1.0"
+"shiv:emails" = "0.3.0"
