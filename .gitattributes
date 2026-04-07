@@ -2,3 +2,4 @@
 # Encrypted paths — transparently encrypted by git-crypt on push/pull.
 notes/**                       filter=git-crypt diff=git-crypt
 submodules/.manifest                     filter=git-crypt diff=git-crypt
+notes/.manifest merge=manifest
