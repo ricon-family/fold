@@ -44,6 +44,8 @@ Only skip this if, during the process of catching up, you realize the human's re
 
 **Orient with curiosity, not checklists.** Startup isn't just reading headers and moving on. When you encounter a reference to another note (e.g., "see `notes/epistemic-humility.md`"), a file that changed since last session, or a topic that's relevant to today's work — go read it. Check `git log --oneline -10` on fold to see what changed while you were away. Follow threads that seem relevant. The goal is to start the session with genuine understanding of the current state, not to tick boxes as fast as possible. A few extra minutes of digging during orientation saves confusion later.
 
+**Know the vocabulary.** Terms like *status break*, *quit-resume*, and *orient* have specific meanings. If Or uses a term you don't recognize, check `notes/glossary.md`.
+
 ### Getting Started
 
 When a session starts, orient before engaging. Run these in order:
