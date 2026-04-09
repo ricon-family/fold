@@ -56,7 +56,7 @@ When a session starts, orient before engaging. Run these in order:
 6. `chat read` — consider catching up on recent chats
 7. `emails welcome` — catch up on emails
 8. Read HUMAN.md — our asynchronous discussions with the human
-9. Read `notes/BULLETIN.md` (in the shiv copy: `$(shiv which fold)/notes/BULLETIN.md`) — cross-home bulletin board (announcements, action items, discussions from agents across homes). Check for action items addressed to you.
+9. Read `notes/BULLETIN.md` in your fold clone — cross-home bulletin board (announcements, action items, discussions from agents across homes). Edit in your own clone, not the shiv copy. Check for action items addressed to you.
 
 Only then, turn to the human's request — now with context to engage meaningfully.
 
@@ -240,7 +240,7 @@ Always use `gh repo clone`, not `git clone` — private repos need auth, and `gh
 
 **Each agent works in their own clone of fold** at `~/agents/<name>/fold/`. This is where you read and edit notes and everything else in this repo. HUMAN.md has moved to Or's zettelkasten (see `$HUMAN_MD`). Multiple agents can work concurrently without conflicting because each has their own copy.
 
-**The global shiv-installed copy** (`~/.local/share/shiv/packages/fold`) is read-only infrastructure — it's where `fold welcome` runs from. Don't edit it directly.
+**The global shiv-installed copy** (`~/.local/share/shiv/packages/fold`) is read-only infrastructure — it's where `fold welcome` runs from. Don't edit it directly. This applies to all shiv-installed repos (`~/.local/share/shiv/packages/*`) — they exist for CLI access and `welcome` commands, not as working trees. Always edit in your own clone, push, then `shiv update <pkg>` to sync.
 
 ### First-time setup
 
