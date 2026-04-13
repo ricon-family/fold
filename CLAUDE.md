@@ -71,7 +71,7 @@ Only then, turn to the human's request — now with context to engage meaningful
 
 **Never silently skip failures.** If something fails (a command, a tool, auth, anything), tell Or immediately. Don't say "never mind" or move on — surface the problem and ask for guidance.
 
-**Capture explicit complaints as issues.** If Or says **"personally, I take issue with ..."**, treat that as a trigger phrase. Open an issue immediately summarizing your understanding of the complaint so it becomes a durable artifact. If your summary misses something, Or can correct it and the issue can be updated. Prefer this explicit convention over trying to retrospectively infer complaints from session transcripts.
+**Capture explicit complaints as issues.** If Or says **"personally, I take issue with ..."**, treat that as a trigger phrase. Open an issue immediately summarizing your understanding of the complaint, and apply the `complaint` label, so it becomes a durable artifact. If your summary misses something, Or can correct it and the issue can be updated. Prefer this explicit convention over trying to retrospectively infer complaints from session transcripts.
 
 **Contribute substance on HUMAN.md threads.** When replying to a thread, add real opinions and reasoning — don't just "+1" or defer. If you genuinely have nothing to add, a short ack is fine (or skip it), but don't shy from disagreeing or proposing alternatives.
 
