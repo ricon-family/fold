@@ -1,0 +1,31 @@
+# Temporary diagnostic workflow — delete after debugging
+name: debug-gpg
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check GPG key format
+        env:
+          GPG_KEY: ${{ secrets.QUICK_GPG_PRIVATE_KEY }}
+        run: |
+          echo "=== Key diagnostics (no secrets exposed) ==="
+          echo "Key length: ${#GPG_KEY}"
+          echo "Line count: $(echo "$GPG_KEY" | wc -l)"
+          echo "First 27 chars: $(echo "$GPG_KEY" | head -c 27)"
+          echo "Last 25 chars: $(echo "$GPG_KEY" | tail -c 25)"
+          echo "Has BEGIN marker: $(echo "$GPG_KEY" | grep -c 'BEGIN PGP' || true)"
+          echo "Has END marker: $(echo "$GPG_KEY" | grep -c 'END PGP' || true)"
+          echo "Blank lines: $(echo "$GPG_KEY" | grep -c '^$' || true)"
+          echo ""
+          echo "=== Attempting GPG import ==="
+          echo "$GPG_KEY" | gpg --import 2>&1 || true
+          echo ""
+          echo "=== Try with --body style ==="
+          echo "$GPG_KEY" > /tmp/key.asc
+          file /tmp/key.asc
+          head -1 /tmp/key.asc
+          gpg --import /tmp/key.asc 2>&1 || true
