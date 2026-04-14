@@ -73,7 +73,7 @@ jobs:
 
       - name: Install project tools
         env:
-          GITHUB_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
+          GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
           MISE_JOBS: 1  # Serialize — vfox-shiv bootstrap isn't parallel-safe yet
         run: |
           mise trust
@@ -146,8 +146,6 @@ jobs:
         run: shimmer gpg:setup ${{ inputs.agent }}
 
       - name: Setup email
-        env:
-          EMAIL_PASSWORD: ${{ secrets.AGENT_EMAIL_PASSWORD }}
         run: emails setup ${{ inputs.agent }}
 
       - name: Setup Matrix
