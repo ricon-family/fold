@@ -48,6 +48,7 @@ jobs:
     timeout-minutes: 20
     env:
       REPO_NAME: ${{ github.event.repository.name }}
+      GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
     defaults:
       run:
         working-directory: /home/runner/${{ github.event.repository.name }}
@@ -73,7 +74,6 @@ jobs:
 
       - name: Install project tools
         env:
-          GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
           MISE_JOBS: 1  # Serialize — vfox-shiv bootstrap isn't parallel-safe yet
         run: |
           mise trust
@@ -99,8 +99,6 @@ jobs:
         run: sessions cli:build
 
       - name: Install pi
-        env:
-          GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
         run: mise use -g github:badlogic/pi-mono@0.64.0
 
       - name: Setup secrets for env provider
@@ -162,8 +160,6 @@ jobs:
           fi
 
       - name: Clone zettelkasten
-        env:
-          GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
         run: |
           ZETTEL_DIR="$HOME/agents/${{ inputs.agent }}/zettelkasten"
           ZETTEL_REPO="${{ inputs.agent }}-ricon/zettelkasten"
@@ -214,8 +210,6 @@ jobs:
 
       - name: Post-failure diagnostics
         if: failure()
-        env:
-          GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
         run: |
           echo "=== Diagnostics ==="
           echo ""
