@@ -1,28 +1,87 @@
-# Temporary diagnostic workflow — delete after debugging
+# Temporary workflow to fix quoted GPG keys — delete after use
+#
+# Root cause: agent:sync-secrets (or manual upload) on Apr 13 stored GPG
+# private keys wrapped in literal double quotes ("-----BEGIN...END-----").
+# GPG rejects these. This workflow strips the quotes and re-uploads.
+#
+# Uses QUICK's PAT for repo secret write access.
 name: debug-gpg
 
 on:
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run — diagnose only, do not fix'
+        required: true
+        type: boolean
+        default: true
 
 jobs:
-  check:
+  fix:
     runs-on: ubuntu-latest
     steps:
-      - name: Check GPG key format
+      - name: Fix quoted GPG keys
         env:
-          GPG_KEY: ${{ secrets.QUICK_GPG_PRIVATE_KEY }}
+          GH_TOKEN: ${{ secrets.QUICK_GITHUB_PAT }}
+          BROWNIE_GPG_PRIVATE_KEY: ${{ secrets.BROWNIE_GPG_PRIVATE_KEY }}
+          C0DA_GPG_PRIVATE_KEY: ${{ secrets.C0DA_GPG_PRIVATE_KEY }}
+          JOHNSON_GPG_PRIVATE_KEY: ${{ secrets.JOHNSON_GPG_PRIVATE_KEY }}
+          JUNIOR_GPG_PRIVATE_KEY: ${{ secrets.JUNIOR_GPG_PRIVATE_KEY }}
+          K7R2_GPG_PRIVATE_KEY: ${{ secrets.K7R2_GPG_PRIVATE_KEY }}
+          QUICK_GPG_PRIVATE_KEY: ${{ secrets.QUICK_GPG_PRIVATE_KEY }}
+          RHO_GPG_PRIVATE_KEY: ${{ secrets.RHO_GPG_PRIVATE_KEY }}
+          X1F9_GPG_PRIVATE_KEY: ${{ secrets.X1F9_GPG_PRIVATE_KEY }}
         run: |
-          echo "=== Key diagnostics ==="
-          echo "Key length: ${#GPG_KEY}"
-          echo "Line count: $(echo "$GPG_KEY" | wc -l)"
-          echo "First char hex: $(echo "$GPG_KEY" | head -c 1 | xxd -p)"
-          echo "Starts with dash: $(echo "$GPG_KEY" | head -c 1 | grep -c '^-' || true)"
-          echo "Starts with quote: $(echo "$GPG_KEY" | head -c 1 | grep -c '^"' || true)"
-          echo "Has literal quotes: $(echo "$GPG_KEY" | grep -c '"' || true)"
-          echo "Has literal backslash-n: $(echo "$GPG_KEY" | grep -c '\\n' || true)"
+          DRY_RUN="${{ inputs.dry_run }}"
+          AGENTS=(BROWNIE C0DA JOHNSON JUNIOR K7R2 QUICK RHO X1F9)
+          fixed=0
+          skipped=0
+          already_ok=0
+
+          for agent in "${AGENTS[@]}"; do
+            var="${agent}_GPG_PRIVATE_KEY"
+            key="${!var}"
+
+            if [ -z "$key" ]; then
+              echo "[$agent] SKIP — no key found"
+              skipped=$((skipped + 1))
+              continue
+            fi
+
+            first_char=$(echo "$key" | head -c 1)
+            if [ "$first_char" != '"' ]; then
+              echo "[$agent] OK — key starts with '${first_char}', not quoted"
+              already_ok=$((already_ok + 1))
+              continue
+            fi
+
+            # Strip leading and trailing quotes
+            clean_key=$(echo "$key" | sed 's/^"//; s/"$//')
+
+            # Verify the cleaned key imports successfully
+            if echo "$clean_key" | gpg --import 2>&1 | grep -q "secret key imported"; then
+              echo "[$agent] QUOTED — cleaned key imports successfully"
+              # Delete imported key so it doesn't interfere with next agent
+              fpr=$(gpg --list-secret-keys --keyid-format long 2>/dev/null | grep -A1 "^sec" | tail -1 | tr -d ' ')
+              gpg --batch --yes --delete-secret-and-public-key "$fpr" 2>/dev/null || true
+
+              if [ "$DRY_RUN" = "true" ]; then
+                echo "  [dry-run] Would re-upload ${var}"
+              else
+                gh secret set "$var" --repo ricon-family/fold --body "$clean_key"
+                echo "  FIXED — re-uploaded ${var}"
+              fi
+              fixed=$((fixed + 1))
+            else
+              echo "[$agent] QUOTED — but cleaned key FAILS import, skipping to be safe"
+              gpg --batch --yes --delete-secret-and-public-key "$(gpg --list-secret-keys --keyid-format long 2>/dev/null | grep -A1 '^sec' | tail -1 | tr -d ' ')" 2>/dev/null || true
+              skipped=$((skipped + 1))
+            fi
+          done
+
           echo ""
-          echo "=== First line hex dump (first 40 bytes) ==="
-          echo "$GPG_KEY" | head -1 | head -c 40 | xxd
-          echo ""
-          echo "=== Last line hex dump ==="
-          echo "$GPG_KEY" | tail -1 | xxd
+          echo "=== Summary ==="
+          echo "Fixed: $fixed | Already OK: $already_ok | Skipped: $skipped"
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "(Dry run — no changes made. Re-run with dry_run=false to apply.)"
+          fi
