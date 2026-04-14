@@ -183,7 +183,7 @@ Notes use YAML frontmatter (title, tags, related, created, updated) and `[[wikil
 
 ## HUMAN.md
 
-**HUMAN.md is Or's voice.** Read it at session start. It contains async notes, ideas, and instructions from Or. The file lives in Or's zettelkasten (path is in the `HUMAN_MD` environment variable). Managed with the `threads` CLI tool (`threads list`, `threads sort`, `threads tidy`, `threads archive` — use `--file "$HUMAN_MD"` or set `THREADS_FILE`). To edit, work on Or's zettelkasten clone directly.
+**HUMAN.md is Or's voice.** Read it at session start. It contains async notes, ideas, and instructions from Or. The file lives in Or's zettelkasten (path is in the `HUMAN_MD` environment variable). Managed with the `threads` CLI tool (`threads ls`, `threads fmt`, `threads archive` — use `--file "$HUMAN_MD"` or set `THREADS_FILE`). To edit, work on Or's zettelkasten clone directly.
 
 **Pull before you read HUMAN.md, push + sync after you write.** Before reading: `git -C ~/agents/or/zettelkasten pull`. After writing: commit and push from Or's zettelkasten. The `fold welcome` command reads HUMAN.md via the `HUMAN_MD` env var — no local copies to drift.
 
