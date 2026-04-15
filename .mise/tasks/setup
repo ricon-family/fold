@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#MISE description="Set up dev environment (hooks, tools)"
+set -euo pipefail
+
+echo "Setting up $(basename "$MISE_CONFIG_ROOT")..."
+
+if command -v codebase &>/dev/null; then
+  cd "$MISE_CONFIG_ROOT" && codebase pre-commit
+else
+  echo "WARN: codebase not found — run 'mise install' first" >&2
+fi
+
+echo "Done."
