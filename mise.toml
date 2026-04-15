@@ -10,16 +10,13 @@ shiv = "https://github.com/KnickKnackLabs/vfox-shiv"
 "ubi:pimalaya/himalaya" = "1.1.0" # Email CLI for agents
 usage = "1"                       # CLI arg parsing for tasks
 yq = "4.50.1"                     # YAML processing
-"shiv:shiv" = "latest"
 "shiv:shimmer" = "latest"
 "shiv:sessions" = "0.3.0"
 "shiv:modules" = "0.7.0"
 "shiv:notes" = "0.8.0"
-"shiv:rudi" = "0.5.1"
 "shiv:secrets" = "0.1.0"
-"shiv:shell" = "0.1.0"
 "shiv:emails" = "0.3.0"
-"shiv:codebase" = "0.1.0"                 # Codebase linting + migrations
+"shiv:codebase" = "0.1.0"
 
 [_.codebase]
 lint = ["mise-settings", "gum-table"]
