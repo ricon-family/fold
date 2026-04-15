@@ -14,6 +14,7 @@ yq = "4.50.1"                     # YAML processing
 "shiv:sessions" = "0.3.0"
 "shiv:modules" = "0.7.0"
 "shiv:notes" = "0.8.0"
+"shiv:rudi" = "0.5.1"                     # git-crypt wrapper — CI calls rudi install directly
 "shiv:secrets" = "0.1.0"
 "shiv:emails" = "0.3.0"
 "shiv:codebase" = "0.1.0"

@@ -2,7 +2,7 @@
 # Source: shimmer workflows generate
 # Regenerate: shimmer workflows generate
 
-name: c0da
+name: agent-first-person-ownership
 
 on:
   workflow_dispatch:
@@ -20,13 +20,13 @@ jobs:
   run:
     uses: ./.github/workflows/agent-run.yml
     with:
-      agent: c0da
+      agent: agent-first-person-ownership
       message: ${{ inputs.message }}
       model: ${{ inputs.model }}
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      AGENT_GITHUB_PAT: ${{ secrets.C0DA_GITHUB_PAT }}
-      AGENT_GPG_PRIVATE_KEY: ${{ secrets.C0DA_GPG_PRIVATE_KEY }}
-      AGENT_EMAIL_PASSWORD: ${{ secrets.C0DA_EMAIL_PASSWORD }}
-      AGENT_MATRIX_PASSWORD: ${{ secrets.C0DA_MATRIX_PASSWORD }}
-      AGENT_GITHUB_PASSWORD: ${{ secrets.C0DA_GITHUB_PASSWORD }}
+      AGENT_GITHUB_PAT: ${{ secrets.AGENT_FIRST_PERSON_OWNERSHIP_GITHUB_PAT }}
+      AGENT_GPG_PRIVATE_KEY: ${{ secrets.AGENT_FIRST_PERSON_OWNERSHIP_GPG_PRIVATE_KEY }}
+      AGENT_EMAIL_PASSWORD: ${{ secrets.AGENT_FIRST_PERSON_OWNERSHIP_EMAIL_PASSWORD }}
+      AGENT_MATRIX_PASSWORD: ${{ secrets.AGENT_FIRST_PERSON_OWNERSHIP_MATRIX_PASSWORD }}
+      AGENT_GITHUB_PASSWORD: ${{ secrets.AGENT_FIRST_PERSON_OWNERSHIP_GITHUB_PASSWORD }}
