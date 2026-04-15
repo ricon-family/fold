@@ -4,33 +4,15 @@ set -eo pipefail
 
 NOTES_DIR="$MISE_CONFIG_ROOT/notes"
 
-# Find identity files by scanning for "identity" in the tags frontmatter line.
-# Uses * not *.md so it works whether notes are obfuscated or not.
-# When obfuscated, extracts agent name from the title frontmatter field.
-for f in "$NOTES_DIR"/*; do
+# Find agent identity files using farts frontmatter queries.
+# Agent notes have `type: agent-identity` in their frontmatter.
+for f in $(farts query 'type = identity' "$NOTES_DIR"/* 2>/dev/null); do
   [ ! -f "$f" ] && continue
-  in_fm=false
-  is_identity=false
-  title=""
-  while IFS= read -r line; do
-    if [[ "$line" == "---" ]]; then
-      if $in_fm; then break; else in_fm=true; continue; fi
-    fi
-    $in_fm || continue
-    if [[ "$line" == title:* ]]; then
-      title="${line#title: }"
-    fi
-    if [[ "$line" == tags:* ]] && [[ "$line" == *"identity"* ]]; then
-      is_identity=true
-    fi
-  done < "$f"
-  if $is_identity; then
-    name=$(basename "$f" .md)
-    # If the filename is a hex ID (obfuscated), use the title instead
-    if [[ "$name" =~ ^[0-9a-f]+$ ]] && [ -n "$title" ]; then
-      echo "$title"
-    else
-      echo "$name"
-    fi
+  name=$(basename "$f" .md)
+  # If the filename is a hex ID (obfuscated), use the title from frontmatter
+  if [[ "$name" =~ ^[0-9a-f]+$ ]]; then
+    title=$(farts get title "$f" 2>/dev/null)
+    [ -n "$title" ] && name="$title"
   fi
+  echo "$name"
 done

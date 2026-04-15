@@ -18,6 +18,7 @@ yq = "4.50.1"                     # YAML processing
 "shiv:secrets" = "0.1.0"
 "shiv:emails" = "0.3.0"
 "shiv:codebase" = "0.1.0"
+"shiv:farts" = "0.1.0"                    # Frontmatter queries for agent:list
 
 [_.codebase]
 lint = ["mise-settings", "gum-table"]
