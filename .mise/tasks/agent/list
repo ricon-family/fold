@@ -1,13 +1,22 @@
 #!/usr/bin/env bash
 #MISE description="List agents in this home"
+#USAGE flag "--ci" help="Only list agents with CI workflows enabled"
 set -eo pipefail
 
 NOTES_DIR="$MISE_CONFIG_ROOT/notes"
+CI_ONLY="${usage_ci:-false}"
 
 # Find agent identity files using farts frontmatter queries.
-# Agent notes have `type: agent-identity` in their frontmatter.
-for f in $(farts query 'type = identity' "$NOTES_DIR"/* 2>/dev/null); do
+# Agent notes have `type: agent` in their frontmatter.
+for f in $(farts query 'type = agent' "$NOTES_DIR"/* 2>/dev/null); do
   [ ! -f "$f" ] && continue
+
+  # Filter to CI-enabled agents if --ci flag is set
+  if [[ "$CI_ONLY" == "true" ]]; then
+    ci_val=$(farts get ci "$f" 2>/dev/null | tr '[:upper:]' '[:lower:]')
+    [[ "$ci_val" != "true" ]] && continue
+  fi
+
   name=$(basename "$f" .md)
   # If the filename is a hex ID (obfuscated), use the title from frontmatter
   if [[ "$name" =~ ^[0-9a-f]+$ ]]; then
