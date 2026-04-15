@@ -1,5 +1,7 @@
 [settings]
 experimental = true
+quiet = true
+task_output = "interleave"
 
 [plugins]
 shiv = "https://github.com/KnickKnackLabs/vfox-shiv"
@@ -17,3 +19,10 @@ yq = "4.50.1"                     # YAML processing
 "shiv:secrets" = "0.1.0"
 "shiv:shell" = "0.1.0"
 "shiv:emails" = "0.3.0"
+"shiv:codebase" = "0.1.0"                 # Codebase linting + migrations
+
+[_.codebase]
+lint = ["mise-settings", "gum-table"]
+
+[_.codebase.scope]
+gum-table = ".mise/tasks"
