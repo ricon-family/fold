@@ -188,7 +188,6 @@ jobs:
 
       - name: Run agent
         env:
-          AGENT_HOME: $GITHUB_WORKSPACE
           AGENT: ${{ inputs.agent }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BROWSER_GITHUB_COM_PASSWORD: ${{ secrets.AGENT_GITHUB_PASSWORD }}
@@ -199,6 +198,9 @@ jobs:
           RUN_TIMEOUT: 900
         run: |
           echo "### AGENT SESSION START ###"
+
+          cd "$GITHUB_WORKSPACE"
+          export CALLER_PWD="$GITHUB_WORKSPACE"
 
           # shimmer as sets identity env vars (AGENT_IDENTITY, GIT_AUTHOR_*, GH_TOKEN, etc.)
           # shimmer agent --headless delegates to sessions run for execution
