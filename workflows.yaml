@@ -19,7 +19,7 @@ workflows:
     agent: junior
     schedule:
       - "0 15 * * *"  # 10am EST daily
-    message: "Check your zettelkasten for job instructions at jobs/dc-checkin.txt and execute them."
+    message: "Check your home repo for job instructions at jobs/dc-checkin.txt and execute them."
 
   - name: rho-repo-audit
     agent: rho

@@ -14,7 +14,7 @@ jobs:
     uses: ./.github/workflows/agent-run.yml
     with:
       agent: junior
-      message: Check your zettelkasten for job instructions at jobs/dc-checkin.txt and execute them.
+      message: Check your home repo for job instructions at jobs/dc-checkin.txt and execute them.
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       AGENT_GITHUB_PAT: ${{ secrets.JUNIOR_GITHUB_PAT }}

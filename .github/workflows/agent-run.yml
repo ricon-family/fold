@@ -160,18 +160,24 @@ jobs:
             echo "B2 credentials not configured, skipping blob storage setup"
           fi
 
-      - name: Clone zettelkasten
+      - name: Clone home repo
         run: |
-          ZETTEL_DIR="$HOME/agents/${{ inputs.agent }}/zettelkasten"
-          ZETTEL_REPO="${{ inputs.agent }}-ricon/zettelkasten"
+          HOME_DIR="$HOME/agents/${{ inputs.agent }}/home"
+          HOME_REPO="${{ inputs.agent }}-ricon/home"
+          LEGACY_REPO="${{ inputs.agent }}-ricon/zettelkasten"
 
-          if gh repo view "$ZETTEL_REPO" --json name > /dev/null 2>&1; then
-            echo "Cloning zettelkasten from $ZETTEL_REPO..."
-            git clone "https://x-access-token:${GH_TOKEN}@github.com/${ZETTEL_REPO}.git" "$ZETTEL_DIR"
-            echo "Zettelkasten available at $ZETTEL_DIR"
+          if gh repo view "$HOME_REPO" --json name > /dev/null 2>&1; then
+            REPO="$HOME_REPO"
+          elif gh repo view "$LEGACY_REPO" --json name > /dev/null 2>&1; then
+            REPO="$LEGACY_REPO"
           else
-            echo "No zettelkasten found for ${{ inputs.agent }}, skipping"
+            echo "No home repo found for ${{ inputs.agent }}, skipping"
+            exit 0
           fi
+
+          echo "Cloning home repo from $REPO..."
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "$HOME_DIR"
+          echo "Home repo available at $HOME_DIR"
 
       - name: Unlock encrypted notes
         run: |

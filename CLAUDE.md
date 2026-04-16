@@ -16,7 +16,7 @@ Run `shimmer whoami` to identify yourself, or check `$GIT_AUTHOR_NAME` (set by `
 
 Then read your canonical identity and startup instructions at:
 ```
-~/agents/<name>/zettelkasten/CLAUDE.md
+~/agents/<name>/home/CLAUDE.md
 ```
 
 **Read that file now and follow the startup procedure it describes.**
@@ -36,7 +36,7 @@ Either way, `eval $(shimmer as <agent>)` and `eval $(fold agent:env)` run before
 
 When a session starts, always catch up before engaging with the human's request. Do this even if the human opens with a question or idea — resist the urge to respond immediately.
 
-Start with yourself. Your zettelkasten is your memory — review it first to remember what you've been working on, what's open, what you know. Then check your messages. Your own context takes priority over what other agents have been doing. You need to understand your own situation before you can meaningfully engage with anything else.
+Start with yourself. Your home repo is your memory — review it first to remember what you've been working on, what's open, what you know. Then check your messages. Your own context takes priority over what other agents have been doing. You need to understand your own situation before you can meaningfully engage with anything else.
 
 The catch-up process is what gives you the context to judge priorities. You can't properly assess whether something is urgent, or how it connects to ongoing work, without first knowing what's been happening. Almost always, orienting first will lead to a better response than jumping straight in.
 
@@ -53,7 +53,7 @@ When a session starts, orient before engaging. Run these in order:
 1. `shimmer welcome` — identity & health check (GPG, tokens, email quota)
 2. `fold welcome` — orient yourself within your agent home
 3. `shimmer zettel:welcome` — review your notes inventory. If something looks important or relevant, read it.
-4. If your zettelkasten has a `CLAUDE.md`, read it — it's your personal orientation and startup procedure.
+4. If your home repo has a `CLAUDE.md`, read it — it's your personal orientation and startup procedure.
 5. Read your Status/scratchpad note — remember where you left off, what's open, what you planned next
 6. `chat read` — consider catching up on recent chats
 7. `emails welcome` — catch up on emails
@@ -100,7 +100,7 @@ Only then, turn to the human's request — now with context to engage meaningful
 
 **Keep your zettels current.** Update session logs, record what you learn, maintain your own notes.
 
-**Maintain a living scratchpad.** Keep a note in your zettelkasten that tracks your current session work, next steps, open items, and anything a future session needs to know. Update it *as you work*, not just at session end — sessions can get cut short without warning, and context that isn't written down is lost. Think of it as your desk: the next session should be able to glance at it and know where things stand.
+**Maintain a living scratchpad.** Keep a note in your home repo that tracks your current session work, next steps, open items, and anything a future session needs to know. Update it *as you work*, not just at session end — sessions can get cut short without warning, and context that isn't written down is lost. Think of it as your desk: the next session should be able to glance at it and know where things stand.
 
 **Shared spaces are shared.** `notes/` is common ground — coordinate changes through chat.
 
@@ -116,7 +116,7 @@ Only then, turn to the human's request — now with context to engage meaningful
 
 **Know when to abort.** If you're fundamentally blocked — missing credentials, service unavailable, permissions error — fail the run with `[[ABORT]]` (output it on its own line) and a clear message explaining what's wrong. Silent non-accomplishment is worse than a visible failure. This doesn't apply to "nothing to do" situations — that's a successful run with no work needed.
 
-**When things break, escalate before exiting.** Services go down, tokens expire, servers time out. One retry is reasonable, then shift to problem-solving. If the broken service isn't essential to your task, skip it and proceed. If it is essential: (1) leave a note in your zettelkasten — what broke, what you were trying to do, whether it's time-sensitive; (2) reach out through an alternative channel — email down, try Matrix; Matrix down, open a GitHub issue; (3) then exit cleanly with `[[ABORT]]`. The goal: when something breaks, someone finds out quickly.
+**When things break, escalate before exiting.** Services go down, tokens expire, servers time out. One retry is reasonable, then shift to problem-solving. If the broken service isn't essential to your task, skip it and proceed. If it is essential: (1) leave a note in your home repo — what broke, what you were trying to do, whether it's time-sensitive; (2) reach out through an alternative channel — email down, try Matrix; Matrix down, open a GitHub issue; (3) then exit cleanly with `[[ABORT]]`. The goal: when something breaks, someone finds out quickly.
 
 **Clean up your inbox.** Each agent has a 50MB email quota. GitHub notification emails are the biggest source of clutter — they duplicate information already available via `gh`. Periodically scan for `[KnickKnackLabs/...]` and `[ricon-family/...]` notification emails and permanently delete them (`emails delete --permanent`). Don't archive — that still counts against quota.
 
@@ -183,11 +183,11 @@ Notes use YAML frontmatter (title, tags, related, created, updated) and `[[wikil
 
 ## HUMAN.md
 
-**HUMAN.md is Or's voice.** Read it at session start. It contains async notes, ideas, and instructions from Or. The file lives in Or's zettelkasten (path is in the `HUMAN_MD` environment variable). Managed with the `threads` CLI tool (`threads ls`, `threads fmt`, `threads archive` — use `--file "$HUMAN_MD"` or set `THREADS_FILE`). To edit, work on Or's zettelkasten clone directly.
+**HUMAN.md is Or's voice.** Read it at session start. It contains async notes, ideas, and instructions from Or. The file lives in Or's home repo (path is in the `HUMAN_MD` environment variable). Managed with the `threads` CLI tool (`threads ls`, `threads fmt`, `threads archive` — use `--file "$HUMAN_MD"` or set `THREADS_FILE`). To edit, work on Or's home clone directly.
 
-**Pull before you read HUMAN.md, push + sync after you write.** Before reading: `git -C ~/agents/or/zettelkasten pull`. After writing: commit and push from Or's zettelkasten. The `fold welcome` command reads HUMAN.md via the `HUMAN_MD` env var — no local copies to drift.
+**Pull before you read HUMAN.md, push + sync after you write.** Before reading: `git -C ~/agents/or/home pull`. After writing: commit and push from Or's home repo. The `fold welcome` command reads HUMAN.md via the `HUMAN_MD` env var — no local copies to drift.
 
-## Architecture: Fold vs Private Zettelkasten
+## Architecture: Fold vs Private Home Repo
 
 Agents have **two** places to store information:
 
@@ -196,11 +196,11 @@ Agents have **two** places to store information:
 - **Use for:** Shared notes, identity files, collaboration
 - **Identity files:** `notes/<agent>.md` (encrypted via git-crypt)
 
-### Private Zettelkasten — Personal Repo
-- **Location:** `~/agents/<name>/zettelkasten/` (e.g., `~/agents/baby-joel/zettelkasten/`)
+### Private Home Repo — Personal Repo
+- **Location:** `~/agents/<name>/home/` (e.g., `~/agents/baby-joel/home/`)
 - **Contains:** `CLAUDE.md` (canonical identity), session logs, working principles, private notes
 - **Visible to:** Only the agent and Or
-- **This is your home.** Fold is where you collaborate; the zettelkasten is who you are.
+- **This repo is your home.** Fold is where you collaborate; your home repo is where your private memory lives.
 
 ## Communication
 
@@ -217,14 +217,14 @@ Agents have **two** places to store information:
 
 Key commands:
 - `shimmer welcome` — Check your identity and system health
-- `shimmer zettel:welcome` — Review your zettelkasten (your memory)
+- `shimmer zettel:welcome` — Review your home notes (your memory)
 - `emails welcome` — Check for messages from humans or other agents
 - `shimmer code:welcome` — Info about this codebase
 - `shimmer tasks` — See all available commands
 
 ## Personal Workspace
 
-Each agent has a workspace at `~/agents/<name>/` for cloning repos, running builds, and hands-on work. The private zettelkasten (`~/agents/<name>/zettelkasten/`) also lives there.
+Each agent has a workspace at `~/agents/<name>/` for cloning repos, running builds, and hands-on work. The private home repo (`~/agents/<name>/home/`) also lives there.
 
 **Always pull latest before working on a repo.** Your workspace persists between sessions, so local clones can be days or weeks stale. Run `git pull` (or `git fetch && git log ..origin/main` to review first) before assuming what you see is current.
 
@@ -241,7 +241,7 @@ Always use `gh repo clone`, not `git clone` — private repos need auth, and `gh
 
 ## Working with Fold
 
-**Each agent works in their own clone of fold** at `~/agents/<name>/fold/`. This is where you read and edit notes and everything else in this repo. HUMAN.md has moved to Or's zettelkasten (see `$HUMAN_MD`). Multiple agents can work concurrently without conflicting because each has their own copy.
+**Each agent works in their own clone of fold** at `~/agents/<name>/fold/`. This is where you read and edit notes and everything else in this repo. HUMAN.md has moved to Or's home repo (see `$HUMAN_MD`). Multiple agents can work concurrently without conflicting because each has their own copy.
 
 **The global shiv-installed copy** (`~/.local/share/shiv/packages/fold`) is read-only infrastructure — it's where `fold welcome` runs from. Don't edit it directly. This applies to all shiv-installed repos (`~/.local/share/shiv/packages/*`) — they exist for CLI access and `welcome` commands, not as working trees. Always edit in your own clone, push, then `shiv update <pkg>` to sync.
 
