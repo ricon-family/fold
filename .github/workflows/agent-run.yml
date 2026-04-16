@@ -188,7 +188,7 @@ jobs:
 
       - name: Run agent
         env:
-          AGENT_HOME: $HOME/${{ github.event.repository.name }}
+          AGENT_HOME: $GITHUB_WORKSPACE
           AGENT: ${{ inputs.agent }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BROWSER_GITHUB_COM_PASSWORD: ${{ secrets.AGENT_GITHUB_PASSWORD }}
