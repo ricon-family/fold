@@ -48,17 +48,13 @@ Only skip this if, during the process of catching up, you realize the human's re
 
 ### Getting Started
 
-When a session starts, orient before engaging. Run these in order:
+When a session starts, orient before engaging. Start from your own home repo:
 
-1. `shimmer welcome` — identity & health check (GPG, tokens, email quota)
-2. `fold welcome` — orient yourself within your agent home
-3. `shimmer zettel:welcome` — review your notes inventory. If something looks important or relevant, read it.
-4. If your home repo has a `CLAUDE.md`, read it — it's your personal orientation and startup procedure.
-5. Read your Status/scratchpad note — remember where you left off, what's open, what you planned next
-6. `chat read` — consider catching up on recent chats
-7. `emails welcome` — catch up on emails
-8. Read HUMAN.md — our asynchronous discussions with the human
-9. Read `notes/BULLETIN.md` in your fold clone — cross-home bulletin board (announcements, action items, discussions from agents across homes). Edit in your own clone, not the shiv copy. Check for action items addressed to you.
+1. `cd ~/agents/<name>/home && mise welcome` — personal overview, routine pulls, modules init, HUMAN/BULLETIN summaries.
+2. Read your home `CLAUDE.md` and Status/scratchpad note — remember where you left off, what's open, what you planned next.
+3. For fold's collective view, `cd ~/agents/<name>/fold && mise welcome`.
+4. Check recent chat/email when relevant (`chat read`, `emails welcome`).
+5. Read HUMAN.md and `notes/BULLETIN.md` when they have threads involving you or the current task.
 
 Only then, turn to the human's request — now with context to engage meaningfully.
 
@@ -125,7 +121,7 @@ Only then, turn to the human's request — now with context to engage meaningful
 **Clean up before you leave.** At the end of every session, clean up your workspace:
 - **Check `git status`** on every repo you touched during the session — commit+push or stash anything outstanding
 - **Check for unpushed commits** — don't leave local-only work that could be lost
-- **Push fold and sync** — after pushing your fold clone, run `shiv update fold` so the global copy is current
+- **Push fold** — push your fold clone; other agents pick up changes when they pull
 - **Update your session log** — this is already practice, but it's part of cleanup, not separate from it
 - **Plan the next session** — talk through what's next with Or, not just a priority list but what you'd actually work on and in what order. The plan goes in your Status note so the next session has a running start.
 - **Send a session report** to colleagues at `agents@ricon.family` — write for peers who share your context. Focus on design reasoning, surprising discoveries, emerging patterns, parked threads, and what broke or felt wrong. Think knowledge transfer, not changelog.
@@ -149,24 +145,25 @@ fold/
 ├── agents/             # Agent rooms (one directory per agent)
 ├── notes/              # Shared encrypted notes (git-crypt)
 │   ├── <name>.md       # Agent identity files
-│   ├── README.md       # Auto-generated index (run: notes index)
+│   ├── index.md        # Auto-generated index (run: notes index)
 │   └── graph.md        # Auto-generated backlink map
-├── submodules/         # Cross-home references (encrypted manifest)
+├── .modules/           # Encrypted cross-home module manifest + config
+├── modules/            # Gitignored cross-home clones populated by `modules init`
 ├── workflows.yaml      # Job schedules
 └── .github/workflows/  # Generated from shimmer templates
 ```
 
 ## Cross-Home Access
 
-Fold and den reference each other as encrypted submodules. After unlocking, run `modules init` to populate them:
+Fold and den reference each other via encrypted module manifests. After unlocking, run `modules init` to populate local clones:
 
 ```bash
-notes unlock      # decrypts notes
-modules unlock    # decrypts the submodules manifest
-modules init      # clones cross-home repos into submodules/
+notes unlock      # decrypt/deobfuscate notes in this repo
+modules unlock    # decrypts .modules/manifest
+modules init      # clones pinned cross-home repos into modules/<name>/
 ```
 
-This gives you read access to den's notes (and den agents get access to fold's). See den's `notes/cross-repo-modules-integration.md` for details.
+This gives you read access to den's notes (and den agents get access to fold's). See den's `notes/cross-repo-modules.md` for details.
 
 ## Shared Notes
 
@@ -178,7 +175,7 @@ Key commands:
 - `notes status` — Check encryption state and who has access
 - `notes unlock` — Decrypt after a fresh clone
 - `notes lock` — Re-encrypt files on disk
-- `notes index` — Regenerate README.md and graph.md from frontmatter
+- `notes index` — Regenerate index.md and graph.md from frontmatter
 - `notes verify --gpg-key <fingerprint>` — Verify a collaborator's public key
 
 Notes use YAML frontmatter (title, tags, related, created, updated) and `[[wikilinks]]` for cross-referencing. Run `notes index` before committing changes to notes.
@@ -187,7 +184,7 @@ Notes use YAML frontmatter (title, tags, related, created, updated) and `[[wikil
 
 **HUMAN.md is Or's voice.** Read it at session start. It contains async notes, ideas, and instructions from Or. The file lives in Or's home repo (path is in the `HUMAN_MD` environment variable). Managed with the `threads` CLI tool (`threads ls`, `threads fmt`, `threads archive` — use `--file "$HUMAN_MD"` or set `THREADS_FILE`). To edit, work on Or's home clone directly.
 
-**Pull before you read HUMAN.md, push + sync after you write.** Before reading: `git -C ~/agents/or/home pull`. After writing: commit and push from Or's home repo. The `fold welcome` command reads HUMAN.md via the `HUMAN_MD` env var — no local copies to drift.
+**Don't pull or push Or's home.** Or keeps his checkout fresh. Read `$HUMAN_MD` directly. If you edit HUMAN.md, commit locally in Or's home checkout and do not push; Or pushes/pulls on his cadence.
 
 ## Architecture: Fold vs Private Home Repo
 
@@ -218,10 +215,10 @@ Agents have **two** places to store information:
 - Job scheduling and dispatch
 
 Key commands:
-- `shimmer welcome` — Check your identity and system health
-- `shimmer zettel:welcome` — Review your home notes (your memory)
+- `mise welcome` from your home repo — personal orientation and current plate
+- `mise welcome` from this fold clone — fold collective overview
 - `emails welcome` — Check for messages from humans or other agents
-- `shimmer code:welcome` — Info about this codebase
+- `shimmer code:welcome` — Info about the current codebase
 - `shimmer tasks` — See all available commands
 
 ## Personal Workspace
@@ -245,7 +242,7 @@ Always use `gh repo clone`, not `git clone` — private repos need auth, and `gh
 
 **Each agent works in their own clone of fold** at `~/agents/<name>/fold/`. This is where you read and edit notes and everything else in this repo. HUMAN.md has moved to Or's home repo (see `$HUMAN_MD`). Multiple agents can work concurrently without conflicting because each has their own copy.
 
-**The global shiv-installed copy** (`~/.local/share/shiv/packages/fold`) is read-only infrastructure — it's where `fold welcome` runs from. Don't edit it directly. This applies to all shiv-installed repos (`~/.local/share/shiv/packages/*`) — they exist for CLI access and `welcome` commands, not as working trees. Always edit in your own clone, push, then `shiv update <pkg>` to sync.
+**Home repos are not global commands.** `fold` and `den` are home repos for collectives, same as `~/agents/<name>/home` is yours. Orient by `cd`-ing into the clone and running `mise welcome`. Treat shiv-installed copies of *tools* (`~/.local/share/shiv/packages/*` for things like `shimmer`, `notes`, `modules`, `chat`) as read-only — always edit tools in their own working clone, push, then `shiv update <pkg>` to sync. But **home repos themselves are not shiv packages anymore** — the old `fold` and `den` global shims are retired.
 
 ### First-time setup
 
@@ -256,20 +253,22 @@ cd ~/agents/<name>/fold/ && notes unlock && modules unlock && modules init && mi
 
 ### Daily workflow
 
-1. **Pull at session start** — `git pull` in your fold clone, then `modules update` to pick up cross-home changes
+1. **Pull at session start** — `git pull` in your fold clone, then `modules init` to sync cross-home clones to the currently-pinned SHAs. (`modules update` deliberately advances pins; don't use it as a startup ritual.)
 2. **Edit files** in `~/agents/<name>/fold/`
 3. **Commit and push** — commits are GPG-signed automatically (your workspace is under `~/agents/<name>/`)
-4. **Sync the global copy** — run `shiv update fold` after pushing so `fold welcome` sees your changes
+4. **Push** — that's it. There's no global shim to sync anymore; other agents will see your changes when they next pull their own fold clone.
 
 ### Obfuscated notes and `git status`
 
-Note filenames are obfuscated on GitHub (e.g., `secret.md` → `a1b2c3d4`). Locally, after `notes unlock`, the working tree has readable names. This means **`git status` will always show noise** — obfuscated files appear as "deleted" and readable files as "untracked." This is expected and harmless. The pre-commit hook handles obfuscation automatically when you commit, and the post-commit/post-merge hooks restore readable names afterward.
+Note filenames are obfuscated on GitHub (e.g., `secret.md` → `a1b2c3d4`). Locally, after `notes unlock`, the working tree has readable names. **`git status` is clean** — readable names are hidden via `.git/info/exclude` and obfuscated IDs are suppressed via `assume-unchanged`.
 
-**What to expect:**
-- `git add notes/<readable-name>` then `git commit` — hooks handle the rest
-- `git pull` works — post-merge hook refreshes readable names
-- Don't run `git add -A` or `git add notes/` — this would stage the deobfuscated names
-- Ignore the `D`/`??` entries in `git status` for files under `notes/`
+**Editing workflow:**
+- Edit notes normally using their readable names
+- `notes changes` — see what you've modified (use `--summary` for just the file list)
+- `notes stage` — stage changed notes for commit (don't use `git add` — it won't work because of the exclude)
+- `git commit` — pre-commit hook obfuscates, post-commit hook deobfuscates
+- `git pull` works — post-merge hook deobfuscates after pull
+- Don't run `git add -A` or `git add notes/` — use `notes stage` instead
 
 ### Why not a shared clone?
 
