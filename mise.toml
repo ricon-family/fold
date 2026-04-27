@@ -10,7 +10,7 @@ shiv = "https://github.com/KnickKnackLabs/vfox-shiv"
 usage = "1"                       # CLI arg parsing for tasks
 yq = "4.50.1"                     # YAML processing
 "shiv:shimmer" = "latest"
-"shiv:sessions" = "0.3.0"
+"shiv:sessions" = "latest"
 "shiv:modules" = "latest"
 "shiv:notes" = "0.8.1"
 "shiv:threads" = "latest"
@@ -18,7 +18,7 @@ yq = "4.50.1"                     # YAML processing
 "shiv:secrets" = "0.1.0"
 "shiv:emails" = "0.4.1"
 "shiv:codebase" = "0.1.0"
-"shiv:farts" = "0.1.0"                    # Frontmatter queries for agent:list
+"shiv:farts" = "latest"                   # Frontmatter queries for agent:list
 
 [_.codebase]
 lint = ["mise-settings", "gum-table"]

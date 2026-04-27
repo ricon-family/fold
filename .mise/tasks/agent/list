@@ -5,23 +5,56 @@ set -eo pipefail
 
 NOTES_DIR="$MISE_CONFIG_ROOT/notes"
 CI_ONLY="${usage_ci:-false}"
+QUERY_OUT=$(mktemp)
+QUERY_ERR=$(mktemp)
+trap 'rm -f "$QUERY_OUT" "$QUERY_ERR"' EXIT
 
 # Find agent identity files using farts frontmatter queries.
-# Agent notes have `type: agent` in their frontmatter.
-for f in $(farts query 'type = agent' "$NOTES_DIR"/* 2>/dev/null); do
-  [ ! -f "$f" ] && continue
+# Agent notes have `type: agent` in their frontmatter. This must fail loudly:
+# shimmer treats agent:list as the authoritative home contract.
+if ! farts query 'type = agent' "$NOTES_DIR"/* >"$QUERY_OUT" 2>"$QUERY_ERR"; then
+  echo "Error: failed to query agent identity files with farts." >&2
+  if [ -s "$QUERY_ERR" ]; then
+    echo "farts stderr:" >&2
+    sed 's/^/  /' "$QUERY_ERR" >&2
+  fi
+  exit 1
+fi
 
-  # Filter to CI-enabled agents if --ci flag is set
+matched_count=0
+emitted_count=0
+while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  [ ! -f "$f" ] && continue
+  matched_count=$((matched_count + 1))
+
+  # Filter to CI-enabled agents if --ci flag is set.
   if [[ "$CI_ONLY" == "true" ]]; then
-    ci_val=$(farts get ci "$f" 2>/dev/null | tr '[:upper:]' '[:lower:]')
+    if ci_val=$(farts get ci "$f" 2>/dev/null); then
+      ci_val=$(printf '%s' "$ci_val" | tr '[:upper:]' '[:lower:]')
+    else
+      ci_val=""
+    fi
     [[ "$ci_val" != "true" ]] && continue
   fi
 
   name=$(basename "$f" .md)
-  # If the filename is a hex ID (obfuscated), use the title from frontmatter
+  # If the filename is a hex ID (obfuscated), use the title from frontmatter.
   if [[ "$name" =~ ^[0-9a-f]+$ ]]; then
-    title=$(farts get title "$f" 2>/dev/null)
-    [ -n "$title" ] && name="$title"
+    if title=$(farts get title "$f" 2>/dev/null); then
+      [ -n "$title" ] && name="$title"
+    fi
   fi
+
+  emitted_count=$((emitted_count + 1))
   echo "$name"
-done
+done < "$QUERY_OUT"
+
+if [[ "$CI_ONLY" != "true" && "$emitted_count" -eq 0 ]]; then
+  echo "Error: agent:list found no agents in $NOTES_DIR." >&2
+  if [ "$matched_count" -eq 0 ]; then
+    echo "No files matched frontmatter query: type = agent" >&2
+  fi
+  echo "Are notes unlocked and readable?" >&2
+  exit 1
+fi
