@@ -7,7 +7,6 @@ task_output = "interleave"
 shiv = "https://github.com/KnickKnackLabs/vfox-shiv"
 
 [tools]
-"ubi:pimalaya/himalaya" = "1.1.0" # Email CLI for agents
 usage = "1"                       # CLI arg parsing for tasks
 yq = "4.50.1"                     # YAML processing
 "shiv:shimmer" = "latest"
