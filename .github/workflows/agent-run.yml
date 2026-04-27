@@ -102,7 +102,7 @@ jobs:
         run: sessions cli:build
 
       - name: Install pi
-        run: mise use -g pi@0.70.5
+        run: mise use -g github:badlogic/pi-mono@0.70.5
 
       - name: Setup secrets for env provider
         env:
