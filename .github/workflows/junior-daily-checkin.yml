@@ -17,6 +17,7 @@ jobs:
       message: Check your home repo for job instructions at jobs/dc-checkin.txt and execute them.
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      PI_AUTH_JSON: ${{ secrets.PI_AUTH_JSON }}
       AGENT_GITHUB_PAT: ${{ secrets.JUNIOR_GITHUB_PAT }}
       AGENT_GPG_PRIVATE_KEY: ${{ secrets.JUNIOR_GPG_PRIVATE_KEY }}
       AGENT_EMAIL_PASSWORD: ${{ secrets.JUNIOR_EMAIL_PASSWORD }}

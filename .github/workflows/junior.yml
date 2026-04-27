@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       model:
-        description: 'Claude model to use (optional)'
+        description: 'Model to use (optional)'
         required: false
         type: string
 
@@ -25,6 +25,7 @@ jobs:
       model: ${{ inputs.model }}
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      PI_AUTH_JSON: ${{ secrets.PI_AUTH_JSON }}
       AGENT_GITHUB_PAT: ${{ secrets.JUNIOR_GITHUB_PAT }}
       AGENT_GPG_PRIVATE_KEY: ${{ secrets.JUNIOR_GPG_PRIVATE_KEY }}
       AGENT_EMAIL_PASSWORD: ${{ secrets.JUNIOR_EMAIL_PASSWORD }}
