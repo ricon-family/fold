@@ -12,8 +12,8 @@ on:
         required: true
         type: string
       model:
-        description: 'Model to use (optional)'
-        required: false
+        description: 'Provider-qualified model to use (e.g., openai-codex/gpt-5.5)'
+        required: true
         type: string
 
 jobs:

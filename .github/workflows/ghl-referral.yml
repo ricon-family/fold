@@ -16,7 +16,7 @@ jobs:
     with:
       agent: c0da
       message: Use `gh repo clone` to clone ricon-family/grow-heal-love to your workspace and read .jobs/referral-check.txt for instructions.
-      model: claude-opus-4-6
+      model: openai-codex/gpt-5.5
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       PI_AUTH_JSON: ${{ secrets.PI_AUTH_JSON }}
