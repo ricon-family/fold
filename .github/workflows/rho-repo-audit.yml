@@ -15,6 +15,7 @@ jobs:
     with:
       agent: rho
       message: Read .jobs/repo-audit.txt in fold and execute those instructions.
+      model: openai-codex/gpt-5.5
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       PI_AUTH_JSON: ${{ secrets.PI_AUTH_JSON }}

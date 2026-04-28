@@ -15,6 +15,7 @@ jobs:
     with:
       agent: junior
       message: Check your home repo for job instructions at jobs/dc-checkin.txt and execute them.
+      model: openai-codex/gpt-5.5
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       PI_AUTH_JSON: ${{ secrets.PI_AUTH_JSON }}

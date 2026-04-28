@@ -18,8 +18,8 @@ on:
         required: true
         type: string
       model:
-        description: 'Model to use (optional)'
-        required: false
+        description: 'Provider-qualified model to use (e.g., openai-codex/gpt-5.5)'
+        required: true
         type: string
     secrets:
       ANTHROPIC_API_KEY:
@@ -232,8 +232,17 @@ jobs:
           # Configure gh as git credential helper so shiv can clone private repos
           gh auth setup-git
 
-          CMD=(shimmer agent --headless --timeout "$RUN_TIMEOUT")
-          [ -n "$INPUT_MODEL" ] && CMD+=(--model "$INPUT_MODEL")
+          if [ -z "$INPUT_MODEL" ]; then
+            echo "::error::model input is required"
+            exit 1
+          fi
+
+          if [[ "$INPUT_MODEL" != */* ]]; then
+            echo "::error::model input must be provider-qualified (for example: openai-codex/gpt-5.5)"
+            exit 1
+          fi
+
+          CMD=(shimmer agent --headless --timeout "$RUN_TIMEOUT" --model "$INPUT_MODEL")
           CMD+=("$INPUT_MESSAGE")
 
           "${CMD[@]}"
