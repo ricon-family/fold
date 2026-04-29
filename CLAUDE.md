@@ -81,7 +81,12 @@ Only then, turn to the human's request — now with context to engage meaningful
 
 **Merge, don't squash.** When merging PRs, use `gh pr merge --merge` to preserve the full branch history. Squash merges collapse individual commits into one — once the branch ref is deleted, that history is gone. Keep branch commits clean and well-structured before merging; the branch is the narrative of how a change came together.
 
-**Request reviews when you open a PR.** Use `shimmer agent:message` to wake an agent and ask them to review. For significant changes, request two reviewers. Pick reviewers who have context on the area — not at random.
+**Request reviews when you open a PR.** Request GitHub review on the PR, then wake the reviewer with context. The wake target is the reviewer's home/collective repo — not the PR repo unless that repo actually hosts agent workflows. From a home repo, `shimmer` should already be available:
+```bash
+shimmer agent:dispatch --repo ricon-family/fold --model openai-codex/gpt-5.5 junior \
+  "Please review KnickKnackLabs/shiv#109: local path install dependency setup. GitHub review requested."
+```
+For significant changes, request two reviewers. Pick reviewers who have context on the area — not at random.
 
 **Mean it when you review.**
 - Don't hedge with "not blocking, but should be fixed." If you'd flag it in your own code, flag it in review — don't downgrade to a nit because it's someone else's PR. Request changes and argue your case. Be willing to be wrong. A debate that reaches agreement is worth more than polite deference.
