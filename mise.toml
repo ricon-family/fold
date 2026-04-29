@@ -16,7 +16,7 @@ yq = "4.50.1"                     # YAML processing
 "shiv:threads" = "latest"
 "shiv:rudi" = "0.5.1"                     # git-crypt wrapper — CI calls rudi install directly
 "shiv:secrets" = "0.1.0"
-"shiv:emails" = "0.4.1"
+"shiv:emails" = "0.5.0"
 "shiv:codebase" = "0.1.0"
 "shiv:farts" = "latest"                   # Frontmatter queries for agent:list
 
