@@ -84,6 +84,52 @@ fi
 #   (cd "$FOLD_DIR" && notes list -- --recent 5 2>/dev/null || true)
 # fi
 
+# ━━━ Modules ━━━
+# Hygiene checks for nested module clones:
+#   - Pin freshness: warn when clone is behind origin/<default-branch>; user
+#     decides whether to `modules update <name>` to bump.
+#   - Notes hooks: ensure pre-commit hook is installed in notes-tracked
+#     clones, since `modules init` does not install them and missing hooks
+#     risk leaking plaintext on commit.
+if [ -d "$FOLD_DIR/modules" ]; then
+  section "🧩 Modules"
+  module_rows=""
+  for mod_path in "$FOLD_DIR/modules"/*/; do
+    [ -d "$mod_path/.git" ] || continue
+    name=$(basename "$mod_path")
+
+    # Pin freshness
+    git -C "$mod_path" fetch -q 2>/dev/null || true
+    default_branch=$(git -C "$mod_path" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+    default_branch=${default_branch:-main}
+    behind=$(git -C "$mod_path" rev-list --count "HEAD..origin/${default_branch}" 2>/dev/null || echo 0)
+    if [ "${behind:-0}" -gt 0 ]; then
+      pin_status="⚠ ${behind} behind origin/${default_branch} → modules update ${name}"
+    else
+      pin_status="✓ at tip of ${default_branch}"
+    fi
+
+    # Notes hooks
+    if [ ! -f "$mod_path/notes/.manifest" ]; then
+      hook_status="n/a"
+    elif [ -f "$mod_path/.git/hooks/pre-commit" ]; then
+      hook_status="✓ installed"
+    else
+      (cd "$mod_path" && notes install-hooks >/dev/null 2>&1) || true
+      hook_status="⚠ installed (was missing)"
+    fi
+
+    module_rows+="${name},${pin_status},${hook_status}"$'\n'
+  done
+  if [ -n "$module_rows" ]; then
+    printf "Module,Pin,Hooks\n%s" "$module_rows" \
+      | gum table --print --separator "," --border rounded \
+          --border.foreground "$DIM" --header.foreground "$SUBHEAD"
+  else
+    gum style --faint "(no nested modules initialized — run: modules init)"
+  fi
+fi
+
 # ━━━ Repo & Status ━━━
 section "📦 Repo"
 cd "$FOLD_DIR"
