@@ -92,7 +92,7 @@ jobs:
           echo "mix-lock-hash=$(sha256sum "$SESSIONS_DIR/cli/mix.lock" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Cache sessions CLI build
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.local/share/mise/installs/shiv-sessions/*/packages/sessions/cli/_build
