@@ -51,7 +51,7 @@ Only skip this if, during the process of catching up, you realize the human's re
 When a session starts, orient before engaging. Start from your own home repo:
 
 1. `cd ~/agents/<name>/home && mise welcome` — personal overview, routine pulls, modules init, HUMAN/BULLETIN summaries.
-2. Read your home `CLAUDE.md` and Status/scratchpad note — remember where you left off, what's open, what you planned next.
+2. Read your home `CLAUDE.md` and its status/scratchpad note (use the path named there; don't assume a literal `Status.md`) — remember where you left off, what's open, what you planned next.
 3. For fold's collective view, `cd ~/agents/<name>/fold && mise welcome`.
 4. Check recent chat/email when relevant (`chat read`, `emails welcome`).
 5. Read HUMAN.md and `notes/BULLETIN.md` when they have threads involving you or the current task.
@@ -106,7 +106,7 @@ For significant changes, request two reviewers. Pick reviewers who have context 
 
 **Shared spaces are shared.** `notes/` is common ground — coordinate changes through chat.
 
-**Use `fold` as your team channel.** Post status updates, questions, heads-ups, and coordination to the `fold` chat channel throughout the day — treat it like a shared Slack. The `den` channel is also available for cross-team coordination with den agents. At end of day, the last agent out harvests anything worth keeping (actionable items → issues, decisions → notes, questions for Or → HUMAN.md threads, progress → your Status.md) and runs `chat clear fold --yes` for a fresh start tomorrow. The channel is ephemeral by convention — anything not harvested is gone.
+**Use `fold` as your team channel.** Post status updates, questions, heads-ups, and coordination to the `fold` chat channel throughout the day — treat it like a shared Slack. The `den` channel is also available for cross-team coordination with den agents. At end of day, the last agent out harvests anything worth keeping (actionable items → issues, decisions → notes, questions for Or → HUMAN.md threads, progress → your status/scratchpad note) and runs `chat clear fold --yes` for a fresh start tomorrow. The channel is ephemeral by convention — anything not harvested is gone.
 
 **Keep it scannable.** Humans don't read walls of text. When presenting information — thread summaries, status reports, options — use short paragraphs, bullet points, and one topic at a time. If you're about to dump a multi-screen response, break it into pieces and let the human pace the conversation.
 
@@ -129,7 +129,7 @@ For significant changes, request two reviewers. Pick reviewers who have context 
 - **Check for unpushed commits** — don't leave local-only work that could be lost
 - **Push fold** — push your fold clone; other agents pick up changes when they pull
 - **Update your session log** — this is already practice, but it's part of cleanup, not separate from it
-- **Plan the next session** — talk through what's next with Or, not just a priority list but what you'd actually work on and in what order. The plan goes in your Status note so the next session has a running start.
+- **Plan the next session** — talk through what's next with Or, not just a priority list but what you'd actually work on and in what order. The plan goes in your status/scratchpad note so the next session has a running start.
 - **Send a session report** to colleagues at `agents@ricon.family` — write for peers who share your context. Focus on design reasoning, surprising discoveries, emerging patterns, parked threads, and what broke or felt wrong. Think knowledge transfer, not changelog.
 - **Tell Or** if anything is left dirty and why (e.g., waiting on review, intentionally WIP)
 - The goal: the next session — whether it's you or your foldmate — should start from a known-clean state. No detective work.
