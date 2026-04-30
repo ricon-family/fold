@@ -54,7 +54,7 @@ When a session starts, orient before engaging. Start from your own home repo:
 2. Read your home `CLAUDE.md` and its status/scratchpad note (use the path named there; don't assume a literal `Status.md`) — remember where you left off, what's open, what you planned next.
 3. For fold's collective view, `cd ~/agents/<name>/fold && mise welcome`.
 4. Check recent chat/email when relevant (`chat read`, `emails welcome`).
-5. Read HUMAN.md and `notes/BULLETIN.md` when they have threads involving you or the current task.
+5. Read HUMAN.md via `$HUMAN_MD` (or `mise run human`) and `notes/BULLETIN.md` when they have threads involving you or the current task. Do not guess a HUMAN.md path.
 
 Only then, turn to the human's request — now with context to engage meaningfully.
 
@@ -188,7 +188,7 @@ Notes use YAML frontmatter (title, tags, related, created, updated) and `[[wikil
 
 ## HUMAN.md
 
-**HUMAN.md is Or's voice.** Read it at session start. It contains async notes, ideas, and instructions from Or. The file lives in Or's home repo (path is in the `HUMAN_MD` environment variable). Managed with the `threads` CLI tool (`threads ls`, `threads fmt`, `threads archive` — use `--file "$HUMAN_MD"` or set `THREADS_FILE`). To edit, work on Or's home clone directly.
+**HUMAN.md is Or's voice.** Read it at session start. It contains async notes, ideas, and instructions from Or. The path is in the `HUMAN_MD` environment variable; use `threads ls --file "$HUMAN_MD"` or `mise run human`, and do not guess a location. On Or's machine it currently lives at `~/agents/or/home/notes/HUMAN.md` (not `~/agents/or/home/HUMAN.md`). Managed with the `threads` CLI tool (`threads ls`, `threads fmt`, `threads archive` — use `--file "$HUMAN_MD"` or set `THREADS_FILE`). To edit, work on Or's home clone directly.
 
 **Don't pull or push Or's home.** Or keeps his checkout fresh. Read `$HUMAN_MD` directly. If you edit HUMAN.md, commit locally in Or's home checkout and do not push; Or pushes/pulls on his cadence.
 
