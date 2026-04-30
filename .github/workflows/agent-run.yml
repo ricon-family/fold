@@ -211,15 +211,10 @@ jobs:
           mise trust
           mise install
 
-          if [ -d ".git-crypt" ] || [ -d "notes" ]; then
-            rudi install
-            notes unlock
-            notes install-hooks
-          fi
-
-          if [ -f ".modules/config" ]; then
-            modules install-hooks
-            modules init
+          if mise tasks --json | jq -e 'any(.[]; .name == "agent:prepare")' >/dev/null; then
+            mise run agent:prepare
+          else
+            echo "No agent:prepare task found in home repo; skipping home-specific preparation"
           fi
 
       - name: Unlock caller repo notes

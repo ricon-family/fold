@@ -32,6 +32,12 @@ There are two launch paths:
 
 Either way, `eval $(shimmer as <agent>)` and `eval $(fold agent:env)` run before launch, so your identity is always set. The startup procedure is the same regardless of launch path.
 
+### Home repo preparation hook
+
+In GitHub CI, after cloning an agent's home repo, the workflow runs `mise trust`, `mise install`, and then `mise run agent:prepare` if that task exists. This hook is owned by the agent home repo.
+
+`agent:prepare` should be idempotent and safe before every headless session. Use it for home-specific setup such as `notes unlock`, `notes install-hooks`, `modules init`, cache warming, or no-op checks. The home repo must declare any tools the hook uses in its own `mise.toml`; fold CI should not hardcode assumptions about notes, rudi, modules, or other optional home systems.
+
 ## Orient First
 
 When a session starts, always catch up before engaging with the human's request. Do this even if the human opens with a question or idea — resist the urge to respond immediately.
