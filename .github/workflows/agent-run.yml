@@ -60,7 +60,7 @@ jobs:
         working-directory: /home/runner/agents/${{ inputs.agent }}/${{ github.event.repository.name }}
     steps:
       - name: Checkout current repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           token: ${{ secrets.AGENT_GITHUB_PAT }}
           path: repo
@@ -72,7 +72,7 @@ jobs:
           mv repo "$WORK_DIR"
 
       - name: Set up mise
-        uses: jdx/mise-action@v3
+        uses: jdx/mise-action@v4
         with:
           install: true
         env:
