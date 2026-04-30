@@ -51,10 +51,13 @@ jobs:
     timeout-minutes: 20
     env:
       REPO_NAME: ${{ github.event.repository.name }}
+      WORK_DIR: /home/runner/agents/${{ inputs.agent }}/${{ github.event.repository.name }}
       GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
+      # Nested shiv package installs run their own mise commands.
+      MISE_EXPERIMENTAL: "1"
     defaults:
       run:
-        working-directory: /home/runner/${{ github.event.repository.name }}
+        working-directory: /home/runner/agents/${{ inputs.agent }}/${{ github.event.repository.name }}
     steps:
       - name: Checkout current repo
         uses: actions/checkout@v4
@@ -65,8 +68,8 @@ jobs:
       - name: Setup workspace
         working-directory: ${{ github.workspace }}
         run: |
-          mv repo "$HOME/$REPO_NAME"
-          mkdir -p "$HOME/agents/${{ inputs.agent }}"
+          mkdir -p "$(dirname "$WORK_DIR")"
+          mv repo "$WORK_DIR"
 
       - name: Set up mise
         uses: jdx/mise-action@v3
@@ -86,7 +89,7 @@ jobs:
         id: sessions
         run: |
           SESSIONS_DIR="$(mise where shiv:sessions)/packages/sessions"
-          echo "mix-lock-hash=$(sha256sum "$SESSIONS_DIR/cli/mix.lock" | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "mix-lock-hash=$(sha256sum "$SESSIONS_DIR/cli/mix.lock" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Cache sessions CLI build
         uses: actions/cache@v4
@@ -136,9 +139,11 @@ jobs:
             value="${SECRETS_MAP[$key]}"
             [ -z "$value" ] && continue
             DELIM="EOFVAL_$(openssl rand -hex 8)"
-            echo "${AGENT_UPPER}_${key}<<${DELIM}" >> "$GITHUB_ENV"
-            echo "$value" >> "$GITHUB_ENV"
-            echo "${DELIM}" >> "$GITHUB_ENV"
+            {
+              echo "${AGENT_UPPER}_${key}<<${DELIM}"
+              echo "$value"
+              echo "${DELIM}"
+            } >> "$GITHUB_ENV"
           done
 
           echo "SECRETS_PROVIDER=env" >> "$GITHUB_ENV"
@@ -179,11 +184,45 @@ jobs:
             exit 0
           fi
 
+          if [ -d "$HOME_DIR/.git" ]; then
+            echo "Home repo already available at $HOME_DIR"
+            exit 0
+          fi
+
           echo "Cloning home repo from $REPO..."
+          mkdir -p "$(dirname "$HOME_DIR")"
           git clone "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "$HOME_DIR"
           echo "Home repo available at $HOME_DIR"
 
-      - name: Unlock encrypted notes
+      - name: Prepare home repo
+        env:
+          MISE_JOBS: 1
+        run: |
+          set -euo pipefail
+
+          HOME_DIR="$HOME/agents/${{ inputs.agent }}/home"
+          if [ ! -d "$HOME_DIR/.git" ]; then
+            echo "Home repo not present at $HOME_DIR; skipping home preparation"
+            exit 0
+          fi
+
+          cd "$HOME_DIR"
+          gh auth setup-git
+          mise trust
+          mise install
+
+          if [ -d ".git-crypt" ] || [ -d "notes" ]; then
+            rudi install
+            notes unlock
+            notes install-hooks
+          fi
+
+          if [ -f ".modules/config" ]; then
+            modules install-hooks
+            modules init
+          fi
+
+      - name: Unlock caller repo notes
         run: |
           if [ -d ".git-crypt" ]; then
             rudi install
@@ -222,8 +261,7 @@ jobs:
         run: |
           echo "### AGENT SESSION START ###"
 
-          cd "$HOME/$REPO_NAME"
-          export CALLER_PWD="$HOME/$REPO_NAME"
+          echo "Working directory: $(pwd)"
 
           # shimmer as sets identity env vars (AGENT_IDENTITY, GIT_AUTHOR_*, GH_TOKEN, etc.)
           # shimmer agent --headless delegates to sessions run for execution
@@ -259,7 +297,7 @@ jobs:
           echo ""
           echo "--- Disk usage ---"
           df -h / | tail -1
-          du -sh "$HOME/$REPO_NAME" 2>/dev/null || true
+          du -sh "$WORK_DIR" 2>/dev/null || true
           du -sh "$HOME/agents" 2>/dev/null || true
           echo ""
           echo "--- mise status ---"
