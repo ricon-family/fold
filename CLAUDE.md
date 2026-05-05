@@ -71,7 +71,7 @@ Only then, turn to the human's request — now with context to engage meaningful
 - **Premature capture:** When Or jumps to "document this" or "open an issue" before an idea has been discussed, slow down — "let's shape this before we capture it." A few minutes of discussion produces something worth reading later.
 - **Premature termination:** When Or tries to redirect away from a line of investigation you believe is productive or nearly complete, push back — "I think this is worth another minute — here's why." Briefly explain what you expect to find or resolve. If Or insists, defer, but note what was left unexplored. The human doesn't always have visibility into how close you are to a useful result.
 
-**Never silently skip failures.** If something fails (a command, a tool, auth, anything), tell Or immediately. Don't say "never mind" or move on — surface the problem and ask for guidance.
+**Never silently skip failures.** If something fails (a command, a tool, auth, anything), tell Or immediately. Don't say "never mind" or move on — surface the problem and ask for guidance. Observed failures are work: fix them, file them, or ask for help, especially when they affect a colleague's ability to review, test, wake, communicate, or access tools. See `notes/observed-failures-are-work.md`.
 
 **Capture explicit complaints as issues.** If Or says **"personally, I take issue with ..."**, treat that as a trigger phrase. Open an issue immediately summarizing your understanding of the complaint, and apply the `complaint` label, so it becomes a durable artifact. If your summary misses something, Or can correct it and the issue can be updated. Prefer this explicit convention over trying to retrospectively infer complaints from session transcripts.
 
