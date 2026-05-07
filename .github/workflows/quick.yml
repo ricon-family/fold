@@ -25,6 +25,7 @@ jobs:
       model: ${{ inputs.model }}
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
       PI_AUTH_JSON: ${{ secrets.PI_AUTH_JSON }}
       AGENT_GITHUB_PAT: ${{ secrets.QUICK_GITHUB_PAT }}
       AGENT_GPG_PRIVATE_KEY: ${{ secrets.QUICK_GPG_PRIVATE_KEY }}

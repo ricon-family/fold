@@ -18,6 +18,7 @@ jobs:
       model: openai-codex/gpt-5.5
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
       PI_AUTH_JSON: ${{ secrets.PI_AUTH_JSON }}
       AGENT_GITHUB_PAT: ${{ secrets.RHO_GITHUB_PAT }}
       AGENT_GPG_PRIVATE_KEY: ${{ secrets.RHO_GPG_PRIVATE_KEY }}

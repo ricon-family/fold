@@ -24,6 +24,8 @@ on:
     secrets:
       ANTHROPIC_API_KEY:
         required: false
+      HF_TOKEN:
+        required: false
       PI_AUTH_JSON:
         required: false
       AGENT_GITHUB_PAT:
@@ -105,7 +107,7 @@ jobs:
         run: sessions cli:build
 
       - name: Install pi
-        run: mise use -g github:badlogic/pi-mono@0.70.5
+        run: mise use -g github:badlogic/pi-mono@0.73.0
 
       - name: Setup secrets for env provider
         env:
@@ -247,6 +249,7 @@ jobs:
         env:
           AGENT: ${{ inputs.agent }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
           BROWSER_GITHUB_COM_PASSWORD: ${{ secrets.AGENT_GITHUB_PASSWORD }}
           BROWSER_GITHUB_COM_USERNAME: ${{ inputs.agent }}-ricon
           DISPATCH_CONTEXT: ${{ github.triggering_actor }}
