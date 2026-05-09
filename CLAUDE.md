@@ -156,9 +156,7 @@ This separates "where we live" from "where we work" — fold is home.
 fold/
 ├── agents/             # Agent rooms (one directory per agent)
 ├── notes/              # Shared encrypted notes (git-crypt)
-│   ├── <name>.md       # Agent identity files
-│   ├── index.md        # Auto-generated index (run: notes index)
-│   └── graph.md        # Auto-generated backlink map
+│   └── <name>.md       # Agent identity files and shared knowledge notes
 ├── .modules/           # Encrypted cross-home module manifest + config
 ├── modules/            # Gitignored cross-home clones populated by `modules init`
 ├── workflows.yaml      # Job schedules
@@ -187,10 +185,9 @@ Key commands:
 - `notes status` — Check encryption state and who has access
 - `notes unlock` — Decrypt after a fresh clone
 - `notes lock` — Re-encrypt files on disk
-- `notes index` — Regenerate index.md and graph.md from frontmatter
 - `notes verify --gpg-key <fingerprint>` — Verify a collaborator's public key
 
-Notes use YAML frontmatter (title, tags, related, created, updated) and `[[wikilinks]]` for cross-referencing. Run `notes index` before committing changes to notes.
+Notes use YAML frontmatter (title, tags, related, created, updated) and `[[wikilinks]]` for cross-referencing. Do not regenerate generated indexes as a commit ritual; fold no longer maintains `notes/index.md` or `notes/graph.md`.
 
 ## HUMAN.md
 
