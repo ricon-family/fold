@@ -15,6 +15,67 @@ section() {
   gum style --bold --foreground "$HEADING" "$1"
 }
 
+notes_repo_status() {
+  local repo_dir="$1"
+  enc_status="n/a"
+  notes_status="n/a"
+
+  if [ ! -d "$repo_dir/notes" ]; then
+    notes_status="no notes dir"
+    return
+  fi
+
+  if [ ! -d "$repo_dir/.git/git-crypt" ]; then
+    enc_status="⚠ not set up → notes setup"
+  elif ! command -v git-crypt &>/dev/null; then
+    enc_status="⚠ git-crypt not installed"
+  elif git -C "$repo_dir" crypt status -e &>/dev/null; then
+    enc_status="✓ unlocked"
+  else
+    enc_status="⚠ locked → notes unlock"
+  fi
+
+  if [ ! -f "$repo_dir/notes/.manifest" ]; then
+    notes_status="no manifest"
+    return
+  fi
+
+  local first_name
+  first_name=$(awk -F'\t' 'NF >= 2 { print $2; exit }' "$repo_dir/notes/.manifest")
+  if [ -z "$first_name" ]; then
+    notes_status="manifest empty"
+    return
+  fi
+
+  if [ ! -f "$repo_dir/notes/$first_name" ]; then
+    notes_status="⚠ obfuscated → notes unlock"
+    return
+  fi
+
+  if ! command -v notes &>/dev/null; then
+    notes_status="⚠ notes CLI missing"
+    return
+  fi
+
+  local changes_output change_count
+  if ! changes_output=$(cd "$repo_dir" && notes changes --summary 2>&1); then
+    notes_status="⚠ check failed → notes changes --summary"
+    return
+  fi
+
+  if printf '%s\n' "$changes_output" | grep -q '^No changes\.$'; then
+    notes_status="✓ readable; no note edits"
+    return
+  fi
+
+  change_count=$(printf '%s\n' "$changes_output" | awk '/ change\(s\):/ { print $1; exit }')
+  if [ -n "$change_count" ]; then
+    notes_status="⚠ readable; ${change_count} note change(s) → notes changes --summary"
+  else
+    notes_status="⚠ readable; changes possible → notes changes --summary"
+  fi
+}
+
 # ━━━ Header ━━━
 echo ""
 gum style --bold --foreground "$HEADING" --border double --border-foreground "$DIM" \
@@ -159,29 +220,9 @@ repo_rows="Branch,${branch_status}"$'\n'
 issue_count=$(GH_HOST=github.com gh issue list --repo ricon-family/fold --state open --json number --jq 'length' 2>/dev/null || echo "?")
 repo_rows+="Issues,${issue_count} open"$'\n'
 
-# Encryption
-if [ ! -d "$FOLD_DIR/.git/git-crypt" ]; then
-  enc_status="⚠ not set up → notes setup"
-elif ! command -v git-crypt &>/dev/null; then
-  enc_status="⚠ git-crypt not installed"
-elif git -C "$FOLD_DIR" crypt status -e &>/dev/null; then
-  enc_status="✓ unlocked"
-else
-  enc_status="⚠ locked → notes unlock"
-fi
+notes_repo_status "$FOLD_DIR"
 repo_rows+="Encryption,${enc_status}"$'\n'
-
-# Obfuscation
-obf_status="n/a"
-if [ -f "$FOLD_DIR/notes/.manifest" ]; then
-  first_name=$(head -1 "$FOLD_DIR/notes/.manifest" | cut -f2)
-  if [ -n "$first_name" ] && [ -f "$FOLD_DIR/notes/$first_name" ]; then
-    obf_status="✓ deobfuscated"
-  else
-    obf_status="obfuscated"
-  fi
-fi
-repo_rows+="Notes,${obf_status}"
+repo_rows+="Notes,${notes_status}"
 
 printf "Property,Status\n%s\n" "$repo_rows" \
   | gum table --print --separator "," --border rounded \
