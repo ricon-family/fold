@@ -64,6 +64,26 @@ When a session starts, orient before engaging. Start from your own home repo:
 
 Only then, turn to the human's request — now with context to engage meaningfully.
 
+## Workflow Triggers: If Doing X, First Read Y
+
+Guidance only works when it appears at the moment you need it. Before starting any of these activities, pause and read the linked note or section. Do not rely on memory or patterns copied from older repos.
+
+| If you are about to... | First do this |
+|------------------------|---------------|
+| Write or change BATS tests | Read `notes/bats-tool-testing.md` |
+| Write or change mise tasks | Read `notes/mise-conventions.md` and `notes/mise-gotchas.md` |
+| Write Python mise tasks | Read `notes/mise-python-tasks.md` |
+| Mock commands/dependencies in tests | Read `notes/mock-first-overlay.md` |
+| Write Bash expected to run on macOS + CI | Read `notes/bash-macos-compat.md` |
+| Write a README | Read `notes/readme-writing.md` |
+| Review a PR | Read `notes/code-review.md` |
+| Change GitHub Actions / CI auth | Read `notes/github-actions-ci.md` and `notes/ci-auth-debugging.md` |
+| Create or revive a codebase | Read `notes/creating-a-codebase.md` and, for stale work, `notes/revival-pattern.md` |
+| Hit any command/tool/auth/CI failure | Stop and read `notes/observed-failures-are-work.md`, especially "When a command fails" |
+| Repeat long paths in shell/tool calls | Create token-short symlink handles and read the pattern note through the handle: `agent=${GIT_AUTHOR_NAME:-<agent>}; mkdir -p "/tmp/$agent.d"; ln -sfn "$HOME/agents/$agent/home/modules/fold" "/tmp/$agent.d/fold"; ln -sfn "/tmp/$agent.d/fold/notes" "/tmp/$agent.d/fn"; cat "/tmp/$agent.d/fn/token-short-symlink-handles.md"` |
+
+This is not a startup reading list. It is a set of just-in-time triggers. Read the note when the trigger fires, then proceed.
+
 ## House Rules
 
 **Push back when something smells off.** If Or proposes something that seems over-engineered, premature, or unnecessary, say so — clearly and with reasoning. Don't just go along to be agreeable. A good "I don't think we need this yet, here's why" is more valuable than building something nobody uses. This applies to HUMAN.md threads too. Specific cases:
@@ -71,7 +91,7 @@ Only then, turn to the human's request — now with context to engage meaningful
 - **Premature capture:** When Or jumps to "document this" or "open an issue" before an idea has been discussed, slow down — "let's shape this before we capture it." A few minutes of discussion produces something worth reading later.
 - **Premature termination:** When Or tries to redirect away from a line of investigation you believe is productive or nearly complete, push back — "I think this is worth another minute — here's why." Briefly explain what you expect to find or resolve. If Or insists, defer, but note what was left unexplored. The human doesn't always have visibility into how close you are to a useful result.
 
-**Never silently skip failures.** If something fails (a command, a tool, auth, anything), tell Or immediately. Don't say "never mind" or move on — surface the problem and ask for guidance. Observed failures are work: fix them, file them, or ask for help, especially when they affect a colleague's ability to review, test, wake, communicate, or access tools. See `notes/observed-failures-are-work.md`.
+**Never silently skip failures.** If something fails (a command, a tool, auth, anything), tell Or immediately. Don't say "never mind" or move on — surface the problem and ask for guidance. Observed failures are work: fix them, file them, or ask for help, especially when they affect a colleague's ability to review, test, wake, communicate, or access tools. See `notes/observed-failures-are-work.md`, especially "When a command fails."
 
 **Capture explicit complaints as issues.** If Or says **"personally, I take issue with ..."**, treat that as a trigger phrase. Open an issue immediately summarizing your understanding of the complaint, and apply the `complaint` label, so it becomes a durable artifact. If your summary misses something, Or can correct it and the issue can be updated. Prefer this explicit convention over trying to retrospectively infer complaints from session transcripts.
 
@@ -289,21 +309,7 @@ Note filenames are obfuscated on GitHub (e.g., `secret.md` → `a1b2c3d4`). Loca
 
 Shared notes capture hard-won lessons. Read the relevant ones *before* starting work — not during orient, but at the moment you're about to write code. Pattern-matching from other repos is not a substitute.
 
-| Activity | Read first |
-|----------|------------|
-| Writing a README | `notes/readme-writing.md` |
-| Writing BATS tests | `notes/bats-tool-testing.md` |
-| Writing mise tasks | `notes/mise-conventions.md`, `notes/mise-gotchas.md` |
-| Python mise tasks | `notes/mise-python-tasks.md` |
-| Mocking dependencies in tests | `notes/mock-first-overlay.md` |
-| Bash that runs on macOS + CI | `notes/bash-macos-compat.md` |
-| Creating a new codebase | `notes/creating-a-codebase.md` (links to all of the above) |
-
-This isn't about reading everything every session. It's about reading the right thing at the right time. The five minutes before you write a README is when `readme-writing.md` matters — not during morning orient when it's abstract.
-
-If you find yourself copying patterns from another repo, stop and check whether a note exists for that pattern. The repo you're copying from may predate the note.
-
-**Keep this table current.** If you notice a recurring activity that has a corresponding guide note, add it. If an entry points to a note that no longer exists or has been superseded, update or remove it. This table is a living index, not a historical artifact.
+Use the **Workflow Triggers** table near the top of this file as the current just-in-time index. Keep that table current: if you notice a recurring activity that has a corresponding guide note, add it. If an entry points to a note that no longer exists or has been superseded, update or remove it. The table is a living index, not a historical artifact.
 
 ## History
 
