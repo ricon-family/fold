@@ -87,6 +87,12 @@ jobs:
           mise trust
           mise install
 
+      - name: Trust shiv package configs
+        run: |
+          while IFS= read -r -d '' config; do
+            mise trust -q "$config"
+          done < <(find "$HOME/.local/share/mise/installs" -path '*/packages/*/mise.toml' -print0)
+
       - name: Compute sessions CLI cache key
         id: sessions
         run: |
