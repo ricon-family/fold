@@ -36,9 +36,12 @@ PATTERN_REGISTRIES = [
 # is a soft "worth a look" threshold rather than a "must trim" line.
 LONG_NOTE_THRESHOLD = 300
 
-# Cross-home wikilinks resolve in den/home rather than fold; treat
-# bare stems matching these as expected misses.
-external_or_cross_home_targets = {"den", "ikma", "zeke", "baby-joel"}
+# Cross-home wikilinks point at den or agent home repos. Names of
+# other home repos are not authoritatively discoverable from inside
+# fold, so we accept some false-positive "missing" hits for
+# agent-home stems (`zeke`, `ikma`, etc.) rather than hardcode a
+# list that will drift.
+external_or_cross_home_targets = {"den"}
 
 # Wikilinks beginning with these prefixes are external references
 # (GitHub org/repo handles, ABI markers), not local note links.
