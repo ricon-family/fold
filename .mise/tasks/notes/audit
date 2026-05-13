@@ -1,0 +1,189 @@
+#!/usr/bin/env bash
+#MISE description="Audit fold notes for gardening signals"
+set -euo pipefail
+
+python3 <<'PY'
+from pathlib import Path
+import re
+
+root = Path.cwd()
+notes_dir = root / "notes"
+notes = sorted(notes_dir.glob("*.md"))
+note_stems = {p.stem for p in notes}
+
+fence_re = re.compile(r"```.*?```", re.S)
+inline_code_re = re.compile(r"`[^`]*`")
+link_re = re.compile(r"\[\[([^\]]+)\]\]")
+frontmatter_re = re.compile(r"\A---\n(.*?)\n---\n", re.S)
+registry_row_re = re.compile(r"^\|\s*\[\[([^\]|]+?)(?:\|[^\]]+)?\]\]\s*\|", re.M)
+
+# Pattern registries: each has a "Registry" section with rows pointing
+# at the pattern notes themselves. Auditing these catches the
+# "registered but no note" / "note but not registered" drift.
+PATTERN_REGISTRIES = [
+    "codebase-health-patterns.md",
+    "garden-patterns.md",
+    "gum-bash-patterns.md",
+    "journal-patterns.md",
+    "organization-patterns.md",
+    "performance-patterns.md",
+    "ux-patterns.md",
+    "welcome-patterns.md",
+    "workflow-patterns.md",
+]
+
+# Fold pattern notes are reference-style and routinely run long; 300
+# is a soft "worth a look" threshold rather than a "must trim" line.
+LONG_NOTE_THRESHOLD = 300
+
+# Cross-home wikilinks resolve in den/home rather than fold; treat
+# bare stems matching these as expected misses.
+external_or_cross_home_targets = {"den", "ikma", "zeke", "baby-joel"}
+
+# Wikilinks beginning with these prefixes are external references
+# (GitHub org/repo handles, ABI markers), not local note links.
+external_link_prefixes = ("KnickKnackLabs/", "jdx/", "ricon-family/", "Torbit/", "vn5a6e7/")
+external_link_exact = {"ABORT", "X", "Y", "Z"}
+
+# Gardening signals in note bodies. Excludes Obsidian-style callout
+# state names (used intentionally as queue/state markers) and lines
+# inside Markdown table cells where pattern docs reference callout
+# vocabulary (`| \`[!todo]-\` | ...`).
+callout_marker_re = re.compile(
+    r"^\s*>+\s*\[!(todo|question|warning|info|success|abstract|tip|attention|note|example)\]",
+    re.I,
+)
+table_row_re = re.compile(r"^\s*\|.*\|")
+marker_re = re.compile(r"\b(TODO|FIXME|XXX|HACK|Next session TODO|Where we left off)\b", re.I)
+
+# Stale references to retired tooling / migrations. Add to this set
+# as new retirements happen.
+stale_path_re = re.compile(
+    r"\bnotes index\b"            # retired in notes v0.8.3
+    r"|submodules/[a-f0-9]"        # pre-v0.9 modules layout
+    r"|den welcome\b"              # retired global shim
+    r"|fold welcome\b"             # retired global shim
+)
+
+print("fold note audit")
+print("===============")
+print(f"notes: {len(notes)}")
+
+print(f"\nLong notes (>{LONG_NOTE_THRESHOLD} lines)")
+long_notes = []
+for path in notes:
+    line_count = len(path.read_text(errors="replace").splitlines())
+    if line_count > LONG_NOTE_THRESHOLD:
+        long_notes.append((line_count, path))
+for line_count, path in sorted(long_notes, reverse=True):
+    print(f"  {line_count:4d}  {path.relative_to(root)}")
+if not long_notes:
+    print("  none")
+
+print("\nActive notes (frontmatter status: active)")
+active_notes = []
+for path in notes:
+    text = path.read_text(errors="replace")
+    match = frontmatter_re.match(text)
+    if not match:
+        continue
+    frontmatter = match.group(1)
+    if re.search(r"^status:\s*active\s*$", frontmatter, re.M):
+        active_notes.append(path)
+for path in active_notes:
+    print(f"  {path.relative_to(root)}")
+if not active_notes:
+    print("  none")
+
+print("\nPattern registry health")
+# For each known registry, extract its [[wikilink]] rows and verify the
+# targets exist as fold notes. Catches both directions: registered but
+# missing note, and existing notes that look pattern-shaped but aren't
+# in any registry (the latter is a separate check below).
+registry_targets_overall = set()
+registry_issues = []
+for registry_name in PATTERN_REGISTRIES:
+    registry_path = notes_dir / registry_name
+    if not registry_path.exists():
+        registry_issues.append((registry_name, "(registry note missing)"))
+        continue
+    text = registry_path.read_text(errors="replace")
+    targets = registry_row_re.findall(text)
+    for target in targets:
+        target = target.strip()
+        registry_targets_overall.add(target)
+        if target not in note_stems:
+            registry_issues.append((registry_name, f"row [[{target}]] -> note not found"))
+for registry_name, issue in registry_issues:
+    print(f"  {registry_name}: {issue}")
+if not registry_issues:
+    print(f"  none (across {len(PATTERN_REGISTRIES)} registries, {len(registry_targets_overall)} rows)")
+
+print("\nGardening markers")
+marker_hits = []
+for path in notes:
+    text = path.read_text(errors="replace")
+    # Remove inline-code spans line-by-line to suppress backticked
+    # references to callout vocabulary in pattern docs.
+    for idx, raw_line in enumerate(text.splitlines(), 1):
+        if callout_marker_re.search(raw_line):
+            continue
+        if table_row_re.match(raw_line):
+            continue
+        line = inline_code_re.sub("", raw_line)
+        if marker_re.search(line):
+            marker_hits.append((path, idx, raw_line.strip()))
+for path, idx, line in marker_hits[:60]:
+    print(f"  {path.relative_to(root)}:{idx}: {line}")
+if len(marker_hits) > 60:
+    print(f"  ... {len(marker_hits) - 60} more")
+if not marker_hits:
+    print("  none")
+
+print("\nLikely local missing wikilinks")
+missing = []
+for path in notes:
+    text = path.read_text(errors="replace")
+    text = fence_re.sub("", text)
+    text = inline_code_re.sub("", text)
+    for raw in link_re.findall(text):
+        target = raw.split("|", 1)[0].split("#", 1)[0].strip()
+        if not target:
+            continue
+        if target.startswith("notes/"):
+            target_stem = Path(target).stem
+        else:
+            target_stem = target
+        if Path(target).suffix.lower() in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf"}:
+            continue
+        if target_stem in external_link_exact:
+            continue
+        if target_stem in external_or_cross_home_targets:
+            continue
+        if any(target.startswith(prefix) for prefix in external_link_prefixes):
+            continue
+        if target_stem not in note_stems:
+            missing.append((path, raw, target_stem))
+for path, raw, target in missing[:60]:
+    print(f"  {path.relative_to(root)}: [[{raw}]] -> {target}")
+if len(missing) > 60:
+    print(f"  ... {len(missing) - 60} more")
+if not missing:
+    print("  none")
+
+print("\nStale path phrases")
+stale_hits = []
+for path in notes:
+    for idx, line in enumerate(path.read_text(errors="replace").splitlines(), 1):
+        if stale_path_re.search(line):
+            stale_hits.append((path, idx, line.strip()))
+for path, idx, line in stale_hits[:40]:
+    print(f"  {path.relative_to(root)}:{idx}: {line}")
+if len(stale_hits) > 40:
+    print(f"  ... {len(stale_hits) - 40} more")
+if not stale_hits:
+    print("  none")
+
+print("\nDirty generated/live files")
+print("  check: git status --short && notes changes --summary")
+PY
