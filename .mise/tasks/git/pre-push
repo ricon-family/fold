@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+#MISE description="Check a repo before pushing commits"
+#USAGE arg "[path]" default="" help="Repository path to check (default: caller cwd when invoked through fold git shims, otherwise current dir)"
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=.mise/tasks/git/_lib.sh
+source "$SCRIPT_DIR/_lib.sh"
+
+repo="$(resolve_repo "${usage_path:-}")" || exit 1
+
+show_invocation_header "fold git:pre-push"
+section "Repository"
+show_repo_identity "$repo"
+
+section "Identity"
+show_git_identity "$repo"
+
+section "Upstream"
+branch=$(git -C "$repo" branch --show-current 2>/dev/null || true)
+upstream=$(git -C "$repo" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)
+ahead=0
+behind=0
+if [ -z "$branch" ]; then
+  fail "detached HEAD; decide where these commits should land before pushing"
+elif [ -z "$upstream" ]; then
+  warn "branch '$branch' has no upstream"
+else
+  info "upstream: $upstream"
+  if git -C "$repo" fetch --quiet; then
+    ok "fetch succeeded"
+  else
+    fail "fetch failed"
+  fi
+  counts=$(git -C "$repo" rev-list --left-right --count "HEAD...$upstream" 2>/dev/null || true)
+  if [ -n "$counts" ]; then
+    ahead=$(printf '%s' "$counts" | awk '{print $1}')
+    behind=$(printf '%s' "$counts" | awk '{print $2}')
+    info "ahead: $ahead, behind: $behind"
+    if [ "$behind" != "0" ]; then
+      fail "upstream has commits not in local branch; merge before pushing"
+    fi
+    if [ "$ahead" = "0" ]; then
+      warn "no local commits to push"
+    fi
+  fi
+fi
+
+section "Working tree"
+git -C "$repo" status --short --branch
+if git -C "$repo" diff --quiet && git -C "$repo" diff --cached --quiet; then
+  ok "working tree has no tracked dirty changes"
+else
+  fail "tracked dirty changes present; commit/stash before pushing"
+fi
+show_untracked_warning "$repo"
+
+section "Notes"
+show_notes_state "$repo"
+
+section "Modules"
+show_modules_state "$repo"
+
+section "Unpushed commit signatures"
+if [ -n "${upstream:-}" ]; then
+  range="$upstream..HEAD"
+  show_commit_signatures "$repo" "$range" 0
+else
+  range="HEAD"
+  show_commit_signatures "$repo" "$range" 5
+fi
+
+section "Suggested next commands"
+if [ "${behind:-0}" != "0" ]; then
+  info "integrate upstream: git -C '$repo' fetch && git -C '$repo' merge --no-edit '$upstream'"
+elif [ "${ahead:-0}" != "0" ]; then
+  info "push when ready: git -C '$repo' push"
+else
+  info "nothing to push"
+fi
+
+summarize
