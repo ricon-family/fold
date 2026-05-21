@@ -4,7 +4,7 @@ quiet = true
 task_output = "interleave"
 
 [plugins]
-shiv = "https://github.com/KnickKnackLabs/vfox-shiv"
+shiv = "https://github.com/KnickKnackLabs/vfox-shiv.git#e8b8c319fb1a25ecf6da7bf15030a2480af1d143"
 
 [tools]
 usage = "3.2.1"                   # CLI arg parsing for tasks
