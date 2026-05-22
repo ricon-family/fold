@@ -9,7 +9,7 @@ shiv = "https://github.com/KnickKnackLabs/vfox-shiv"
 [tools]
 usage = "3.2.1"                   # CLI arg parsing for tasks
 yq = "4.50.1"                     # YAML processing
-"shiv:shimmer" = "0.1.3"
+"shiv:shimmer" = "0.1.6"
 "shiv:sessions" = "0.4.2"
 "shiv:modules" = "0.9.5"
 "shiv:notes" = "0.8.5"
