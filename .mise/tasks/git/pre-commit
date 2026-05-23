@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+#MISE description="Check a repo before making a commit"
+#USAGE arg "[path]" default="" help="Repository path to check (default: caller cwd when invoked through fold git shims, otherwise current dir)"
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=.mise/tasks/git/_lib.sh
+source "$SCRIPT_DIR/_lib.sh"
+
+repo="$(resolve_repo "${usage_path:-}")" || exit 1
+
+show_invocation_header "fold git:pre-commit"
+section "Repository"
+show_repo_identity "$repo"
+
+section "Identity"
+show_git_identity "$repo"
+
+section "Working tree"
+git -C "$repo" status --short --branch
+if git -C "$repo" diff --cached --quiet; then
+  warn "no staged changes; stage intended files before committing"
+else
+  ok "staged changes present"
+fi
+if git -C "$repo" diff --quiet; then
+  ok "no unstaged tracked changes"
+else
+  warn "unstaged tracked changes present; commit may be partial"
+fi
+
+section "Notes"
+show_notes_state "$repo"
+
+section "Modules"
+show_modules_state "$repo"
+
+section "Suggested next commands"
+info "review staged diff: git -C '$repo' diff --cached --stat && git -C '$repo' diff --cached"
+info "commit with active key if needed: git -C '$repo' -c user.signingkey=... commit -m '...'"
+info "after committing: mise run -C '$MISE_CONFIG_ROOT' git:pre-push '$repo'"
+
+summarize

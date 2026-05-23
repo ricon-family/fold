@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+#MISE description="Check a repo before publishing a release tag"
+#USAGE flag "--tag <tag>" default="" help="Intended semver tag, e.g. v0.5.2"
+#USAGE arg "[path]" default="" help="Repository path to check (default: caller cwd when invoked through fold git shims, otherwise current dir)"
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=.mise/tasks/git/_lib.sh
+source "$SCRIPT_DIR/_lib.sh"
+
+repo="$(resolve_repo "${usage_path:-}")" || exit 1
+tag="${usage_tag:-}"
+
+show_invocation_header "fold git:pre-publish"
+section "Repository"
+show_repo_identity "$repo"
+
+section "Identity"
+show_git_identity "$repo"
+
+section "Release branch"
+branch=$(git -C "$repo" branch --show-current 2>/dev/null || true)
+upstream=$(git -C "$repo" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)
+ahead=0
+behind=0
+if [ -z "$branch" ]; then
+  fail "detached HEAD; publish from the repository's default branch"
+elif [ -z "$upstream" ]; then
+  fail "branch '$branch' has no upstream; cannot verify release target"
+else
+  info "upstream: $upstream"
+  if git -C "$repo" fetch --quiet; then
+    ok "fetch succeeded"
+  else
+    fail "fetch failed"
+  fi
+
+  default_branch=$(git -C "$repo" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##' || true)
+  default_branch=${default_branch:-main}
+  info "default branch: $default_branch"
+  if [ "$branch" != "$default_branch" ]; then
+    fail "current branch '$branch' is not default branch '$default_branch'"
+  fi
+
+  counts=$(git -C "$repo" rev-list --left-right --count "HEAD...$upstream" 2>/dev/null || true)
+  if [ -n "$counts" ]; then
+    ahead=$(printf '%s' "$counts" | awk '{print $1}')
+    behind=$(printf '%s' "$counts" | awk '{print $2}')
+    info "ahead: $ahead, behind: $behind"
+    if [ "$behind" != "0" ]; then
+      fail "upstream has commits not in local branch; merge before publishing"
+    fi
+    if [ "$ahead" != "0" ]; then
+      fail "local branch has unpushed commits; push branch before publishing a release tag"
+    fi
+  fi
+fi
+
+section "Working tree"
+show_tracked_dirty_state "$repo"
+show_untracked_warning "$repo"
+
+section "Notes"
+show_notes_state "$repo"
+
+section "Modules"
+show_modules_state "$repo"
+
+section "Release tag"
+latest_tag=$(latest_semver_tag "$repo" || true)
+if [ -n "$latest_tag" ]; then
+  info "latest semver tag: $latest_tag"
+else
+  info "latest semver tag: none"
+fi
+
+if [ -z "$tag" ]; then
+  warn "no --tag provided; pass the intended semver tag to check collisions"
+elif ! printf '%s\n' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+  fail "tag '$tag' is not a vMAJOR.MINOR.PATCH semver tag"
+else
+  ok "tag shape looks like semver: $tag"
+  if git -C "$repo" rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+    fail "local tag already exists: $tag"
+  else
+    ok "local tag does not exist: $tag"
+  fi
+  if git -C "$repo" ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+    fail "remote tag already exists on origin: $tag"
+  else
+    ok "remote tag not found on origin: $tag"
+  fi
+fi
+
+section "Release commit signatures"
+if [ -n "$latest_tag" ]; then
+  release_range="$latest_tag..HEAD"
+else
+  release_range="HEAD"
+fi
+show_commit_signatures "$repo" "$release_range" 0
+
+section "Suggested next commands"
+if [ -n "$tag" ]; then
+  repo_name=$(basename "$repo")
+  msg_file="/tmp/${repo_name}-${tag}-tag-message.txt"
+  info "write tag message: cat > '$msg_file' <<'EOF'"
+  info "$tag — brief summary"
+  info "EOF"
+  info "create signed tag: git -C '$repo' tag -s '$tag' -F '$msg_file'"
+  info "push tag: git -C '$repo' push origin '$tag'"
+else
+  info "rerun with intended tag: mise run -C '$MISE_CONFIG_ROOT' git:pre-publish --tag vX.Y.Z '$repo'"
+fi
+
+summarize

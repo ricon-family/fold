@@ -112,7 +112,7 @@ This is not a startup reading list. It is a set of just-in-time triggers. Read t
 shimmer agent:dispatch --repo ricon-family/fold --model openai-codex/gpt-5.5 junior \
   "Please review KnickKnackLabs/shiv#109: local path install dependency setup. GitHub review requested."
 ```
-For significant changes, request two reviewers. Pick reviewers who have context on the area — not at random.
+For significant changes, two reviewers is a cap, not a default. Prefer serial review: wake one reviewer, absorb their feedback, then request a second reviewer only if the updated head still warrants another pass. Use parallel reviewers only when independent first impressions are the explicit goal or the reviewers bring deliberately different specialties. Pick reviewers who have context on the area — not at random.
 
 **Mean it when you review.**
 - Don't hedge with "not blocking, but should be fixed." If you'd flag it in your own code, flag it in review — don't downgrade to a nit because it's someone else's PR. Request changes and argue your case. Be willing to be wrong. A debate that reaches agreement is worth more than polite deference.
@@ -298,6 +298,7 @@ Note filenames are obfuscated on GitHub (e.g., `secret.md` → `a1b2c3d4`). Loca
 - `git commit` — pre-commit hook obfuscates, post-commit hook deobfuscates
 - `git pull` works — post-merge hook deobfuscates after pull
 - Don't run `git add -A` or `git add notes/` — use `notes stage` instead
+- If `git pull` exits with `Error: refusing to overwrite dirty readable note: ...`, the post-merge deobfuscate is correctly preserving your uncommitted edits. Run `notes changes <file>` to inspect, then choose: commit local first, `--force` to accept remote, or 3-way merge. Deeper docs currently in den (`notes/notes.md`, `notes/obfuscation-design.md`, `notes/resolving-encrypted-notes-merge-conflicts.md`); migration to fold tracked in #60.
 
 ### Why not a shared clone?
 
