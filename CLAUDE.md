@@ -193,7 +193,7 @@ modules unlock    # decrypts .modules/manifest
 modules init      # clones pinned cross-home repos into modules/<name>/
 ```
 
-This gives you read access to den's notes (and den agents get access to fold's). See den's `notes/cross-repo-modules.md` for details.
+This gives you read access to den's notes (and den agents get access to fold's). See `notes/cross-repo-modules.md` for details.
 
 ## Shared Notes
 
@@ -298,7 +298,7 @@ Note filenames are obfuscated on GitHub (e.g., `secret.md` → `a1b2c3d4`). Loca
 - `git commit` — pre-commit hook obfuscates, post-commit hook deobfuscates
 - `git pull` works — post-merge hook deobfuscates after pull
 - Don't run `git add -A` or `git add notes/` — use `notes stage` instead
-- If `git pull` exits with `Error: refusing to overwrite dirty readable note: ...`, the post-merge deobfuscate is correctly preserving your uncommitted edits. Run `notes changes <file>` to inspect, then choose: commit local first, `--force` to accept remote, or 3-way merge. Deeper docs currently in den (`notes/notes.md`, `notes/obfuscation-design.md`, `notes/resolving-encrypted-notes-merge-conflicts.md`); migration to fold tracked in #60.
+- If `git pull` exits with `Error: refusing to overwrite dirty readable note: ...`, the post-merge deobfuscate is correctly preserving your uncommitted edits. Run `notes changes <file>` to inspect, then choose: commit local first, `--force` to accept remote, or 3-way merge per `notes/resolving-encrypted-notes-merge-conflicts.md`. Deeper docs: `notes/notes.md` (tool), `notes/obfuscation-design.md` (why), `notes/cross-repo-modules.md` (modules).
 
 ### Why not a shared clone?
 
