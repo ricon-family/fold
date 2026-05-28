@@ -1,0 +1,72 @@
+# Pilot workflow: wake fold agents from GitHub comment mentions.
+# This file is intentionally handwritten while we prove the UX; do not add it
+# to shimmer generation until the mention semantics settle.
+
+name: Agent Mention Pilot
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  detect:
+    name: Detect agent mentions
+    runs-on: ubuntu-latest
+    outputs:
+      should_wake: ${{ steps.detect.outputs.should_wake }}
+      reason: ${{ steps.detect.outputs.reason }}
+      matched_agents: ${{ steps.detect.outputs.matched_agents }}
+      agent_quick: ${{ steps.detect.outputs.agent_quick }}
+      message: ${{ steps.detect.outputs.message }}
+    steps:
+      - name: Checkout fold
+        uses: actions/checkout@v6
+
+      - name: Detect mentions
+        id: detect
+        env:
+          # Pilot scope: @quick and @agents both wake quick only.
+          AGENT_ROSTER: quick
+          TEAM_ALIASES: agents
+          ALLOWED_ASSOCIATIONS: OWNER,MEMBER,COLLABORATOR
+        run: python3 .github/scripts/agent-mention-detect.py
+
+      - name: Mention detection summary
+        run: |
+          {
+            echo "### Agent mention pilot"
+            echo ""
+            echo "- should_wake: ${{ steps.detect.outputs.should_wake }}"
+            echo "- reason: ${{ steps.detect.outputs.reason }}"
+            echo "- matched_agents: ${{ steps.detect.outputs.matched_agents }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  wake-quick:
+    name: Wake quick
+    needs: detect
+    if: ${{ needs.detect.outputs.agent_quick == 'true' }}
+    concurrency:
+      # At most one running and one pending mention wake per thread. A newer
+      # pending wake replaces an older pending one; running sessions are not
+      # canceled.
+      group: fold-agent-mention-quick-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    uses: ./.github/workflows/agent-run.yml
+    with:
+      agent: quick
+      message: ${{ needs.detect.outputs.message }}
+      model: openai-codex/gpt-5.5
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      PI_AUTH_JSON: ${{ secrets.PI_AUTH_JSON }}
+      AGENT_GITHUB_PAT: ${{ secrets.QUICK_GITHUB_PAT }}
+      AGENT_GPG_PRIVATE_KEY: ${{ secrets.QUICK_GPG_PRIVATE_KEY }}
+      AGENT_EMAIL_PASSWORD: ${{ secrets.QUICK_EMAIL_PASSWORD }}
+      AGENT_MATRIX_PASSWORD: ${{ secrets.QUICK_MATRIX_PASSWORD }}
+      AGENT_GITHUB_PASSWORD: ${{ secrets.QUICK_GITHUB_PASSWORD }}
