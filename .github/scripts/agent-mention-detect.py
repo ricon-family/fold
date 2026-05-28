@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""Detect fold agent mentions in GitHub issue comments.
-
-Pilot scope: workflow supplies a small AGENT_ROSTER (currently just quick).
-The parser deliberately strips quoted lines and fenced code before matching so
-examples like `> @quick said` or code snippets don't wake an agent.
-"""
+"""Detect trusted, non-quoted fold agent mentions in issue comments."""
 
 from __future__ import annotations
 
@@ -75,19 +70,16 @@ def build_message(event: dict, matched_agents: list[str], matched_mentions: list
 
     return textwrap.dedent(
         f"""
-        You were mentioned in a GitHub {thread_kind} comment.
+        GitHub mention wake: {repo}#{issue['number']} ({thread_kind})
+        Thread: {issue.get('html_url', '')}
+        Comment: {comment.get('html_url', '')}
+        Author: @{author} ({association})
+        Mentions: {', '.join('@' + mention for mention in matched_mentions)}
+        Agents: {', '.join(matched_agents)}
 
-        Repository: {repo}
-        Thread: {repo}#{issue['number']} — {issue.get('title', '')}
-        Thread URL: {issue.get('html_url', '')}
-        Triggering comment: {comment.get('html_url', '')}
-        Comment author: @{author} ({association})
-        Matched mention(s): {', '.join('@' + mention for mention in matched_mentions)}
-        Matched agent(s): {', '.join(matched_agents)}
+        Inspect the thread yourself before responding. Reply on GitHub if useful.
 
-        Please orient normally, inspect the GitHub thread yourself before responding, and reply on the thread if useful. Do not rely solely on this wake packet for context.
-
-        Triggering comment body:
+        Comment body:
         ---
         {body}
         ---
