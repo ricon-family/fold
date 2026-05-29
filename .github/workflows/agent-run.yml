@@ -73,9 +73,22 @@ jobs:
           mkdir -p "$(dirname "$WORK_DIR")"
           mv repo "$WORK_DIR"
 
+      - name: Resolve mise version
+        id: mise-version
+        run: |
+          version=$(curl -fsSL --connect-timeout 10 --max-time 60 --retry 3 --retry-delay 2 --retry-all-errors https://mise.jdx.dev/VERSION)
+          version=${version%$'\r'}
+          if [[ ! "$version" =~ ^[0-9]{4}\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Unexpected mise version: $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Resolved mise version: $version"
+
       - name: Set up mise
         uses: jdx/mise-action@v4
         with:
+          version: ${{ steps.mise-version.outputs.version }}
           install: true
         env:
           GITHUB_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
@@ -293,6 +306,7 @@ jobs:
 
       - name: Post-failure diagnostics
         if: failure()
+        working-directory: ${{ github.workspace }}
         run: |
           echo "=== Diagnostics ==="
           echo ""
