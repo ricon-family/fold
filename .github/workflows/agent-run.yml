@@ -173,15 +173,6 @@ jobs:
           EMAIL_PASSWORD: ${{ secrets.AGENT_EMAIL_PASSWORD }}
         run: emails setup ${{ inputs.agent }}
 
-      - name: Setup blob storage
-        continue-on-error: true
-        run: |
-          if secrets get "${{ inputs.agent }}/b2-endpoint" >/dev/null 2>&1; then
-            shimmer blob:setup ${{ inputs.agent }}
-          else
-            echo "B2 credentials not configured, skipping blob storage setup"
-          fi
-
       - name: Clone home repo
         run: |
           HOME_DIR="$HOME/agents/${{ inputs.agent }}/home"
@@ -295,6 +286,17 @@ jobs:
           "${CMD[@]}"
 
           echo "### AGENT SESSION END ###"
+
+      - name: Back up sessions
+        if: always()
+        env:
+          AGENT: ${{ inputs.agent }}
+        run: |
+          if ! command -v shimmer >/dev/null 2>&1; then
+            echo "shimmer not available; skipping session backup"
+            exit 0
+          fi
+          shimmer sessions:backup --all
 
       - name: Post-failure diagnostics
         if: failure()
