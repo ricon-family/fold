@@ -34,8 +34,6 @@ on:
         required: true
       AGENT_EMAIL_PASSWORD:
         required: true
-      AGENT_MATRIX_PASSWORD:
-        required: false
       AGENT_GITHUB_PASSWORD:
         required: false
       AGENT_B2_ENDPOINT:
@@ -133,7 +131,6 @@ jobs:
           AGENT_GITHUB_PAT: ${{ secrets.AGENT_GITHUB_PAT }}
           AGENT_GPG_PRIVATE_KEY: ${{ secrets.AGENT_GPG_PRIVATE_KEY }}
           AGENT_EMAIL_PASSWORD: ${{ secrets.AGENT_EMAIL_PASSWORD }}
-          AGENT_MATRIX_PASSWORD: ${{ secrets.AGENT_MATRIX_PASSWORD }}
           AGENT_GITHUB_PASSWORD: ${{ secrets.AGENT_GITHUB_PASSWORD }}
           AGENT_B2_ENDPOINT: ${{ secrets.AGENT_B2_ENDPOINT }}
           AGENT_B2_KEY_ID: ${{ secrets.AGENT_B2_KEY_ID }}
@@ -148,7 +145,6 @@ jobs:
             [GITHUB_PAT]="$AGENT_GITHUB_PAT"
             [GPG_PRIVATE_KEY]="$AGENT_GPG_PRIVATE_KEY"
             [EMAIL_PASSWORD]="$AGENT_EMAIL_PASSWORD"
-            [MATRIX_PASSWORD]="${AGENT_MATRIX_PASSWORD:-}"
             [GITHUB_PASSWORD]="${AGENT_GITHUB_PASSWORD:-}"
             [B2_ENDPOINT]="${AGENT_B2_ENDPOINT:-}"
             [B2_KEY_ID]="${AGENT_B2_KEY_ID:-}"
@@ -176,10 +172,6 @@ jobs:
         env:
           EMAIL_PASSWORD: ${{ secrets.AGENT_EMAIL_PASSWORD }}
         run: emails setup ${{ inputs.agent }}
-
-      - name: Setup Matrix
-        continue-on-error: true
-        run: shimmer matrix:login ${{ inputs.agent }}
 
       - name: Setup blob storage
         continue-on-error: true
