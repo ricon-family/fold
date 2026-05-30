@@ -34,8 +34,6 @@ on:
         required: true
       AGENT_EMAIL_PASSWORD:
         required: true
-      AGENT_MATRIX_PASSWORD:
-        required: false
       AGENT_GITHUB_PASSWORD:
         required: false
       AGENT_B2_ENDPOINT:
@@ -73,9 +71,22 @@ jobs:
           mkdir -p "$(dirname "$WORK_DIR")"
           mv repo "$WORK_DIR"
 
+      - name: Resolve mise version
+        id: mise-version
+        run: |
+          version=$(curl -fsSL --connect-timeout 10 --max-time 60 --retry 3 --retry-delay 2 --retry-all-errors https://mise.jdx.dev/VERSION)
+          version=${version%$'\r'}
+          if [[ ! "$version" =~ ^[0-9]{4}\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Unexpected mise version: $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Resolved mise version: $version"
+
       - name: Set up mise
         uses: jdx/mise-action@v4
         with:
+          version: ${{ steps.mise-version.outputs.version }}
           install: true
         env:
           GITHUB_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
@@ -120,7 +131,6 @@ jobs:
           AGENT_GITHUB_PAT: ${{ secrets.AGENT_GITHUB_PAT }}
           AGENT_GPG_PRIVATE_KEY: ${{ secrets.AGENT_GPG_PRIVATE_KEY }}
           AGENT_EMAIL_PASSWORD: ${{ secrets.AGENT_EMAIL_PASSWORD }}
-          AGENT_MATRIX_PASSWORD: ${{ secrets.AGENT_MATRIX_PASSWORD }}
           AGENT_GITHUB_PASSWORD: ${{ secrets.AGENT_GITHUB_PASSWORD }}
           AGENT_B2_ENDPOINT: ${{ secrets.AGENT_B2_ENDPOINT }}
           AGENT_B2_KEY_ID: ${{ secrets.AGENT_B2_KEY_ID }}
@@ -135,7 +145,6 @@ jobs:
             [GITHUB_PAT]="$AGENT_GITHUB_PAT"
             [GPG_PRIVATE_KEY]="$AGENT_GPG_PRIVATE_KEY"
             [EMAIL_PASSWORD]="$AGENT_EMAIL_PASSWORD"
-            [MATRIX_PASSWORD]="${AGENT_MATRIX_PASSWORD:-}"
             [GITHUB_PASSWORD]="${AGENT_GITHUB_PASSWORD:-}"
             [B2_ENDPOINT]="${AGENT_B2_ENDPOINT:-}"
             [B2_KEY_ID]="${AGENT_B2_KEY_ID:-}"
@@ -163,10 +172,6 @@ jobs:
         env:
           EMAIL_PASSWORD: ${{ secrets.AGENT_EMAIL_PASSWORD }}
         run: emails setup ${{ inputs.agent }}
-
-      - name: Setup Matrix
-        continue-on-error: true
-        run: shimmer matrix:login ${{ inputs.agent }}
 
       - name: Setup blob storage
         continue-on-error: true
@@ -293,6 +298,7 @@ jobs:
 
       - name: Post-failure diagnostics
         if: failure()
+        working-directory: ${{ github.workspace }}
         run: |
           echo "=== Diagnostics ==="
           echo ""
