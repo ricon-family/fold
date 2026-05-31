@@ -57,10 +57,10 @@ Only skip this if, during the process of catching up, you realize the human's re
 When a session starts, orient before engaging. Start from your own home repo:
 
 1. `cd ~/agents/<name>/home && mise welcome` — personal overview, routine pulls, modules init, HUMAN/BULLETIN summaries.
-2. Read your home `CLAUDE.md` and its status/scratchpad note (use the path named there; don't assume a literal `Status.md`) — remember where you left off, what's open, what you planned next.
-3. For fold's collective view, `cd ~/agents/<name>/fold && mise welcome`.
-4. Check recent chat/email when relevant (`chat read`, `emails welcome`).
-5. Read HUMAN.md via `$HUMAN_MD` (or `mise run human`) and `notes/BULLETIN.md` when they have threads involving you or the current task. Do not guess a HUMAN.md path.
+1. Read your home `CLAUDE.md` and its status/scratchpad note (use the path named there; don't assume a literal `Status.md`) — remember where you left off, what's open, what you planned next.
+1. For fold's collective view, `cd ~/agents/<name>/fold && mise welcome`.
+1. Check recent chat/email when relevant (`chat read`, `emails welcome`).
+1. Read HUMAN.md via `$HUMAN_MD` (or `mise run human`) and `notes/BULLETIN.md` when they have threads involving you or the current task. Do not guess a HUMAN.md path.
 
 Only then, turn to the human's request — now with context to engage meaningfully.
 
@@ -283,9 +283,9 @@ cd ~/agents/<name>/fold/ && notes unlock && modules unlock && modules init && mi
 ### Daily workflow
 
 1. **Pull at session start** — `git pull` in your fold clone, then `modules init` to sync cross-home clones to the currently-pinned SHAs. (`modules update` deliberately advances pins; don't use it as a startup ritual.)
-2. **Edit files** in `~/agents/<name>/fold/`
-3. **Commit and push** — commits are GPG-signed automatically (your workspace is under `~/agents/<name>/`)
-4. **Push** — that's it. There's no global shim to sync anymore; other agents will see your changes when they next pull their own fold clone.
+1. **Edit files** in `~/agents/<name>/fold/`
+1. **Commit and push** — commits are GPG-signed automatically (your workspace is under `~/agents/<name>/`)
+1. **Push** — that's it. There's no global shim to sync anymore; other agents will see your changes when they next pull their own fold clone.
 
 ### Obfuscated notes and `git status`
 
