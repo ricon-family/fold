@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+#MISE description="Show agent GitHub token validity and expiration metadata"
+#USAGE flag "--ci" default=#false help="Default to CI-enabled fold agents only"
+#USAGE arg "[agents]" var=#true default="" help="Agent names to check (default: all fold agents)"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+CI_ONLY="${usage_ci:-false}"
+AGENTS_ARG="${usage_agents:-}"
+
+require_tool() {
+  local tool="$1"
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "ERROR: required tool not found: $tool" >&2
+    exit 1
+  fi
+}
+
+redact() {
+  sed -E \
+    -e 's/gh[pousr]_[A-Za-z0-9_]+/[REDACTED_GITHUB_TOKEN]/g' \
+    -e 's/github_pat_[A-Za-z0-9_]+/[REDACTED_GITHUB_TOKEN]/g'
+}
+
+validate_agent() {
+  local agent="$1"
+  if [[ ! "$agent" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    echo "ERROR: invalid agent name: $agent" >&2
+    exit 1
+  fi
+}
+
+parse_explicit_agents() {
+  [ -n "$AGENTS_ARG" ] || return 0
+
+  # Mise exports an omitted default="" variadic as a shell-escaped empty
+  # value on some platforms. Treat blank parsed values as omitted.
+  printf '%s' "$AGENTS_ARG" | xargs printf '%s\n' | while IFS= read -r agent; do
+    [ -n "$agent" ] || continue
+    validate_agent "$agent"
+    printf '%s\n' "$agent"
+  done
+}
+
+list_default_agents() {
+  if [ "$CI_ONLY" = "true" ]; then
+    (cd "$ROOT" && mise run -q agent:list --ci)
+  else
+    (cd "$ROOT" && mise run -q agent:list)
+  fi
+}
+
+parse_epoch() {
+  local value="$1"
+  local epoch=""
+
+  if epoch=$(date -u -d "$value" +%s 2>/dev/null); then
+    printf '%s\n' "$epoch"
+    return 0
+  fi
+
+  if epoch=$(date -j -u -f "%Y-%m-%d %H:%M:%S %Z" "$value" +%s 2>/dev/null); then
+    printf '%s\n' "$epoch"
+    return 0
+  fi
+
+  return 1
+}
+
+print_row() {
+  printf '%-12s %-8s %-8s %-18s %-24s %-8s %s\n' "$@"
+}
+
+require_tool secrets
+require_tool gh
+require_tool date
+require_tool awk
+require_tool sed
+require_tool xargs
+
+TMP_AGENTS=$(mktemp)
+trap 'rm -f "$TMP_AGENTS"' EXIT
+
+if [ -n "$AGENTS_ARG" ]; then
+  parse_explicit_agents > "$TMP_AGENTS"
+  if ! grep -q '[^[:space:]]' "$TMP_AGENTS"; then
+    list_default_agents > "$TMP_AGENTS"
+  fi
+else
+  list_default_agents > "$TMP_AGENTS"
+fi
+
+if ! grep -q '[^[:space:]]' "$TMP_AGENTS"; then
+  echo "ERROR: no agents found" >&2
+  exit 1
+fi
+
+sort -u "$TMP_AGENTS" -o "$TMP_AGENTS"
+
+print_row "agent" "secret" "valid" "login" "expires" "days" "note"
+print_row "------------" "--------" "--------" "------------------" "------------------------" "--------" "----"
+
+while IFS= read -r agent; do
+  [ -n "$agent" ] || continue
+  validate_agent "$agent"
+
+  key="$agent/github-pat"
+  token=""
+  if ! token=$(secrets get "$key" 2>/dev/null); then
+    print_row "$agent" "missing" "unknown" "-" "-" "-" "secret not found"
+    continue
+  fi
+
+  if [ -z "$token" ]; then
+    print_row "$agent" "empty" "unknown" "-" "-" "-" "secret is empty"
+    unset token
+    continue
+  fi
+
+  response=""
+  if ! response=$(GH_TOKEN="$token" gh api /user -i 2>&1); then
+    note=$(printf '%s\n' "$response" | redact | tr '\n' ' ' | sed 's/[[:space:]]\{1,\}/ /g; s/^ //; s/ $//' | cut -c1-80)
+    if printf '%s\n' "$response" | grep -q 'Bad credentials'; then
+      print_row "$agent" "present" "no" "-" "-" "-" "bad credentials"
+    else
+      print_row "$agent" "present" "error" "-" "-" "-" "$note"
+    fi
+    unset token response
+    continue
+  fi
+
+  login=$(printf '%s\n' "$response" | sed -n 's/.*"login"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+  [ -n "$login" ] || login="-"
+
+  expiry=$(printf '%s\n' "$response" | awk '
+    tolower($0) ~ /^github-authentication-token-expiration:/ {
+      sub(/^[^:]*:[[:space:]]*/, "")
+      sub(/\r$/, "")
+      print
+      exit
+    }
+  ')
+
+  if [ -z "$expiry" ]; then
+    print_row "$agent" "present" "yes" "$login" "no expiration" "-" ""
+    unset token response
+    continue
+  fi
+
+  if epoch=$(parse_epoch "$expiry"); then
+    now=$(date -u +%s)
+    days=$(( (epoch - now) / 86400 ))
+    note=""
+    if [ "$days" -lt 0 ]; then
+      note="expired"
+    elif [ "$days" -le 7 ]; then
+      note="rotate soon"
+    fi
+    print_row "$agent" "present" "yes" "$login" "$expiry" "$days" "$note"
+  else
+    print_row "$agent" "present" "yes" "$login" "$expiry" "?" "could not parse expiry"
+  fi
+
+  unset token response
+done < "$TMP_AGENTS"
