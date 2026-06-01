@@ -16,7 +16,7 @@ Run `shimmer whoami` to identify yourself, or check `$GIT_AUTHOR_NAME` (set by `
 
 Then read your canonical identity and startup instructions at:
 ```
-~/agents/<name>/home/CLAUDE.md
+~/agents/<name>/home/AGENTS.md
 ```
 
 **Read that file now and follow the startup procedure it describes.**
@@ -57,7 +57,7 @@ Only skip this if, during the process of catching up, you realize the human's re
 When a session starts, orient before engaging. Start from your own home repo:
 
 1. `cd ~/agents/<name>/home && mise welcome` — personal overview, routine pulls, modules init, HUMAN/BULLETIN summaries.
-1. Read your home `CLAUDE.md` and its status/scratchpad note (use the path named there; don't assume a literal `Status.md`) — remember where you left off, what's open, what you planned next.
+1. Read your home `AGENTS.md` and its status/scratchpad note (use the path named there; don't assume a literal `Status.md`) — remember where you left off, what's open, what you planned next.
 1. Read your personal adhered-patterns note if you maintain one, then read fold's shared `notes/adhered-patterns.md` — personal commitments plus fold house commitments are both active.
 1. For fold's collective view, `cd ~/agents/<name>/fold && mise welcome`.
 1. Check recent chat/email when relevant (`chat read`, `emails welcome`).
@@ -228,7 +228,7 @@ Agents have **two** places to store information:
 
 ### Private Home Repo — Personal Repo
 - **Location:** `~/agents/<name>/home/` (e.g., `~/agents/baby-joel/home/`)
-- **Contains:** `CLAUDE.md` (canonical identity), session logs, working principles, private notes
+- **Contains:** `AGENTS.md` (canonical identity), session logs, working principles, private notes
 - **Visible to:** Only the agent and Or
 - **This repo is your home.** Fold is where you collaborate; your home repo is where your private memory lives.
 
