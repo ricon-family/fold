@@ -13,6 +13,12 @@ DRY_RUN="${usage_dry_run:-false}"
 OPERATOR="${usage_operator:-${GIT_AUTHOR_NAME:-}}"
 NO_SYNC_CI="${usage_no_sync_ci:-false}"
 AGENTS_ARG="${usage_agents:-}"
+SECRETS_BIN="${SECRETS_BIN:-secrets}"
+WEBSITES_BIN="${WEBSITES_BIN:-websites}"
+SHIMMER_BIN="${SHIMMER_BIN:-shimmer}"
+GH_BIN="${GH_BIN:-gh}"
+AWK_BIN="${AWK_BIN:-awk}"
+XARGS_BIN="${XARGS_BIN:-xargs}"
 
 require_tool() {
   local tool="$1"
@@ -40,7 +46,7 @@ validate_agent() {
 }
 
 parse_explicit_agents() {
-  printf '%s' "$AGENTS_ARG" | xargs printf '%s\n' | while IFS= read -r agent; do
+  printf '%s' "$AGENTS_ARG" | "$XARGS_BIN" printf '%s\n' | while IFS= read -r agent; do
     [ -n "$agent" ] || continue
     validate_agent "$agent"
     printf '%s\n' "$agent"
@@ -63,7 +69,7 @@ load_operator_token() {
   fi
   validate_agent "$OPERATOR"
 
-  if ! OPERATOR_TOKEN=$(secrets get "$OPERATOR/github-pat" 2>/dev/null); then
+  if ! OPERATOR_TOKEN=$("$SECRETS_BIN" get "$OPERATOR/github-pat" 2>/dev/null); then
     echo "ERROR: could not read $OPERATOR/github-pat for CI sync operator" >&2
     exit 1
   fi
@@ -81,7 +87,7 @@ verify_operator_access() {
 
   local err
   err=$(mktemp)
-  if GH_TOKEN="$OPERATOR_TOKEN" gh api repos/ricon-family/fold/actions/secrets/public-key --jq .key >/dev/null 2>"$err"; then
+  if GH_TOKEN="$OPERATOR_TOKEN" "$GH_BIN" api repos/ricon-family/fold/actions/secrets/public-key --jq .key >/dev/null 2>"$err"; then
     rm -f "$err"
     return 0
   fi
@@ -103,12 +109,30 @@ sync_ci() {
   echo "  ✓ synced fold CI secrets"
 }
 
-require_tool secrets
-require_tool websites
-require_tool shimmer
-require_tool gh
-require_tool awk
-require_tool xargs
+run_websites_create() {
+  local agent="$1"
+  local username="$2"
+  local password="$3"
+  local stdout="$4"
+  local stderr="$5"
+  local totp_code=""
+
+  if "$SECRETS_BIN" get "$agent/github-totp" >/dev/null 2>&1; then
+    totp_code=$("$SECRETS_BIN" totp "$agent/github-totp")
+    GITHUB_USERNAME="$username" GITHUB_PASSWORD="$password" GITHUB_TOTP_CODE="$totp_code" \
+      "$WEBSITES_BIN" github:token:create "$agent" --login-id "$agent" >"$stdout" 2>"$stderr"
+  else
+    GITHUB_USERNAME="$username" GITHUB_PASSWORD="$password" \
+      "$WEBSITES_BIN" github:token:create "$agent" --login-id "$agent" >"$stdout" 2>"$stderr"
+  fi
+}
+
+require_tool "$SECRETS_BIN"
+require_tool "$WEBSITES_BIN"
+require_tool "$SHIMMER_BIN"
+require_tool "$GH_BIN"
+require_tool "$AWK_BIN"
+require_tool "$XARGS_BIN"
 
 TMP_AGENTS=$(mktemp)
 TMP_ROOT=$(mktemp -d)
@@ -161,15 +185,15 @@ while IFS= read -r agent; do
   validate_agent "$agent"
   printf '== %s ==\n' "$agent"
 
-  username=$(secrets get "$agent/github-username" 2>/dev/null || true)
-  password=$(secrets get "$agent/github-password" 2>/dev/null || true)
+  username=$("$SECRETS_BIN" get "$agent/github-username" 2>/dev/null || true)
+  password=$("$SECRETS_BIN" get "$agent/github-password" 2>/dev/null || true)
   if [ -z "$username" ] || [ -z "$password" ]; then
     printf '  ✗ missing github username/password secret\n'
     exit 1
   fi
 
   if [ "$DRY_RUN" = "true" ]; then
-    if secrets get "$agent/github-pat" >/dev/null 2>&1; then
+    if "$SECRETS_BIN" get "$agent/github-pat" >/dev/null 2>&1; then
       printf '  ✓ credentials present; current PAT present\n\n'
     else
       printf '  ⚠ credentials present; current PAT missing\n\n'
@@ -183,14 +207,14 @@ while IFS= read -r agent; do
   stdout="$agent_tmp/stdout"
   stderr="$agent_tmp/stderr"
 
-  if ! GITHUB_USERNAME="$username" GITHUB_PASSWORD="$password" websites github:token:create "$agent" --login-id "$agent" >"$stdout" 2>"$stderr"; then
+  if ! run_websites_create "$agent" "$username" "$password" "$stdout" "$stderr"; then
     printf '  ✗ token creation failed\n'
     printf '  sanitized diagnostics:\n'
     redact <"$stderr" | sed 's/^/    /' | tail -100
     exit 1
   fi
 
-  new_token=$(awk '/^ghp_/ { value=$0 } END { print value }' "$stdout")
+  new_token=$("$AWK_BIN" '/^(ghp_|github_pat_)/ { value=$0 } END { print value }' "$stdout")
   if [ -z "$new_token" ]; then
     printf '  ✗ token creation produced no token on stdout\n'
     printf '  sanitized diagnostics:\n'
@@ -199,7 +223,7 @@ while IFS= read -r agent; do
   fi
   printf '  ✓ created\n'
 
-  shimmer github:token:store "$agent" "$new_token" >/dev/null
+  "$SHIMMER_BIN" github:token:store "$agent" "$new_token" >/dev/null
   printf '  ✓ stored\n'
 
   if [ "$agent" = "$OPERATOR" ]; then
@@ -209,8 +233,8 @@ while IFS= read -r agent; do
 
   sync_ci "$agent"
 
-  stored_token=$(secrets get "$agent/github-pat")
-  login=$(GH_TOKEN="$stored_token" gh api /user --jq .login 2>/dev/null || true)
+  stored_token=$("$SECRETS_BIN" get "$agent/github-pat")
+  login=$(GH_TOKEN="$stored_token" "$GH_BIN" api /user --jq .login 2>/dev/null || true)
   if [ -z "$login" ]; then
     printf '  ✗ verification failed\n'
     exit 1
