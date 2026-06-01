@@ -97,7 +97,7 @@ def main() -> int:
 
     event = json.loads(Path(event_path).read_text(encoding="utf-8"))
     roster = csv_env("AGENT_ROSTER", "quick")
-    aliases = csv_env("TEAM_ALIASES", "ricon-family/agents")
+    aliases = csv_env("TEAM_ALIASES", "")
     agent_mentions = {f"{agent}-ricon": agent for agent in roster}
     allowed_associations = {item.upper() for item in csv_env("ALLOWED_ASSOCIATIONS", "OWNER,MEMBER,COLLABORATOR")}
 
