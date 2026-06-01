@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+#MISE description="List fold skill entrypoint notes"
+#USAGE flag "--json" default=#false help="Output as JSON array"
+#USAGE flag "--status <status>" default="" help="Filter by frontmatter status"
+#USAGE flag "--recent <n>" default="" help="Show N most recently updated skills"
+set -euo pipefail
+
+FOLD_DIR="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+
+args=(list --tag skill)
+if [ "${usage_json:-false}" = "true" ]; then
+  args+=(--json)
+fi
+if [ -n "${usage_status:-}" ]; then
+  args+=(--status "$usage_status")
+fi
+if [ -n "${usage_recent:-}" ]; then
+  args+=(--recent "$usage_recent")
+fi
+
+NOTES_CALLER_PWD="$FOLD_DIR" exec notes ${args[@]+"${args[@]}"}

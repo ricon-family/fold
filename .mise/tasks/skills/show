@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+#MISE description="Show a fold skill entrypoint note"
+#USAGE arg "<skill>" help="Skill slug, title, or path" required=#true
+#USAGE flag "--json" default=#false help="Output metadata and body as JSON"
+set -euo pipefail
+
+FOLD_DIR="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+
+skill_json=$(NOTES_CALLER_PWD="$FOLD_DIR" notes show "$usage_skill" --json)
+
+skill_path=$(python3 -c '
+import json
+import sys
+
+data = json.load(sys.stdin)
+metadata = data.get("metadata", {})
+tags = metadata.get("tags", [])
+if not isinstance(tags, list):
+    tags = []
+if "skill" not in tags:
+    title = data.get("title") or data.get("path") or "<unknown>"
+    print(f"Error: not a skill-tagged note: {title}", file=sys.stderr)
+    sys.exit(2)
+print(data["path"])
+' <<< "$skill_json")
+
+if [ "${usage_json:-false}" = "true" ]; then
+  printf '%s\n' "$skill_json"
+else
+  cat "$skill_path"
+fi
