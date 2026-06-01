@@ -11,7 +11,9 @@ import textwrap
 import uuid
 from pathlib import Path
 
-MENTION_RE = re.compile(r"(?<![\w/.-])@([A-Za-z0-9][A-Za-z0-9-]*)\b")
+MENTION_RE = re.compile(
+    r"(?<![\w/.-])@([A-Za-z0-9][A-Za-z0-9-]*(?:/[A-Za-z0-9][A-Za-z0-9-]*)?)(?![\w/-])"
+)
 FENCE_RE = re.compile(r"^\s*(```|~~~)")
 
 
@@ -95,7 +97,8 @@ def main() -> int:
 
     event = json.loads(Path(event_path).read_text(encoding="utf-8"))
     roster = csv_env("AGENT_ROSTER", "quick")
-    aliases = csv_env("TEAM_ALIASES", "agents")
+    aliases = csv_env("TEAM_ALIASES", "ricon-family/agents")
+    agent_mentions = {f"{agent}-ricon": agent for agent in roster}
     allowed_associations = {item.upper() for item in csv_env("ALLOWED_ASSOCIATIONS", "OWNER,MEMBER,COLLABORATOR")}
 
     association = (event.get("comment", {}).get("author_association") or "UNKNOWN").upper()
@@ -110,8 +113,8 @@ def main() -> int:
     matched_agents: set[str] = set()
     matched_mentions: list[str] = []
     for mention in mentions:
-        if mention in roster:
-            matched_agents.add(mention)
+        if mention in agent_mentions:
+            matched_agents.add(agent_mentions[mention])
             matched_mentions.append(mention)
         elif mention in aliases:
             matched_agents.update(roster)

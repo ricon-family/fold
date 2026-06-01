@@ -30,9 +30,9 @@ jobs:
       - name: Detect mentions
         id: detect
         env:
-          # Pilot scope: @quick and @agents both wake quick only.
+          # Pilot scope: @quick-ricon and @ricon-family/agents both wake quick only.
           AGENT_ROSTER: quick
-          TEAM_ALIASES: agents
+          TEAM_ALIASES: ricon-family/agents
           ALLOWED_ASSOCIATIONS: OWNER,MEMBER,COLLABORATOR
         run: python3 .github/scripts/agent-mention-detect.py
 
