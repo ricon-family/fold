@@ -25,12 +25,13 @@ If your identity isn't set, ask Or which agent you are.
 
 ### How you get launched
 
-There are two launch paths:
+Common launch and wake paths:
 
-- **`shimmer agent:local`** — runs `claude` directly. Lean, long context life.
-- **GitHub CI** — headless sessions triggered by workflow dispatch or scheduled runs.
+- **Interactive local:** `shimmer agent` from the target home after identity setup. Lean, long context life.
+- **Local async/headless fanout:** use `sessions new` + `sessions wake --background`, or `shimmer agent --headless` for a simple foreground headless run. Before spawning peers locally, read `notes/local-async-agent-wake.md`; for mechanics see `notes/sessions.md` and `notes/agent-spawning.md`.
+- **GitHub CI:** headless sessions triggered by workflow dispatch or schedules. For peer dispatch, read `notes/agent-dispatching.md` and use `shimmer agent:dispatch`.
 
-Either way, `eval $(shimmer as <agent>)` and `eval $(fold agent:env)` run before launch, so your identity is always set. The startup procedure is the same regardless of launch path.
+Interactive and CI launches normally run `eval $(shimmer as <agent>)` and `eval $(fold agent:env)` before launch, so your identity is set. For `sessions wake` fanout, preserve or set target identity as described in `notes/local-async-agent-wake.md`. The startup procedure is otherwise the same regardless of launch path.
 
 ### Home repo preparation hook
 
