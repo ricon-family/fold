@@ -2,7 +2,7 @@
 # Source: shimmer/.github/templates/agent-scheduled.yml + workflows.yaml
 # Regenerate: shimmer workflows generate
 
-name: ghl-referral
+name: "ghl-referral"
 
 on:
   schedule:
@@ -12,20 +12,8 @@ on:
 
 jobs:
   run:
-    uses: ./.github/workflows/agent-run.yml
+    uses: ./.github/workflows/c0da.yml
     with:
-      agent: c0da
-      message: Use `gh repo clone` to clone ricon-family/grow-heal-love to your workspace and read .jobs/referral-check.txt for instructions.
-      model: openai-codex/gpt-5.5
-    secrets:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
-      PI_AUTH_JSON: ${{ secrets.PI_AUTH_JSON }}
-      AGENT_GITHUB_PAT: ${{ secrets.C0DA_GITHUB_PAT }}
-      AGENT_GPG_PRIVATE_KEY: ${{ secrets.C0DA_GPG_PRIVATE_KEY }}
-      AGENT_EMAIL_PASSWORD: ${{ secrets.C0DA_EMAIL_PASSWORD }}
-      AGENT_GITHUB_PASSWORD: ${{ secrets.C0DA_GITHUB_PASSWORD }}
-      AGENT_B2_ENDPOINT: ${{ secrets.C0DA_B2_ENDPOINT }}
-      AGENT_B2_KEY_ID: ${{ secrets.C0DA_B2_KEY_ID }}
-      AGENT_B2_APPLICATION_KEY: ${{ secrets.C0DA_B2_APPLICATION_KEY }}
-      AGENT_B2_BUCKET: ${{ secrets.C0DA_B2_BUCKET }}
+      message: "Use `gh repo clone` to clone ricon-family/grow-heal-love to your workspace and read .jobs/referral-check.txt for instructions."
+      model: "openai-codex/gpt-5.5"
+    secrets: inherit
