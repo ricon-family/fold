@@ -29,6 +29,11 @@ workflows:
       - "0 16 * * 1"  # Monday 11am EST weekly
     message: "Read .jobs/repo-audit.txt in fold and execute those instructions."
 
+mention_wakes:
+  enabled: true
+  model: openai-codex/gpt-5.5
+  allowed_associations: [OWNER, MEMBER]
+
 # Other workflows (uncomment when ready):
 #
 #   - name: quick-probe

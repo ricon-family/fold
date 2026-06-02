@@ -2,7 +2,7 @@
 # Source: shimmer workflows generate
 # Regenerate: shimmer workflows generate
 
-name: junior
+name: 'junior'
 
 on:
   workflow_dispatch:
@@ -15,12 +15,45 @@ on:
         description: 'Provider-qualified model to use (e.g., openai-codex/gpt-5.5)'
         required: true
         type: string
+  workflow_call:
+    inputs:
+      message:
+        description: 'Message for the agent'
+        required: true
+        type: string
+      model:
+        description: 'Provider-qualified model to use (e.g., openai-codex/gpt-5.5)'
+        required: true
+        type: string
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: false
+      HF_TOKEN:
+        required: false
+      PI_AUTH_JSON:
+        required: false
+      JUNIOR_GITHUB_PAT:
+        required: true
+      JUNIOR_GPG_PRIVATE_KEY:
+        required: true
+      JUNIOR_EMAIL_PASSWORD:
+        required: true
+      JUNIOR_GITHUB_PASSWORD:
+        required: false
+      JUNIOR_B2_ENDPOINT:
+        required: false
+      JUNIOR_B2_KEY_ID:
+        required: false
+      JUNIOR_B2_APPLICATION_KEY:
+        required: false
+      JUNIOR_B2_BUCKET:
+        required: false
 
 jobs:
   run:
     uses: ./.github/workflows/agent-run.yml
     with:
-      agent: junior
+      agent: 'junior'
       message: ${{ inputs.message }}
       model: ${{ inputs.model }}
     secrets:
