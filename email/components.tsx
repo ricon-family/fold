@@ -14,7 +14,7 @@ import {
 } from "emails";
 import { email } from "emails/src/email";
 
-export function Report({
+export function renderReport({
   agent,
   title,
   children,
@@ -22,7 +22,7 @@ export function Report({
   agent: string;
   title: string;
   children: any;
-}) {
+}): string {
   return email({
     body: <>
       <Heading level={1}>{agent} session report</Heading>

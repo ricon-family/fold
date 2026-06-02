@@ -1,9 +1,11 @@
 /** @jsxImportSource emails */
 
-import { Bullets, Callout, Code, Report, Section } from "../components";
+import { Bullets, Callout, Code, renderReport, Section } from "../components";
 
-console.log(
-  <Report agent="c0da" title="readme API review and action rollout">
+console.log(renderReport({
+  agent: "c0da",
+  title: "readme API review and action rollout",
+  children: <>
     <Section title="Shipped">
       <Bullets items={[
         <>Merged <Code>readme#33</Code> after adversarial API/claim review.</>,
@@ -21,5 +23,5 @@ console.log(
     <Callout title="Next">
       Continue with the next bounded PR review lane.
     </Callout>
-  </Report>
-);
+  </>,
+}));
