@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+#MISE description="Search fold skill entrypoint notes"
+#USAGE arg "<query>" help="Case-insensitive text to search for" required=#true
+#USAGE flag "--json" default=#false help="Output as JSON array"
+#USAGE flag "--status <status>" default="" help="Filter by frontmatter status"
+#USAGE flag "--limit <n>" default="50" help="Maximum results to show"
+set -euo pipefail
+
+FOLD_DIR="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+
+args=(search "$usage_query" --tag skill --limit "${usage_limit:-50}")
+if [ "${usage_json:-false}" = "true" ]; then
+  args+=(--json)
+fi
+if [ -n "${usage_status:-}" ]; then
+  args+=(--status "$usage_status")
+fi
+
+NOTES_CALLER_PWD="$FOLD_DIR" exec notes ${args[@]+"${args[@]}"}

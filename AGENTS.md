@@ -16,7 +16,7 @@ Run `shimmer whoami` to identify yourself, or check `$GIT_AUTHOR_NAME` (set by `
 
 Then read your canonical identity and startup instructions at:
 ```
-~/agents/<name>/home/CLAUDE.md
+~/agents/<name>/home/AGENTS.md
 ```
 
 **Read that file now and follow the startup procedure it describes.**
@@ -25,12 +25,13 @@ If your identity isn't set, ask Or which agent you are.
 
 ### How you get launched
 
-There are two launch paths:
+Common launch and wake paths:
 
-- **`shimmer agent:local`** — runs `claude` directly. Lean, long context life.
-- **GitHub CI** — headless sessions triggered by workflow dispatch or scheduled runs.
+- **Interactive local:** `shimmer agent` from the target home after identity setup. Lean, long context life.
+- **Local async/headless fanout:** use `sessions new` + `sessions wake --background`, or `shimmer agent --headless` for a simple foreground headless run. Before spawning peers locally, read `notes/local-async-agent-wake.md`; for mechanics see `notes/sessions.md` and `notes/agent-spawning.md`.
+- **GitHub CI:** headless sessions triggered by workflow dispatch or schedules. For peer dispatch, read `notes/agent-dispatching.md` and use `shimmer agent:dispatch`.
 
-Either way, `eval $(shimmer as <agent>)` and `eval $(fold agent:env)` run before launch, so your identity is always set. The startup procedure is the same regardless of launch path.
+Interactive and CI launches normally run `eval $(shimmer as <agent>)` and `eval $(fold agent:env)` before launch, so your identity is set. For `sessions wake` fanout, preserve or set target identity as described in `notes/local-async-agent-wake.md`. The startup procedure is otherwise the same regardless of launch path.
 
 ### Home repo preparation hook
 
@@ -57,7 +58,8 @@ Only skip this if, during the process of catching up, you realize the human's re
 When a session starts, orient before engaging. Start from your own home repo:
 
 1. `cd ~/agents/<name>/home && mise welcome` — personal overview, routine pulls, modules init, HUMAN/BULLETIN summaries.
-1. Read your home `CLAUDE.md` and its status/scratchpad note (use the path named there; don't assume a literal `Status.md`) — remember where you left off, what's open, what you planned next.
+1. Read your home `AGENTS.md` and its status/scratchpad note (use the path named there; don't assume a literal `Status.md`) — remember where you left off, what's open, what you planned next.
+1. Read your personal adhered-patterns note if you maintain one, then read fold's shared `notes/adhered-patterns.md` — personal commitments plus fold house commitments are both active.
 1. For fold's collective view, `cd ~/agents/<name>/fold && mise welcome`.
 1. Check recent chat/email when relevant (`chat read`, `emails welcome`).
 1. Read HUMAN.md via `$HUMAN_MD` (or `mise run human`) and `notes/BULLETIN.md` when they have threads involving you or the current task. Do not guess a HUMAN.md path.
@@ -80,6 +82,7 @@ Guidance only works when it appears at the moment you need it. Before starting a
 | Change GitHub Actions / CI auth | Read `notes/github-actions-ci.md` and `notes/ci-auth-debugging.md` |
 | Create or revive a codebase | Read `notes/creating-a-codebase.md` and, for stale work, `notes/revival-pattern.md` |
 | Hit any command/tool/auth/CI failure | Stop and read `notes/observed-failures-are-work.md`, especially "When a command fails" |
+| Edit, stage, or commit readable notes in a notes-managed repo | Read `notes/notes-managed-repo-workflow.md`; use `notes changes` and `notes stage`, not raw `git add notes/...` |
 | Repeat long paths in shell/tool calls | Create token-short symlink handles and read the pattern note through the handle: `agent=${GIT_AUTHOR_NAME:-<agent>}; mkdir -p "/tmp/$agent.d"; ln -sfn "$HOME/agents/$agent/home/modules/fold" "/tmp/$agent.d/fold"; ln -sfn "/tmp/$agent.d/fold/notes" "/tmp/$agent.d/fn"; cat "/tmp/$agent.d/fn/token-short-symlink-handles.md"` |
 
 This is not a startup reading list. It is a set of just-in-time triggers. Read the note when the trigger fires, then proceed.
@@ -226,7 +229,7 @@ Agents have **two** places to store information:
 
 ### Private Home Repo — Personal Repo
 - **Location:** `~/agents/<name>/home/` (e.g., `~/agents/baby-joel/home/`)
-- **Contains:** `CLAUDE.md` (canonical identity), session logs, working principles, private notes
+- **Contains:** `AGENTS.md` (canonical identity), session logs, working principles, private notes
 - **Visible to:** Only the agent and Or
 - **This repo is your home.** Fold is where you collaborate; your home repo is where your private memory lives.
 

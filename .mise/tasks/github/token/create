@@ -1,0 +1,228 @@
+#!/usr/bin/env bash
+#MISE description="Create agent GitHub classic PATs, store them, and sync fold CI secrets"
+#USAGE flag "-y --yes" default=#false help="Actually create tokens without prompting"
+#USAGE flag "--dry-run" default=#false help="Check prerequisites without creating, storing, or syncing"
+#USAGE flag "--operator <agent>" default="" help="Agent whose stored GitHub PAT has fold Actions-secret permission"
+#USAGE flag "--no-sync-ci" default=#false help="Create/store only; do not sync fold CI secrets"
+#USAGE arg "[agents]" var=#true default="" help="Agent names to create tokens for (default: CI-enabled fold agents)"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+YES="${usage_yes:-false}"
+DRY_RUN="${usage_dry_run:-false}"
+OPERATOR="${usage_operator:-${GIT_AUTHOR_NAME:-}}"
+NO_SYNC_CI="${usage_no_sync_ci:-false}"
+AGENTS_ARG="${usage_agents:-}"
+
+require_tool() {
+  local tool="$1"
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "ERROR: required tool not found: $tool" >&2
+    exit 1
+  fi
+}
+
+redact() {
+  sed -E \
+    -e 's/gh[pousr]_[A-Za-z0-9_]+/[REDACTED_GITHUB_TOKEN]/g' \
+    -e 's/github_pat_[A-Za-z0-9_]+/[REDACTED_GITHUB_TOKEN]/g' \
+    -e 's/(Password: ).*/\1[REDACTED]/g' \
+    -e 's/(GITHUB_PASSWORD=)[^[:space:]]+/\1[REDACTED]/g' \
+    -e 's/^TOKEN:.*/TOKEN:[REDACTED_GITHUB_TOKEN]/'
+}
+
+validate_agent() {
+  local agent="$1"
+  if [[ ! "$agent" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    echo "ERROR: invalid agent name: $agent" >&2
+    exit 1
+  fi
+}
+
+parse_explicit_agents() {
+  printf '%s' "$AGENTS_ARG" | xargs printf '%s\n' | while IFS= read -r agent; do
+    [ -n "$agent" ] || continue
+    validate_agent "$agent"
+    printf '%s\n' "$agent"
+  done
+}
+
+list_default_agents() {
+  (cd "$ROOT" && mise run -q agent:list --ci)
+}
+
+load_operator_token() {
+  if [ "$NO_SYNC_CI" = "true" ]; then
+    return 0
+  fi
+
+  if [ -z "$OPERATOR" ]; then
+    echo "ERROR: CI sync requires --operator <agent> or GIT_AUTHOR_NAME identity" >&2
+    echo "       Use --no-sync-ci to create/store without syncing fold CI secrets." >&2
+    exit 1
+  fi
+  validate_agent "$OPERATOR"
+
+  if ! OPERATOR_TOKEN=$(secrets get "$OPERATOR/github-pat" 2>/dev/null); then
+    echo "ERROR: could not read $OPERATOR/github-pat for CI sync operator" >&2
+    exit 1
+  fi
+  if [ -z "$OPERATOR_TOKEN" ]; then
+    echo "ERROR: $OPERATOR/github-pat is empty" >&2
+    exit 1
+  fi
+  export OPERATOR_TOKEN
+}
+
+verify_operator_access() {
+  if [ "$NO_SYNC_CI" = "true" ]; then
+    return 0
+  fi
+
+  local err
+  err=$(mktemp)
+  if GH_TOKEN="$OPERATOR_TOKEN" gh api repos/ricon-family/fold/actions/secrets/public-key --jq .key >/dev/null 2>"$err"; then
+    rm -f "$err"
+    return 0
+  fi
+
+  echo "ERROR: $OPERATOR/github-pat cannot manage ricon-family/fold Actions secrets" >&2
+  sed 's/^/  /' "$err" >&2
+  rm -f "$err"
+  exit 1
+}
+
+sync_ci() {
+  local agent="$1"
+  if [ "$NO_SYNC_CI" = "true" ]; then
+    echo "  - skipped CI sync (--no-sync-ci)"
+    return 0
+  fi
+
+  (cd "$ROOT" && mise run github:token:sync-ci --operator "$OPERATOR" "$agent") >/dev/null
+  echo "  ✓ synced fold CI secrets"
+}
+
+require_tool secrets
+require_tool websites
+require_tool shimmer
+require_tool gh
+require_tool awk
+require_tool xargs
+
+TMP_AGENTS=$(mktemp)
+TMP_ROOT=$(mktemp -d)
+chmod 700 "$TMP_ROOT"
+trap 'rm -rf "$TMP_ROOT" "$TMP_AGENTS"' EXIT
+
+if [ -n "$AGENTS_ARG" ]; then
+  parse_explicit_agents > "$TMP_AGENTS"
+  if ! grep -q '[^[:space:]]' "$TMP_AGENTS"; then
+    list_default_agents > "$TMP_AGENTS"
+  fi
+else
+  list_default_agents > "$TMP_AGENTS"
+fi
+
+if ! grep -q '[^[:space:]]' "$TMP_AGENTS"; then
+  echo "ERROR: no agents found" >&2
+  exit 1
+fi
+
+sort -u "$TMP_AGENTS" -o "$TMP_AGENTS"
+
+load_operator_token
+verify_operator_access
+
+printf 'GitHub token creation for fold agents\n\n'
+printf 'Agents:\n'
+while IFS= read -r agent; do
+  [ -n "$agent" ] || continue
+  validate_agent "$agent"
+  printf '  - %s\n' "$agent"
+done < "$TMP_AGENTS"
+printf '\n'
+
+if [ "$NO_SYNC_CI" != "true" ]; then
+  printf 'CI sync operator: %s/github-pat\n\n' "$OPERATOR"
+fi
+
+printf 'Consent reminder: only create or replace another agent credential with that agent or Or approving. See fold notes/credential-rotation-consent.md.\n\n'
+
+if [ "$DRY_RUN" = "true" ]; then
+  printf 'Dry run: checking required credentials only; no browser automation, storage, or CI sync.\n\n'
+elif [ "$YES" != "true" ]; then
+  echo "ERROR: token creation is destructive; rerun with --yes after confirming consent, or --dry-run to inspect." >&2
+  exit 1
+fi
+
+while IFS= read -r agent; do
+  [ -n "$agent" ] || continue
+  validate_agent "$agent"
+  printf '== %s ==\n' "$agent"
+
+  username=$(secrets get "$agent/github-username" 2>/dev/null || true)
+  password=$(secrets get "$agent/github-password" 2>/dev/null || true)
+  if [ -z "$username" ] || [ -z "$password" ]; then
+    printf '  ✗ missing github username/password secret\n'
+    exit 1
+  fi
+
+  if [ "$DRY_RUN" = "true" ]; then
+    if secrets get "$agent/github-pat" >/dev/null 2>&1; then
+      printf '  ✓ credentials present; current PAT present\n\n'
+    else
+      printf '  ⚠ credentials present; current PAT missing\n\n'
+    fi
+    unset username password
+    continue
+  fi
+
+  agent_tmp="$TMP_ROOT/$agent"
+  mkdir -p "$agent_tmp"
+  stdout="$agent_tmp/stdout"
+  stderr="$agent_tmp/stderr"
+
+  if ! GITHUB_USERNAME="$username" GITHUB_PASSWORD="$password" websites github:token:create "$agent" --login-id "$agent" >"$stdout" 2>"$stderr"; then
+    printf '  ✗ token creation failed\n'
+    printf '  sanitized diagnostics:\n'
+    redact <"$stderr" | sed 's/^/    /' | tail -100
+    exit 1
+  fi
+
+  new_token=$(awk '/^ghp_/ { value=$0 } END { print value }' "$stdout")
+  if [ -z "$new_token" ]; then
+    printf '  ✗ token creation produced no token on stdout\n'
+    printf '  sanitized diagnostics:\n'
+    redact <"$stderr" | sed 's/^/    /' | tail -100
+    exit 1
+  fi
+  printf '  ✓ created\n'
+
+  shimmer github:token:store "$agent" "$new_token" >/dev/null
+  printf '  ✓ stored\n'
+
+  if [ "$agent" = "$OPERATOR" ]; then
+    OPERATOR_TOKEN="$new_token"
+    export OPERATOR_TOKEN
+  fi
+
+  sync_ci "$agent"
+
+  stored_token=$(secrets get "$agent/github-pat")
+  login=$(GH_TOKEN="$stored_token" gh api /user --jq .login 2>/dev/null || true)
+  if [ -z "$login" ]; then
+    printf '  ✗ verification failed\n'
+    exit 1
+  fi
+  printf '  ✓ verified as %s\n\n' "$login"
+
+  unset username password new_token stored_token login
+  rm -rf "$agent_tmp"
+done < "$TMP_AGENTS"
+
+if [ "$DRY_RUN" = "true" ]; then
+  printf 'Dry run complete. No tokens were created.\n'
+else
+  printf 'Creation complete. Selected PATs were created, stored, synced when requested, and verified.\n'
+fi
