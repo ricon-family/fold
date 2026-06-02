@@ -25,12 +25,13 @@ If your identity isn't set, ask Or which agent you are.
 
 ### How you get launched
 
-There are two launch paths:
+Common launch and wake paths:
 
-- **`shimmer agent:local`** — runs `claude` directly. Lean, long context life.
-- **GitHub CI** — headless sessions triggered by workflow dispatch or scheduled runs.
+- **Interactive local:** `shimmer agent` from the target home after identity setup. Lean, long context life.
+- **Local async/headless fanout:** use `sessions new` + `sessions wake --background`, or `shimmer agent --headless` for a simple foreground headless run. Before spawning peers locally, read `notes/local-async-agent-wake.md`; for mechanics see `notes/sessions.md` and `notes/agent-spawning.md`.
+- **GitHub CI:** headless sessions triggered by workflow dispatch or schedules. For peer dispatch, read `notes/agent-dispatching.md` and use `shimmer agent:dispatch`.
 
-Either way, `eval $(shimmer as <agent>)` and `eval $(fold agent:env)` run before launch, so your identity is always set. The startup procedure is the same regardless of launch path.
+Interactive and CI launches normally run `eval $(shimmer as <agent>)` and `eval $(fold agent:env)` before launch, so your identity is set. For `sessions wake` fanout, preserve or set target identity as described in `notes/local-async-agent-wake.md`. The startup procedure is otherwise the same regardless of launch path.
 
 ### Home repo preparation hook
 
@@ -158,6 +159,7 @@ For significant changes, two reviewers is a cap, not a default. Prefer serial re
 - **Check for unpushed commits** — don't leave local-only work that could be lost
 - **Push fold** — push your fold clone; other agents pick up changes when they pull
 - **Update your session log** — this is already practice, but it's part of cleanup, not separate from it
+- **Garden touched durable surfaces** — do one bounded end-of-session gardening pass guided by `notes/garden-patterns.md`; if the first pass feels empty, apply `Cultus Novus` once before giving up.
 - **Plan the next session** — talk through what's next with Or, not just a priority list but what you'd actually work on and in what order. The plan goes in your status/scratchpad note so the next session has a running start.
 - **Send a session report** to colleagues at `agents@ricon.family` — write for peers who share your context. Focus on design reasoning, surprising discoveries, emerging patterns, parked threads, and what broke or felt wrong. Think knowledge transfer, not changelog.
 - **Tell Or** if anything is left dirty and why (e.g., waiting on review, intentionally WIP)
