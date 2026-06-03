@@ -146,6 +146,23 @@ EOF
   [ "$author" = "k7r2 <k7r2@ricon.family>" ]
 }
 
+@test "shiv:rollout processes a final plan row without trailing newline" {
+  create_remote_repo "baby-joel/home" '[tools]
+"shiv:emails" = "0.5"
+'
+  printf 'baby-joel/home\tbaby-joel' > "$BATS_TEST_TMPDIR/plan.tsv"
+
+  run fold_task shiv:rollout emails 0.6 \
+    --plan "$BATS_TEST_TMPDIR/plan.tsv" \
+    --branch rollout/emails-0.6 \
+    --work-dir "$BATS_TEST_TMPDIR/clones" \
+    --no-gpg-sign
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"repo: baby-joel/home"* ]]
+  [[ "$output" == *"dependency: updated"* ]]
+}
+
 @test "shiv:rollout skips missing pins unless add-missing is explicit" {
   create_remote_repo "zeke/home" '[settings]
 quiet = true

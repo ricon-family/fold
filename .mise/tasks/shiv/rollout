@@ -317,7 +317,7 @@ printf 'commit:  %s\n' "$COMMIT_MESSAGE"
 printf 'mode:    %s\n' "$( [ "$YES" = "true" ] && echo mutate || echo dry-run )"
 printf 'missing: %s\n\n' "$( [ "$ADD_MISSING" = "true" ] && echo add || echo skip )"
 
-while IFS=$'\t' read -r repo push_agent extra; do
+while IFS=$'\t' read -r repo push_agent extra || [ -n "${repo:-}" ]; do
   [ -z "${repo//[[:space:]]/}" ] && continue
   [[ "$repo" == \#* ]] && continue
   if [ -n "${extra:-}" ]; then
