@@ -303,7 +303,9 @@ Note filenames are obfuscated on GitHub (e.g., `secret.md` → `a1b2c3d4`). Loca
 - `git commit` — pre-commit hook obfuscates, post-commit hook deobfuscates
 - `git pull` works — post-merge hook deobfuscates after pull
 - Don't run `git add -A` or `git add notes/` — use `notes stage` instead
-- If `git pull` exits with `Error: refusing to overwrite dirty readable note: ...`, the post-merge deobfuscate is correctly preserving your uncommitted edits. Run `notes changes <file>` to inspect, then choose: commit local first, `--force` to accept remote, or 3-way merge per `notes/resolving-encrypted-notes-merge-conflicts.md`. Deeper docs: `notes/notes.md` (tool), `notes/obfuscation-design.md` (why), `notes/cross-repo-modules.md` (modules).
+- If `git pull` exits with `Error: refusing to overwrite dirty readable note: ...`, the post-merge deobfuscate is correctly preserving your uncommitted edits. Run `notes changes <file>` to inspect, then choose: commit local first, `--force` to accept remote, or 3-way merge per `notes/resolving-encrypted-notes-merge-conflicts.md`.
+- If Git reports encrypted note content conflicts (`Cannot merge binary files: notes/<hash>` or `UU notes/<hash>`), start with `notes merge --dry-run --out /tmp/<name>` or `notes conflicts --out /tmp/<name>` to get readable `base.md` / `ours.md` / `theirs.md` artifacts. Resolve plaintext, then stage the obfuscated path with `git add notes/<hash>`.
+- For readable note diffs, use `notes diff` (or `notes diff --pr <number>`) instead of raw GitHub encrypted blob diffs. Deeper docs: `notes/notes.md` (tool), `notes/obfuscation-design.md` (why), `notes/cross-repo-modules.md` (modules).
 
 ### Why not a shared clone?
 
