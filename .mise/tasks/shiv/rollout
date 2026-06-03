@@ -199,7 +199,9 @@ update_mise_toml() {
           exit 0
         }
 
-        key_re = "^[[:space:]]*\"" key "\"[[:space:]]*="
+        key_re_key = key
+        gsub(/[][\\.^$*+?(){}|]/, "\\\\&", key_re_key)
+        key_re = "^[[:space:]]*\"" key_re_key "\"[[:space:]]*="
         for (i = tools_start + 1; i <= tools_end; i++) {
           if (lines[i] ~ key_re) {
             found = 1

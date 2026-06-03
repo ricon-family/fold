@@ -189,3 +189,19 @@ quiet = true
   run git --git-dir="$MOCK_GIT_REMOTE_ROOT/zeke/home.git" show-ref --verify refs/heads/rollout/emails-0.6
   [ "$status" -ne 0 ]
 }
+
+@test "shiv:rollout treats package names as literal TOML keys" {
+  create_remote_repo "baby-joel/home" '[tools]
+"shiv:fooXbar" = "0.5"
+'
+
+  run fold_task shiv:rollout foo.bar 1.0 \
+    --repo baby-joel/home \
+    --branch rollout/foo-bar-1.0 \
+    --work-dir "$BATS_TEST_TMPDIR/clones" \
+    --no-gpg-sign
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"dependency: missing"* ]]
+  [[ "$(cat "$BATS_TEST_TMPDIR/clones/baby-joel__home/mise.toml")" == *'"shiv:fooXbar" = "0.5"'* ]]
+}
