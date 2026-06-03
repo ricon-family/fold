@@ -199,7 +199,7 @@ update_mise_toml() {
           exit 0
         }
 
-        key_re = "^[[:space:]]*\\\"" key "\\\"[[:space:]]*="
+        key_re = "^[[:space:]]*\"" key "\"[[:space:]]*="
         for (i = tools_start + 1; i <= tools_end; i++) {
           if (lines[i] ~ key_re) {
             found = 1

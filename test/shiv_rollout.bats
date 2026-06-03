@@ -106,6 +106,7 @@ quiet = true
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"dependency: updated"* ]]
+  [[ "$output" != *"regexp escape sequence"* ]]
   [[ "$output" == *"dry-run: would commit and push rollout/emails-0.6"* ]]
   grep -q 'GH_TOKEN=token-baby-joel ARGS=.* clone .*baby-joel/home.git' "$MOCK_GIT_LOG"
   run git --git-dir="$MOCK_GIT_REMOTE_ROOT/baby-joel/home.git" show-ref --verify refs/heads/rollout/emails-0.6
