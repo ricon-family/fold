@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      MISE_EXPERIMENTAL: "1"
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up mise
+        uses: jdx/mise-action@v4
+        with:
+          install: false
+
+      - name: Install tools
+        env:
+          MISE_JOBS: 1
+        run: |
+          mise trust
+          mise install
+
+      - name: Run tests
+        run: mise run test
+
+      - name: Run codebase lint
+        run: codebase lint
+
+      - name: Smoke welcome without HUMAN_MD
+        run: env -u HUMAN_MD mise run welcome

@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+#MISE description="Accept exact GitHub repo invitations as the current user or selected agents"
+#USAGE flag "-y --yes" default=#false help="Actually accept invitations"
+#USAGE flag "--as <agent>" var=#true default="" help="Agent whose stored GitHub PAT should accept the invite (repeatable; default: ambient gh auth)"
+#USAGE flag "--all-fold-agents" default=#false help="Accept as every fold agent from mise run agent:list"
+#USAGE arg "<repo>" help="Repository in OWNER/REPO form"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+source "$ROOT/.mise/tasks/github/repo/_lib.sh"
+
+YES="${usage_yes:-false}"
+AS_AGENTS="${usage_as:-}"
+ALL_FOLD_AGENTS="${usage_all_fold_agents:-false}"
+REPO="${usage_repo:?repo required}"
+OWNER_LC=""
+NAME_LC=""
+
+require_tool "$GH_BIN"
+require_tool "$SECRETS_BIN"
+require_tool gum
+require_tool xargs
+require_tool sort
+require_tool mktemp
+require_tool sed
+
+validate_repo "$REPO"
+OWNER_LC=$(repo_owner_lc "$REPO")
+NAME_LC=$(repo_name_lc "$REPO")
+
+TMP_ACTORS=$(mktemp)
+TMP_UNIQ=$(mktemp)
+TMP_ERR=$(mktemp)
+TMP_RESULTS=$(mktemp)
+trap 'rm -f "$TMP_ACTORS" "$TMP_UNIQ" "$TMP_ERR" "$TMP_RESULTS"' EXIT
+
+if [ "$ALL_FOLD_AGENTS" = "true" ]; then
+  if [ -n "$AS_AGENTS" ]; then
+    echo "ERROR: use either --all-fold-agents or --as <agent>, not both." >&2
+    exit 1
+  fi
+  list_fold_agents "$ROOT" > "$TMP_ACTORS"
+else
+  parse_values "$AS_AGENTS" > "$TMP_ACTORS"
+fi
+
+if ! grep -q '[^[:space:]]' "$TMP_ACTORS"; then
+  printf 'current\n' > "$TMP_ACTORS"
+fi
+
+sort -u "$TMP_ACTORS" > "$TMP_UNIQ"
+
+printf 'GitHub repo invitation acceptance\n\n'
+printf 'repo: %s\n\n' "$REPO"
+printf 'actors:\n'
+while IFS= read -r actor; do
+  [ -n "$actor" ] || continue
+  printf '  - %s\n' "$actor"
+done < "$TMP_UNIQ"
+printf '\n'
+
+if [ "$YES" != "true" ]; then
+  echo "Dry run. Rerun with --yes to accept matching invitations."
+  echo ""
+fi
+
+printf 'actor\tlogin\tinvite\tpermission\n' > "$TMP_RESULTS"
+
+while IFS= read -r actor; do
+  [ -n "$actor" ] || continue
+
+  token=""
+  if [ "$actor" != "current" ]; then
+    validate_agent "$actor"
+    token=$(get_agent_github_token "$actor")
+  fi
+
+  run_actor_gh() {
+    if [ -n "$token" ]; then
+      GH_TOKEN="$token" GITHUB_TOKEN= "$GH_BIN" "$@"
+    else
+      "$GH_BIN" "$@"
+    fi
+  }
+
+  if ! login=$(run_actor_gh api user --jq .login 2>"$TMP_ERR"); then
+    note=$(redact_github_tokens < "$TMP_ERR" | tr '\n' ' ' | sed 's/[[:space:]]\{1,\}/ /g; s/^ //; s/ $//' | cut -c1-80)
+    printf '%s\t%s\t%s\t%s\n' "$actor" "-" "error" "$note" >> "$TMP_RESULTS"
+    continue
+  fi
+
+  invite_ids=$(run_actor_gh api /user/repository_invitations \
+    --jq ".[] | select((.repository.owner.login | ascii_downcase) == \"$OWNER_LC\" and (.repository.name | ascii_downcase) == \"$NAME_LC\") | .id" \
+    2>"$TMP_ERR" || true)
+
+  if [ -z "$invite_ids" ]; then
+    permission=$(run_actor_gh repo view "$REPO" --json viewerPermission --jq .viewerPermission 2>/dev/null || true)
+    [ -n "$permission" ] || permission="no-access"
+    printf '%s\t%s\t%s\t%s\n' "$actor" "$login" "none-found" "$permission" >> "$TMP_RESULTS"
+    continue
+  fi
+
+  invite_note="pending"
+  if [ "$YES" = "true" ]; then
+    invite_note="accepted"
+    while IFS= read -r invite_id; do
+      [ -n "$invite_id" ] || continue
+      if ! run_actor_gh api -X PATCH "/user/repository_invitations/$invite_id" >/dev/null 2>"$TMP_ERR"; then
+        invite_note="accept-error"
+        break
+      fi
+    done <<< "$invite_ids"
+  fi
+
+  permission=$(run_actor_gh repo view "$REPO" --json viewerPermission --jq .viewerPermission 2>/dev/null || true)
+  [ -n "$permission" ] || permission="unknown"
+  printf '%s\t%s\t%s\t%s\n' "$actor" "$login" "$invite_note" "$permission" >> "$TMP_RESULTS"
+done < "$TMP_UNIQ"
+
+gum table --print --separator "	" --border rounded < "$TMP_RESULTS"

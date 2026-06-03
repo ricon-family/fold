@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+#MISE description="Run BATS tests"
+#USAGE arg "[args]" var=#true default="" help="Test files, suite names, or BATS flags"
+#USAGE example "mise run test" header="Run all tests"
+#USAGE example "mise run test github_repo_invitations" header="Run one suite by bare name"
+#USAGE example "mise run test --filter accept" header="Filter tests by name"
+set -euo pipefail
+
+TEST_DIR="$MISE_CONFIG_ROOT/test"
+
+args=()
+if [ -n "${usage_args:-}" ]; then
+  while IFS= read -r arg; do
+    [ -n "$arg" ] || continue
+    args+=("$arg")
+  done < <(printf '%s' "$usage_args" | xargs printf '%s\n')
+fi
+
+resolved=()
+has_target=false
+for arg in ${args[@]+"${args[@]}"}; do
+  if [[ "$arg" != -* && "$arg" != *.bats && -f "$TEST_DIR/$arg.bats" ]]; then
+    resolved+=("$TEST_DIR/$arg.bats")
+    has_target=true
+  else
+    [[ "$arg" == *.bats || -d "$arg" ]] && has_target=true
+    resolved+=("$arg")
+  fi
+done
+
+if ! $has_target; then
+  resolved+=("$TEST_DIR/")
+fi
+
+bats "${resolved[@]}"
