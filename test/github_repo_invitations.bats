@@ -42,6 +42,8 @@ setup() {
   run fold_task github:repo:accept-invite rikonor/ideas --as rho --yes
   [ "$status" -eq 0 ]
   grep -q 'GH_TOKEN=token-rho ARGS=api -X PATCH /user/repository_invitations/321' "$MOCK_GH_LOG"
+  ! grep -q 'repository_invitations/322' "$MOCK_GH_LOG"
+  ! grep -q 'repository_invitations/323' "$MOCK_GH_LOG"
   [[ "$output" == *"rho"*"rho-ricon"*"accepted"*"WRITE"* ]]
 }
 
