@@ -204,7 +204,7 @@ update_mise_toml() {
           if (lines[i] ~ key_re) {
             found = 1
             old = lines[i]
-            sub(/= *"[^"]*"/, "= \"" target_version "\"", lines[i])
+            sub(/=[[:space:]]*"[^"]*"/, "= \"" target_version "\"", lines[i])
             if (lines[i] != old) changed = 1
           }
         }

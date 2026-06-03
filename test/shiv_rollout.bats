@@ -141,6 +141,23 @@ jq = "1.8.1"
   [ "$author" = "k7r2 <k7r2@ricon.family>" ]
 }
 
+@test "shiv:rollout updates pins with tab-separated TOML whitespace" {
+  create_remote_repo "baby-joel/home" '[tools]
+"shiv:emails"	=	"0.5"
+'
+
+  run fold_task shiv:rollout emails 0.6 \
+    --repo baby-joel/home:baby-joel \
+    --branch rollout/emails-0.6 \
+    --work-dir "$BATS_TEST_TMPDIR/clones" \
+    --no-gpg-sign
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"dependency: updated"* ]]
+  [[ "$output" == *'-"shiv:emails"	=	"0.5"'* ]]
+  [[ "$output" == *'+"shiv:emails"	= "0.6"'* ]]
+}
+
 @test "shiv:rollout processes final plan row without trailing newline" {
   create_remote_repo "baby-joel/home" '[tools]
 "shiv:emails" = "0.5"
