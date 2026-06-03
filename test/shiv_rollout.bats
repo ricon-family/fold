@@ -58,6 +58,7 @@ if [ "${1:-}" != "get" ]; then
 fi
 case "${2:-}" in
   baby-joel/github-pat) echo "token-baby-joel" ;;
+  quick/github-username) echo "quick-ricon" ;;
   quick/github-pat) echo "token-quick" ;;
   zeke/github-pat) echo "token-zeke" ;;
   *) echo "missing secret: ${2:-}" >&2; exit 1 ;;
@@ -97,12 +98,8 @@ quiet = true
 "shiv:notes" = "0.8"
 "shiv:emails" = "0.5"
 '
-  cat > "$BATS_TEST_TMPDIR/plan.tsv" <<'EOF'
-baby-joel/home	baby-joel
-EOF
-
   run fold_task shiv:rollout emails 0.6 \
-    --plan "$BATS_TEST_TMPDIR/plan.tsv" \
+    --repo baby-joel/home:baby-joel \
     --branch rollout/emails-0.6 \
     --work-dir "$BATS_TEST_TMPDIR/clones" \
     --no-gpg-sign
@@ -115,20 +112,17 @@ EOF
   [ "$status" -ne 0 ]
 }
 
-@test "shiv:rollout --add-missing commits with operator identity and pushes with target token" {
-  create_remote_repo "quick/home" '[settings]
+@test "shiv:rollout --home adds missing dependency and pushes with target token" {
+  create_remote_repo "quick-ricon/home" '[settings]
 quiet = true
 
 [tools]
 "shiv:notes" = "0.8"
 jq = "1.8.1"
 '
-  cat > "$BATS_TEST_TMPDIR/plan.tsv" <<'EOF'
-quick/home	quick
-EOF
 
   run fold_task shiv:rollout emails 0.6 \
-    --plan "$BATS_TEST_TMPDIR/plan.tsv" \
+    --home quick \
     --branch rollout/emails-0.6 \
     --message "deps: add emails 0.6" \
     --work-dir "$BATS_TEST_TMPDIR/clones" \
@@ -139,29 +133,21 @@ EOF
   [ "$status" -eq 0 ]
   [[ "$output" == *"dependency: added"* ]]
   [[ "$output" == *"pushed: rollout/emails-0.6"* ]]
-  grep -q 'GH_TOKEN=token-quick ARGS=.* clone .*quick/home.git' "$MOCK_GIT_LOG"
+  grep -q 'GH_TOKEN=token-quick ARGS=.* clone .*quick-ricon/home.git' "$MOCK_GIT_LOG"
   grep -q 'GH_TOKEN=token-quick ARGS=.* push origin HEAD:refs/heads/rollout/emails-0.6' "$MOCK_GIT_LOG"
-  [[ "$(show_remote_file "quick/home" "refs/heads/rollout/emails-0.6" mise.toml)" == *'"shiv:emails" = "0.6"'* ]]
-  author=$(git --git-dir="$MOCK_GIT_REMOTE_ROOT/quick/home.git" log -1 --format='%an <%ae>' refs/heads/rollout/emails-0.6)
+  [[ "$(show_remote_file "quick-ricon/home" "refs/heads/rollout/emails-0.6" mise.toml)" == *'"shiv:emails" = "0.6"'* ]]
+  author=$(git --git-dir="$MOCK_GIT_REMOTE_ROOT/quick-ricon/home.git" log -1 --format='%an <%ae>' refs/heads/rollout/emails-0.6)
   [ "$author" = "k7r2 <k7r2@ricon.family>" ]
 }
 
-@test "shiv:rollout skips missing pins unless add-missing is explicit" {
+@test "shiv:rollout accepts plan rows from stdin" {
   create_remote_repo "zeke/home" '[settings]
 quiet = true
 
 [tools]
 "shiv:notes" = "0.8"
 '
-  cat > "$BATS_TEST_TMPDIR/plan.tsv" <<'EOF'
-zeke/home	zeke
-EOF
-
-  run fold_task shiv:rollout emails 0.6 \
-    --plan "$BATS_TEST_TMPDIR/plan.tsv" \
-    --branch rollout/emails-0.6 \
-    --work-dir "$BATS_TEST_TMPDIR/clones" \
-    --no-gpg-sign
+  run bash -c 'printf "zeke/home\tzeke\n" | fold_task shiv:rollout emails 0.6 --plan - --branch rollout/emails-0.6 --work-dir "$BATS_TEST_TMPDIR/clones" --no-gpg-sign'
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"dependency: missing"* ]]

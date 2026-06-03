@@ -13,7 +13,7 @@ setup() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"Dry run. Rerun with --yes"* ]]
   [[ "$output" == *"rho (rho-ricon)"* ]]
-  ! grep -q -- '-X PUT' "$MOCK_GH_LOG"
+  run ! grep -q -- '-X PUT' "$MOCK_GH_LOG"
 }
 
 @test "github:repo:invite --yes sends collaborator invitation with normalized permission" {
@@ -35,21 +35,21 @@ setup() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"Dry run. Rerun with --yes"* ]]
   [[ "$output" == *"rho"*"rho-ricon"*"pending"* ]]
-  ! grep -q -- '-X PATCH' "$MOCK_GH_LOG"
+  run ! grep -q -- '-X PATCH' "$MOCK_GH_LOG"
 }
 
 @test "github:repo:accept-invite --yes accepts exact repo invitation" {
   run fold_task github:repo:accept-invite rikonor/ideas --as rho --yes
   [ "$status" -eq 0 ]
-  grep -q 'GH_TOKEN=token-rho ARGS=api -X PATCH /user/repository_invitations/321' "$MOCK_GH_LOG"
-  ! grep -q 'repository_invitations/322' "$MOCK_GH_LOG"
-  ! grep -q 'repository_invitations/323' "$MOCK_GH_LOG"
   [[ "$output" == *"rho"*"rho-ricon"*"accepted"*"WRITE"* ]]
+  grep -q 'GH_TOKEN=token-rho ARGS=api -X PATCH /user/repository_invitations/321' "$MOCK_GH_LOG"
+  run ! grep -q 'repository_invitations/322' "$MOCK_GH_LOG"
+  run ! grep -q 'repository_invitations/323' "$MOCK_GH_LOG"
 }
 
 @test "github:repo:accept-invite reports no matching invite and current permission" {
   run fold_task github:repo:accept-invite rikonor/ideas --as quick --yes
   [ "$status" -eq 0 ]
   [[ "$output" == *"quick"*"quick-ricon"*"none-found"*"no-access"* ]]
-  ! grep -q -- '-X PATCH' "$MOCK_GH_LOG"
+  run ! grep -q -- '-X PATCH' "$MOCK_GH_LOG"
 }

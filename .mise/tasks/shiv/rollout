@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 #MISE description="Roll out a shiv package pin across fresh repo clones"
 #USAGE flag "-y --yes" default=#false help="Commit and push rollout branches"
-#USAGE flag "--plan <path>" default="" help="TSV rows: repo<TAB>push-agent; push-agent '-' uses ambient GitHub auth"
+#USAGE flag "--repo <repo>" var=#true default="" help="Repo target (repeatable): OWNER/REPO or OWNER/REPO:push-agent; omitted push-agent uses ambient GitHub auth"
+#USAGE flag "--home <agent>" var=#true default="" help="Agent home target (repeatable); resolves <agent>/github-username to LOGIN/home and pushes with <agent>/github-pat"
+#USAGE flag "--plan <path>" default="" help="Optional TSV rows: repo<TAB>push-agent; use '-' for stdin; push-agent '-' uses ambient GitHub auth"
 #USAGE flag "--branch <branch>" default="" help="Rollout branch name (default: <operator>/<package>-<version>)"
 #USAGE flag "--base <branch>" default="main" help="Base branch to clone"
 #USAGE flag "--message <message>" default="" help="Commit message (default: deps: bump <package> to <version>)"
@@ -10,12 +12,18 @@
 #USAGE flag "--no-gpg-sign" default=#false help="Do not GPG-sign commits (intended for tests or emergency recovery)"
 #USAGE arg "<package>" help="Shiv package name, with or without shiv: prefix"
 #USAGE arg "<version>" help="Target version/pin, usually a minor stream like 0.6"
-#USAGE example "mise run shiv:rollout emails 0.6 --plan /tmp/emails.tsv --add-missing" header="Dry-run an emails rollout"
-#USAGE example "mise run shiv:rollout emails 0.6 --plan /tmp/emails.tsv --add-missing --yes" header="Commit and push rollout branches"
+#USAGE example "mise run shiv:rollout emails 0.6 --home quick --home zeke --repo ricon-family/fold --add-missing" header="Dry-run homes plus fold"
+#USAGE example "printf 'quick-ricon/home<TAB>quick\\n' | mise run shiv:rollout emails 0.6 --plan - --add-missing" header="Read batch plan from stdin"
+#USAGE example "mise run shiv:rollout emails 0.6 --home quick --add-missing --yes" header="Commit and push rollout branches"
 set -euo pipefail
 
 ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck disable=SC1091 # dynamic repo-local source
+source "$ROOT/.mise/lib/common.sh"
+
 YES="${usage_yes:-false}"
+REPO_TARGETS="${usage_repo:-}"
+HOME_TARGETS="${usage_home:-}"
 PLAN_FILE="${usage_plan:-}"
 BASE_BRANCH="${usage_base:-main}"
 PACKAGE_RAW="${usage_package:?package required}"
@@ -26,33 +34,11 @@ WORK_DIR="${usage_work_dir:-}"
 ADD_MISSING="${usage_add_missing:-false}"
 NO_GPG_SIGN="${usage_no_gpg_sign:-false}"
 GIT_BIN="${GIT:-git}"
-SECRETS_BIN="${SECRETS:-secrets}"
-
-require_tool() {
-  local tool
-  for tool in "$@"; do
-    if ! command -v "$tool" >/dev/null 2>&1; then
-      echo "ERROR: required tool not found: $tool" >&2
-      exit 1
-    fi
-  done
-}
-
-validate_repo() {
-  local repo="$1"
-  if [[ ! "$repo" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
-    echo "ERROR: repo must be OWNER/REPO: $repo" >&2
-    exit 1
-  fi
-}
 
 validate_agent_or_dash() {
   local agent="$1"
   [ "$agent" = "-" ] && return 0
-  if [[ ! "$agent" =~ ^[A-Za-z0-9._-]+$ ]]; then
-    echo "ERROR: invalid push agent: $agent" >&2
-    exit 1
-  fi
+  validate_agent "$agent"
 }
 
 normalize_package() {
@@ -69,20 +55,87 @@ slugify_version() {
   printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '-'
 }
 
+normalize_push_agent() {
+  local push_agent="$1"
+  case "$push_agent" in
+    ""|ambient|-)
+      printf '%s\n' "-"
+      ;;
+    *)
+      validate_agent "$push_agent"
+      printf '%s\n' "$push_agent"
+      ;;
+  esac
+}
+
+add_target() {
+  local repo="$1" push_agent="$2"
+
+  validate_repo "$repo"
+  push_agent=$(normalize_push_agent "$push_agent")
+  printf '%s\t%s\n' "$repo" "$push_agent" >> "$TMP_TARGETS"
+}
+
+add_repo_target() {
+  local target="$1" repo push_agent
+
+  if [[ "$target" == *:* ]]; then
+    repo="${target%%:*}"
+    push_agent="${target#*:}"
+  else
+    repo="$target"
+    push_agent="-"
+  fi
+
+  add_target "$repo" "$push_agent"
+}
+
+add_home_target() {
+  local agent="$1" login
+
+  validate_agent "$agent"
+  login=$(get_agent_github_login "$agent")
+  add_target "$login/home" "$agent"
+}
+
+add_plan_targets() {
+  local line repo push_agent extra
+
+  if [ -z "$PLAN_FILE" ]; then
+    return 0
+  fi
+
+  if [ "$PLAN_FILE" != "-" ] && [ ! -f "$PLAN_FILE" ]; then
+    echo "ERROR: plan file not found: $PLAN_FILE" >&2
+    exit 1
+  fi
+
+  while IFS= read -r line; do
+    [ -z "${line//[[:space:]]/}" ] && continue
+    [[ "$line" == \#* ]] && continue
+
+    repo=""
+    push_agent=""
+    extra=""
+    IFS=$'\t' read -r repo push_agent extra <<< "$line"
+    if [ -n "$extra" ] || [ -z "$repo" ] || [ -z "$push_agent" ]; then
+      echo "ERROR: plan rows must be: repo<TAB>push-agent" >&2
+      exit 1
+    fi
+    add_target "$repo" "$push_agent"
+  done < <(
+    if [ "$PLAN_FILE" = "-" ]; then
+      cat
+    else
+      cat "$PLAN_FILE"
+    fi
+  )
+}
+
 get_push_token() {
   local agent="$1"
-  local token
   [ "$agent" = "-" ] && return 0
-
-  if ! token=$("$SECRETS_BIN" get "$agent/github-pat" 2>/dev/null); then
-    echo "ERROR: could not read $agent/github-pat" >&2
-    exit 1
-  fi
-  if [ -z "$token" ]; then
-    echo "ERROR: $agent/github-pat is empty" >&2
-    exit 1
-  fi
-  printf '%s\n' "$token"
+  get_agent_github_token "$agent"
 }
 
 run_git() {
@@ -206,8 +259,6 @@ process_repo() {
   local repo="$1" push_agent="$2"
   local token clone_dir status
 
-  validate_repo "$repo"
-  validate_agent_or_dash "$push_agent"
   token=$(get_push_token "$push_agent")
 
   clone_dir="$WORK_DIR/${repo//\//__}"
@@ -256,24 +307,11 @@ process_repo() {
   echo "  pushed: $BRANCH_NAME"
 }
 
-require_tool "$GIT_BIN" awk mktemp sed tr
+require_tool "$GIT_BIN" awk mktemp sed tr xargs
 
 PACKAGE=$(normalize_package "$PACKAGE_RAW")
 PACKAGE_KEY="shiv:$PACKAGE"
 VERSION_SLUG=$(slugify_version "$TARGET_VERSION")
-
-if [ -z "$PLAN_FILE" ]; then
-  echo "ERROR: --plan is required" >&2
-  exit 1
-fi
-if [ ! -f "$PLAN_FILE" ]; then
-  echo "ERROR: plan file not found: $PLAN_FILE" >&2
-  exit 1
-fi
-
-if [ "$PLAN_FILE" != "-" ]; then
-  PLAN_FILE=$(cd "$(dirname "$PLAN_FILE")" && pwd)/$(basename "$PLAN_FILE")
-fi
 
 if [ -z "$BRANCH_NAME" ]; then
   operator_slug=$(printf '%s' "${GIT_AUTHOR_NAME:-k7r2}" | tr -c 'A-Za-z0-9._-' '-')
@@ -292,10 +330,28 @@ if [ -z "$OPERATOR_NAME" ] || [ -z "$OPERATOR_EMAIL" ]; then
   exit 1
 fi
 
-if grep -vE '^[[:space:]]*(#|$)' "$PLAN_FILE" | grep -Eqv $'^[^\t]+\t[^\t]+$'; then
-  echo "ERROR: plan rows must be: repo<TAB>push-agent" >&2
+TMP_TARGETS=$(mktemp)
+TMP_UNIQ=$(mktemp)
+trap 'rm -f "$TMP_TARGETS" "$TMP_UNIQ"' EXIT
+
+while IFS= read -r target; do
+  [ -n "$target" ] || continue
+  add_repo_target "$target"
+done < <(parse_values "$REPO_TARGETS")
+
+while IFS= read -r agent; do
+  [ -n "$agent" ] || continue
+  add_home_target "$agent"
+done < <(parse_values "$HOME_TARGETS")
+
+add_plan_targets
+
+if ! grep -q '[^[:space:]]' "$TMP_TARGETS"; then
+  echo "ERROR: provide --repo, --home, or --plan" >&2
   exit 1
 fi
+
+awk -F'\t' '!seen[$1]++ { print }' "$TMP_TARGETS" > "$TMP_UNIQ"
 
 cleanup_work_dir=false
 if [ -z "$WORK_DIR" ]; then
@@ -305,7 +361,7 @@ else
   mkdir -p "$WORK_DIR"
 fi
 if $cleanup_work_dir; then
-  trap 'rm -rf "$WORK_DIR"' EXIT
+  trap 'rm -rf "$WORK_DIR" "$TMP_TARGETS" "$TMP_UNIQ"' EXIT
 fi
 
 printf 'Shiv rollout\n\n'
@@ -317,12 +373,7 @@ printf 'commit:  %s\n' "$COMMIT_MESSAGE"
 printf 'mode:    %s\n' "$( [ "$YES" = "true" ] && echo mutate || echo dry-run )"
 printf 'missing: %s\n\n' "$( [ "$ADD_MISSING" = "true" ] && echo add || echo skip )"
 
-while IFS=$'\t' read -r repo push_agent extra; do
-  [ -z "${repo//[[:space:]]/}" ] && continue
-  [[ "$repo" == \#* ]] && continue
-  if [ -n "${extra:-}" ]; then
-    echo "ERROR: too many fields in plan row for $repo" >&2
-    exit 1
-  fi
+while IFS=$'\t' read -r repo push_agent; do
+  [ -n "$repo" ] || continue
   process_repo "$repo" "$push_agent"
-done < "$PLAN_FILE"
+done < "$TMP_UNIQ"
