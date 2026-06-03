@@ -57,10 +57,30 @@ if [ "${1:-}" = "api" ] && [[ "${2:-}" == /repos/rikonor/ideas/collaborators/*/p
 fi
 
 if [ "${1:-}" = "api" ] && [ "${2:-}" = "/user/repository_invitations" ]; then
+  jq_filter=""
+  for ((i = 3; i <= $#; i++)); do
+    arg="${!i}"
+    if [ "$arg" = "--jq" ]; then
+      next=$((i + 1))
+      jq_filter="${!next:-}"
+      break
+    fi
+  done
+
   case "${GH_TOKEN:-ambient}" in
-    token-rho) echo "321" ;;
+    token-rho)
+      if [ -z "$jq_filter" ]; then
+        printf '%s\n' 321 322 323
+      elif [[ "$jq_filter" == *'"rikonor"'* && "$jq_filter" == *'"ideas"'* ]]; then
+        echo "321"
+      fi
+      ;;
     token-quick) : ;;
-    *) echo "999" ;;
+    *)
+      if [[ "$jq_filter" == *'"rikonor"'* && "$jq_filter" == *'"ideas"'* ]]; then
+        echo "999"
+      fi
+      ;;
   esac
   exit 0
 fi
