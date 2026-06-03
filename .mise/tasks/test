@@ -1,32 +1,33 @@
 #!/usr/bin/env bash
-#MISE description="Run fold tests"
-#USAGE arg "[args]" var=#true default="" help="Test suites, bats args, or 'codebase'"
-#USAGE example "mise run test" header="Run all BATS tests and codebase lints"
-#USAGE example "mise run test github-2fa-enroll" header="Run one BATS suite by name"
-#USAGE example "mise run test codebase" header="Run configured codebase lints"
-#USAGE example "mise run test --filter stores" header="Filter BATS tests"
+#MISE description="Run fold tests, lint, and welcome smoke"
+#USAGE arg "[args]" var=#true default="" help="Test files, suite names, BATS flags, or 'codebase'"
+#USAGE example "mise run test" header="Run all tests"
+#USAGE example "mise run test github_repo_invitations" header="Run one suite by bare name"
+#USAGE example "mise run test codebase" header="Run only codebase lint"
+#USAGE example "mise run test --filter accept" header="Filter tests by name"
 set -euo pipefail
 
-ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
-TEST_DIR="$ROOT/test"
+TEST_DIR="$MISE_CONFIG_ROOT/test"
 CODEBASE_BIN="${CODEBASE_BIN:-codebase}"
 
 args=()
 if [ -n "${usage_args:-}" ]; then
   while IFS= read -r arg; do
-    [ -z "$arg" ] && continue
+    [ -n "$arg" ] || continue
     args+=("$arg")
-  done < <(printf '%s' "${usage_args}" | xargs printf '%s\n')
+  done < <(printf '%s' "$usage_args" | xargs printf '%s\n')
 fi
 
 run_bats=false
 run_codebase=false
+run_welcome=false
 bats_args=()
-has_bats_target=false
+has_target=false
 
 if [ "${#args[@]}" -eq 0 ]; then
   run_bats=true
   run_codebase=true
+  run_welcome=true
 else
   for arg in ${args[@]+"${args[@]}"}; do
     if [ "$arg" = "codebase" ]; then
@@ -35,45 +36,33 @@ else
     fi
 
     run_bats=true
+    run_codebase=true
+    run_welcome=true
     if [[ "$arg" != -* && "$arg" != *.bats && -f "$TEST_DIR/$arg.bats" ]]; then
       bats_args+=("$TEST_DIR/$arg.bats")
-      has_bats_target=true
+      has_target=true
     else
-      if [[ "$arg" == *.bats || -d "$arg" ]]; then
-        has_bats_target=true
-      fi
+      [[ "$arg" == *.bats || -d "$arg" ]] && has_target=true
       bats_args+=("$arg")
     fi
   done
 fi
 
 if [ "$run_bats" = "true" ]; then
-  if [ "$has_bats_target" = "false" ]; then
+  if ! $has_target; then
     bats_args+=("$TEST_DIR/")
   fi
+
+  printf '\n== bats ==\n'
   bats "${bats_args[@]}"
 fi
 
 if [ "$run_codebase" = "true" ]; then
-  lint_line=$(grep -E '^[[:space:]]*lint[[:space:]]*=' "$ROOT/mise.toml" | head -1 || true)
-  if [ -z "$lint_line" ]; then
-    echo "ERROR: no [_.codebase] lint list found in mise.toml" >&2
-    exit 1
-  fi
+  printf '\n== codebase lint ==\n'
+  "$CODEBASE_BIN" lint
+fi
 
-  lint_names=$(printf '%s\n' "$lint_line" \
-    | sed -E 's/^[^=]*=//; s/[][]//g; s/"//g; s/[[:space:]]//g' \
-    | tr ',' '\n' \
-    | sed '/^$/d')
-
-  if [ -z "$lint_names" ]; then
-    echo "ERROR: codebase lint list is empty" >&2
-    exit 1
-  fi
-
-  while IFS= read -r lint_name; do
-    (cd "$ROOT" && mise exec -- "$CODEBASE_BIN" "lint:$lint_name" "$ROOT")
-  done <<EOF
-$lint_names
-EOF
+if [ "$run_welcome" = "true" ]; then
+  printf '\n== welcome smoke (no HUMAN_MD) ==\n'
+  env -u HUMAN_MD mise run -q welcome >/dev/null
 fi

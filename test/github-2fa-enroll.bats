@@ -11,7 +11,7 @@ setup() {
   FAKE_SECRET_STORE="$BATS_TEST_TMPDIR/secrets"
   mkdir -p "$FAKE_SECRET_STORE"
   export FAKE_SECRET_STORE
-  write_fake_secret_tools
+  write_fake_github_auth_secret_tools
   export SECRETS_BIN="$TMPBIN/secrets"
   export WEBSITES_BIN="$TMPBIN/websites"
 }
@@ -41,7 +41,7 @@ EOF
 @test "github:2fa:enroll stores enrollment material without printing secrets" {
   write_fake_websites
 
-  run fold github:2fa:enroll --yes c0da
+  run fold_task github:2fa:enroll --yes c0da
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"✓ stored TOTP seed and 2 recovery code(s)"* ]]
@@ -57,7 +57,7 @@ EOF
 @test "github:2fa:enroll dry-run checks prerequisites without browser automation" {
   write_fake_websites
 
-  run fold github:2fa:enroll --dry-run x1f9
+  run fold_task github:2fa:enroll --dry-run x1f9
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"TOTP missing"* ]]
@@ -67,8 +67,8 @@ EOF
 @test "github:2fa:enroll requires visible approval" {
   write_fake_websites
 
-  run fold github:2fa:enroll c0da
+  run fold_task github:2fa:enroll c0da
 
   [ "$status" -ne 0 ]
-  [[ "$(cat "$BATS_TEST_TMPDIR/stderr")" == *"rerun with --yes"* ]]
+  [[ "$output" == *"rerun with --yes"* ]]
 }

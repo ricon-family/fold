@@ -31,7 +31,8 @@ redact() {
     -e 's/[A-Z2-7]{16,}/[REDACTED_BASE32]/g' \
     -e 's/[a-z0-9]{5}-[a-z0-9]{5}/[REDACTED_RECOVERY_CODE]/gi' \
     -e 's/(Password: ).*/\1[REDACTED]/g' \
-    -e 's/(GITHUB_PASSWORD=)[^[:space:]]+/\1[REDACTED]/g'
+    -e 's/(GITHUB_PASSWORD=)[^[:space:]]+/\1[REDACTED]/g' \
+    -e 's/(GITHUB_TOTP_CODE=)[^[:space:]]+/\1[REDACTED_TOTP_CODE]/g'
 }
 
 validate_agent() {
@@ -118,6 +119,8 @@ while IFS= read -r agent; do
   enrollment_json="$agent_tmp/enrollment.json"
   stdout="$agent_tmp/stdout"
   stderr="$agent_tmp/stderr"
+  : > "$enrollment_json"
+  chmod 600 "$enrollment_json"
 
   if ! GITHUB_USERNAME="$username" GITHUB_PASSWORD="$password" \
     "$WEBSITES_BIN" github:2fa:enroll "$agent" --token-name "$token_name" --out "$enrollment_json" >"$stdout" 2>"$stderr"; then

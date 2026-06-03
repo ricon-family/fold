@@ -100,7 +100,10 @@ if command -v fold &>/dev/null; then
 fi
 
 # ━━━ HUMAN.md ━━━
-HUMAN_FILE=$(cd "$FOLD_DIR" && mise run -q human 2>/dev/null)
+HUMAN_FILE=""
+if HUMAN_FILE=$(cd "$FOLD_DIR" && mise run -q human 2>/dev/null); then
+  :
+fi
 if [ -n "$HUMAN_FILE" ] && [ -f "$HUMAN_FILE" ]; then
   thread_summary=$(threads status --file "$HUMAN_FILE" 2>/dev/null || echo "")
   section "📝 HUMAN.md  ($thread_summary)"
@@ -136,6 +139,15 @@ if command -v chat &>/dev/null; then
 else
   gum style --faint "(chat not installed — run: shiv install chat)"
 fi
+
+# ━━━ Task discovery ━━━
+section "🧰 Tasks"
+(
+  printf 'Need\tCommand\n'
+  printf 'Browse GitHub tasks\tmise tasks ls | grep ^github:\n'
+  printf 'Repo invitations guide\tnotes show github-repo-invitations\n'
+) | gum table --print --separator "	" --border rounded \
+      --border.foreground "$DIM" --header.foreground "$SUBHEAD"
 
 # ━━━ Notes ━━━
 # Disabled: notes list is too slow (~18s due to per-file farts calls). See den#10.
