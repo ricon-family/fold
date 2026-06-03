@@ -7,10 +7,13 @@
 #USAGE flag "--all-fold-agents" default=#false help="Invite every fold agent from mise run agent:list"
 #USAGE flag "--permission <permission>" default="write" help="Permission: read, write, triage, maintain, admin"
 #USAGE arg "<repo>" help="Repository in OWNER/REPO form"
+#USAGE example "mise run github:repo:invite rikonor/ideas --to rho --permission write" header="Dry-run an agent invitation"
+#USAGE example "mise run github:repo:invite rikonor/ideas --to rho --permission write --yes" header="Invite an agent"
+#USAGE example "mise run github:repo:invite rho-ricon/ideas --as rho --to-login rikonor --permission write --yes" header="Invite using an agent token"
 set -euo pipefail
 
 ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
-source "$ROOT/.mise/tasks/github/repo/_lib.sh"
+source "$ROOT/.mise/lib/github/repo.sh"
 
 YES="${usage_yes:-false}"
 ACTOR_AGENT="${usage_as:-}"
@@ -20,13 +23,7 @@ ALL_FOLD_AGENTS="${usage_all_fold_agents:-false}"
 REPO="${usage_repo:?repo required}"
 PERMISSION_REQUEST="${usage_permission:-write}"
 
-require_tool "$GH_BIN"
-require_tool "$SECRETS_BIN"
-require_tool gum
-require_tool xargs
-require_tool sort
-require_tool awk
-require_tool mktemp
+require_tool "$GH_BIN" "$SECRETS_BIN" gum xargs sort awk mktemp
 
 validate_repo "$REPO"
 permission_pair=$(normalize_permission "$PERMISSION_REQUEST")
@@ -124,7 +121,9 @@ while IFS=$'\t' read -r entity login; do
   fi
 
   permission=$(run_actor_gh api "/repos/$REPO/collaborators/$login/permission" --jq .permission 2>/dev/null || true)
-  if [ -n "$permission" ]; then
+  if [ "$permission" = "none" ]; then
+    note="invitation pending"
+  elif [ -n "$permission" ]; then
     note="permission=$permission"
   else
     note="invitation sent or already pending"

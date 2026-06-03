@@ -4,11 +4,13 @@ GH_BIN="${GH:-gh}"
 SECRETS_BIN="${SECRETS:-secrets}"
 
 require_tool() {
-  local tool="$1"
-  if ! command -v "$tool" >/dev/null 2>&1; then
-    echo "ERROR: required tool not found: $tool" >&2
-    exit 1
-  fi
+  local tool
+  for tool in "$@"; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+      echo "ERROR: required tool not found: $tool" >&2
+      exit 1
+    fi
+  done
 }
 
 redact_github_tokens() {

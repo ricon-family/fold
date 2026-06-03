@@ -32,9 +32,3 @@ jobs:
 
       - name: Run tests
         run: mise run test
-
-      - name: Run codebase lint
-        run: codebase lint
-
-      - name: Smoke welcome without HUMAN_MD
-        run: env -u HUMAN_MD mise run welcome

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Run BATS tests"
+#MISE description="Run fold tests, lint, and welcome smoke"
 #USAGE arg "[args]" var=#true default="" help="Test files, suite names, or BATS flags"
 #USAGE example "mise run test" header="Run all tests"
 #USAGE example "mise run test github_repo_invitations" header="Run one suite by bare name"
@@ -32,4 +32,11 @@ if ! $has_target; then
   resolved+=("$TEST_DIR/")
 fi
 
+printf '\n== bats ==\n'
 bats "${resolved[@]}"
+
+printf '\n== codebase lint ==\n'
+codebase lint
+
+printf '\n== welcome smoke (no HUMAN_MD) ==\n'
+env -u HUMAN_MD mise run -q welcome >/dev/null

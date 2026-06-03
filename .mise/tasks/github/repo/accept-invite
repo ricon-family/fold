@@ -4,10 +4,13 @@
 #USAGE flag "--as <agent>" var=#true default="" help="Agent whose stored GitHub PAT should accept the invite (repeatable; default: ambient gh auth)"
 #USAGE flag "--all-fold-agents" default=#false help="Accept as every fold agent from mise run agent:list"
 #USAGE arg "<repo>" help="Repository in OWNER/REPO form"
+#USAGE example "mise run github:repo:accept-invite rikonor/ideas" header="Dry-run current user's matching invite"
+#USAGE example "mise run github:repo:accept-invite rikonor/ideas --as rho --yes" header="Accept as an agent"
+#USAGE example "mise run github:repo:accept-invite rikonor/ideas --all-fold-agents --yes" header="Accept as every fold agent"
 set -euo pipefail
 
 ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
-source "$ROOT/.mise/tasks/github/repo/_lib.sh"
+source "$ROOT/.mise/lib/github/repo.sh"
 
 YES="${usage_yes:-false}"
 AS_AGENTS="${usage_as:-}"
@@ -16,13 +19,7 @@ REPO="${usage_repo:?repo required}"
 OWNER_LC=""
 NAME_LC=""
 
-require_tool "$GH_BIN"
-require_tool "$SECRETS_BIN"
-require_tool gum
-require_tool xargs
-require_tool sort
-require_tool mktemp
-require_tool sed
+require_tool "$GH_BIN" "$SECRETS_BIN" gum xargs sort mktemp sed
 
 validate_repo "$REPO"
 OWNER_LC=$(repo_owner_lc "$REPO")
