@@ -21,7 +21,7 @@ gum = "0.17.0"                   # Human-readable task tables and welcome output
 "shiv:threads" = "0.3"
 "shiv:rudi" = "0.5"                       # git-crypt wrapper — CI calls rudi install directly
 "shiv:secrets" = "0.2"
-"shiv:emails" = "0.5"
+"shiv:emails" = "0.6"
 "shiv:codebase" = "0.3"
 "shiv:farts" = "0.1"                      # Frontmatter queries for agent:list
 
