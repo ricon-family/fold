@@ -32,6 +32,7 @@ for arg in "$@"; do
   prev="$arg"
 done
 [ -n "$out" ] || { echo 'missing --out' >&2; exit 1; }
+[ ! -e "$out" ] || { echo "out path already exists: $out" >&2; exit 1; }
 printf '{"status":"enrolled","totp_seed":"JBSWY3DPEHPK3PXP","recovery_codes":["a1b2c-3d4e5","f6g7h-8i9j0"]}\n' > "$out"
 printf 'TWO_FACTOR_RESULT:enrolled\n'
 EOF
@@ -62,6 +63,33 @@ EOF
   [ "$status" -eq 0 ]
   [[ "$output" == *"TOTP missing"* ]]
   [ ! -e "$BATS_TEST_TMPDIR/websites-args" ]
+}
+
+@test "github:2fa:enroll reports already-enabled accounts without storing blanks" {
+  cat > "$TMPBIN/websites" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+out=""
+prev=""
+for arg in "$@"; do
+  if [ "$prev" = "--out" ]; then
+    out="$arg"
+  fi
+  prev="$arg"
+done
+[ -n "$out" ] || { echo 'missing --out' >&2; exit 1; }
+[ ! -e "$out" ] || { echo "out path already exists: $out" >&2; exit 1; }
+printf '{"status":"already_enabled"}\n' > "$out"
+printf 'TWO_FACTOR_RESULT:already_enabled\n'
+EOF
+  chmod +x "$TMPBIN/websites"
+
+  run fold_task github:2fa:enroll --yes c0da
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"2FA already enabled"* ]]
+  [ ! -e "$FAKE_SECRET_STORE/c0da_github-totp" ]
+  [ ! -e "$FAKE_SECRET_STORE/c0da_github-recovery-codes" ]
 }
 
 @test "github:2fa:enroll requires visible approval" {
