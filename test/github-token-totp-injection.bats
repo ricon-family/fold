@@ -115,11 +115,44 @@ EOF
   [ ! -e "$BATS_TEST_TMPDIR/shimmer-log" ]
 }
 
-@test "github:token:rotate redacts TOTP codes from browser diagnostics" {
+@test "github:token:create redacts credential material from browser diagnostics" {
   cat > "$TMPBIN/websites" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 echo "diagnostic GITHUB_TOTP_CODE=${GITHUB_TOTP_CODE:-unset}" >&2
+echo "diagnostic bare totp ${GITHUB_TOTP_CODE:-unset}" >&2
+echo "diagnostic password ${GITHUB_PASSWORD:-unset}" >&2
+echo "diagnostic seed JBSWY3DPEHPK3PXP" >&2
+echo "diagnostic recovery a1b2c-3d4e5" >&2
+exit 42
+EOF
+  chmod +x "$TMPBIN/websites"
+  write_fake_shimmer_and_gh
+
+  run fold_task github:token:create --yes --no-sync-ci c0da
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"GITHUB_TOTP_CODE=[REDACTED_TOTP_CODE]"* ]]
+  [[ "$output" == *"bare totp [REDACTED_TOTP_CODE]"* ]]
+  [[ "$output" == *"password [REDACTED_PASSWORD]"* ]]
+  [[ "$output" == *"[REDACTED_BASE32]"* ]]
+  [[ "$output" == *"[REDACTED_RECOVERY_CODE]"* ]]
+  [[ "$output" != *"GITHUB_TOTP_CODE=123456"* ]]
+  [[ "$output" != *"bare totp 123456"* ]]
+  [[ "$output" != *"password-for-c0da"* ]]
+  [[ "$output" != *"JBSWY3DPEHPK3PXP"* ]]
+  [[ "$output" != *"a1b2c-3d4e5"* ]]
+}
+
+@test "github:token:rotate redacts credential material from browser diagnostics" {
+  cat > "$TMPBIN/websites" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "diagnostic GITHUB_TOTP_CODE=${GITHUB_TOTP_CODE:-unset}" >&2
+echo "diagnostic bare totp ${GITHUB_TOTP_CODE:-unset}" >&2
+echo "diagnostic password ${GITHUB_PASSWORD:-unset}" >&2
+echo "diagnostic seed JBSWY3DPEHPK3PXP" >&2
+echo "diagnostic recovery a1b2c-3d4e5" >&2
 exit 42
 EOF
   chmod +x "$TMPBIN/websites"
@@ -129,5 +162,13 @@ EOF
 
   [ "$status" -ne 0 ]
   [[ "$output" == *"GITHUB_TOTP_CODE=[REDACTED_TOTP_CODE]"* ]]
+  [[ "$output" == *"bare totp [REDACTED_TOTP_CODE]"* ]]
+  [[ "$output" == *"password [REDACTED_PASSWORD]"* ]]
+  [[ "$output" == *"[REDACTED_BASE32]"* ]]
+  [[ "$output" == *"[REDACTED_RECOVERY_CODE]"* ]]
   [[ "$output" != *"GITHUB_TOTP_CODE=123456"* ]]
+  [[ "$output" != *"bare totp 123456"* ]]
+  [[ "$output" != *"password-for-c0da"* ]]
+  [[ "$output" != *"JBSWY3DPEHPK3PXP"* ]]
+  [[ "$output" != *"a1b2c-3d4e5"* ]]
 }
