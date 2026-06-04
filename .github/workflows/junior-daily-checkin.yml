@@ -2,7 +2,7 @@
 # Source: shimmer/.github/templates/agent-scheduled.yml + workflows.yaml
 # Regenerate: shimmer workflows generate
 
-name: junior-daily-checkin
+name: "junior-daily-checkin"
 
 on:
   schedule:
@@ -11,20 +11,8 @@ on:
 
 jobs:
   run:
-    uses: ./.github/workflows/agent-run.yml
+    uses: ./.github/workflows/junior.yml
     with:
-      agent: junior
-      message: Check your home repo for job instructions at jobs/dc-checkin.txt and execute them.
-      model: openai-codex/gpt-5.5
-    secrets:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
-      PI_AUTH_JSON: ${{ secrets.PI_AUTH_JSON }}
-      AGENT_GITHUB_PAT: ${{ secrets.JUNIOR_GITHUB_PAT }}
-      AGENT_GPG_PRIVATE_KEY: ${{ secrets.JUNIOR_GPG_PRIVATE_KEY }}
-      AGENT_EMAIL_PASSWORD: ${{ secrets.JUNIOR_EMAIL_PASSWORD }}
-      AGENT_GITHUB_PASSWORD: ${{ secrets.JUNIOR_GITHUB_PASSWORD }}
-      AGENT_B2_ENDPOINT: ${{ secrets.JUNIOR_B2_ENDPOINT }}
-      AGENT_B2_KEY_ID: ${{ secrets.JUNIOR_B2_KEY_ID }}
-      AGENT_B2_APPLICATION_KEY: ${{ secrets.JUNIOR_B2_APPLICATION_KEY }}
-      AGENT_B2_BUCKET: ${{ secrets.JUNIOR_B2_BUCKET }}
+      message: "Check your home repo for job instructions at jobs/dc-checkin.txt and execute them."
+      model: "openai-codex/gpt-5.5"
+    secrets: inherit

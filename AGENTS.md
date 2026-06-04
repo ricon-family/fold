@@ -25,12 +25,13 @@ If your identity isn't set, ask Or which agent you are.
 
 ### How you get launched
 
-There are two launch paths:
+Common launch and wake paths:
 
-- **`shimmer agent:local`** — runs `claude` directly. Lean, long context life.
-- **GitHub CI** — headless sessions triggered by workflow dispatch or scheduled runs.
+- **Interactive local:** `shimmer agent` from the target home after identity setup. Lean, long context life.
+- **Local async/headless fanout:** use `sessions new` + `sessions wake --background`, or `shimmer agent --headless` for a simple foreground headless run. Before spawning peers locally, read `notes/local-async-agent-wake.md`; for mechanics see `notes/sessions.md` and `notes/agent-spawning.md`.
+- **GitHub CI:** headless sessions triggered by workflow dispatch or schedules. For peer dispatch, read `notes/agent-dispatching.md` and use `shimmer agent:dispatch`.
 
-Either way, `eval $(shimmer as <agent>)` and `eval $(fold agent:env)` run before launch, so your identity is always set. The startup procedure is the same regardless of launch path.
+Interactive and CI launches normally run `eval $(shimmer as <agent>)` and `eval $(fold agent:env)` before launch, so your identity is set. For `sessions wake` fanout, preserve or set target identity as described in `notes/local-async-agent-wake.md`. The startup procedure is otherwise the same regardless of launch path.
 
 ### Home repo preparation hook
 
@@ -78,6 +79,7 @@ Guidance only works when it appears at the moment you need it. Before starting a
 | Write Bash expected to run on macOS + CI | Read `notes/bash-macos-compat.md` |
 | Write a README | Read `notes/readme-writing.md` |
 | Review a PR | Read `notes/code-review.md` |
+| Wake or spawn a local worker/agent, continue a session, or dispatch a hosted wake | Read `notes/local-agent-wakes.md` |
 | Change GitHub Actions / CI auth | Read `notes/github-actions-ci.md` and `notes/ci-auth-debugging.md` |
 | Create or revive a codebase | Read `notes/creating-a-codebase.md` and, for stale work, `notes/revival-pattern.md` |
 | Hit any command/tool/auth/CI failure | Stop and read `notes/observed-failures-are-work.md`, especially "When a command fails" |
@@ -157,6 +159,7 @@ For significant changes, two reviewers is a cap, not a default. Prefer serial re
 - **Check for unpushed commits** — don't leave local-only work that could be lost
 - **Push fold** — push your fold clone; other agents pick up changes when they pull
 - **Update your session log** — this is already practice, but it's part of cleanup, not separate from it
+- **Garden touched durable surfaces** — do one bounded end-of-session gardening pass guided by `notes/garden-patterns.md`; if the first pass feels empty, apply `Cultus Novus` once before giving up.
 - **Plan the next session** — talk through what's next with Or, not just a priority list but what you'd actually work on and in what order. The plan goes in your status/scratchpad note so the next session has a running start.
 - **Send a session report** to colleagues at `agents@ricon.family` — write for peers who share your context. Focus on design reasoning, surprising discoveries, emerging patterns, parked threads, and what broke or felt wrong. Think knowledge transfer, not changelog.
 - **Tell Or** if anything is left dirty and why (e.g., waiting on review, intentionally WIP)
@@ -300,7 +303,9 @@ Note filenames are obfuscated on GitHub (e.g., `secret.md` → `a1b2c3d4`). Loca
 - `git commit` — pre-commit hook obfuscates, post-commit hook deobfuscates
 - `git pull` works — post-merge hook deobfuscates after pull
 - Don't run `git add -A` or `git add notes/` — use `notes stage` instead
-- If `git pull` exits with `Error: refusing to overwrite dirty readable note: ...`, the post-merge deobfuscate is correctly preserving your uncommitted edits. Run `notes changes <file>` to inspect, then choose: commit local first, `--force` to accept remote, or 3-way merge per `notes/resolving-encrypted-notes-merge-conflicts.md`. Deeper docs: `notes/notes.md` (tool), `notes/obfuscation-design.md` (why), `notes/cross-repo-modules.md` (modules).
+- If `git pull` exits with `Error: refusing to overwrite dirty readable note: ...`, the post-merge deobfuscate is correctly preserving your uncommitted edits. Run `notes changes <file>` to inspect, then choose: commit local first, `--force` to accept remote, or 3-way merge per `notes/resolving-encrypted-notes-merge-conflicts.md`.
+- If Git reports encrypted note content conflicts (`Cannot merge binary files: notes/<hash>` or `UU notes/<hash>`), start with `notes merge --dry-run --out /tmp/<name>` or `notes conflicts --out /tmp/<name>` to get readable `base.md` / `ours.md` / `theirs.md` artifacts. Resolve plaintext, then stage the obfuscated path with `git add notes/<hash>`.
+- For readable note diffs, use `notes diff` (or `notes diff --pr <number>`) instead of raw GitHub encrypted blob diffs. Deeper docs: `notes/notes.md` (tool), `notes/obfuscation-design.md` (why), `notes/cross-repo-modules.md` (modules).
 
 ### Why not a shared clone?
 

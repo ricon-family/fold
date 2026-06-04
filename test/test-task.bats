@@ -18,9 +18,9 @@ printf 'codebase ok: %s\n' "$1"
 EOF
   chmod +x "$TMPBIN/codebase"
 
-  CODEBASE_BIN="$TMPBIN/codebase" run fold test codebase
+  export CODEBASE_BIN="$TMPBIN/codebase"
+  run fold_task test codebase
 
   [ "$status" -eq 0 ]
-  grep -q "^lint:mise-settings $REPO_DIR$" "$BATS_TEST_TMPDIR/codebase-args"
-  grep -q "^lint:gum-table $REPO_DIR$" "$BATS_TEST_TMPDIR/codebase-args"
+  grep -q "^lint$" "$BATS_TEST_TMPDIR/codebase-args"
 }

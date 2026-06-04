@@ -32,9 +32,36 @@ redact() {
   sed -E \
     -e 's/gh[pousr]_[A-Za-z0-9_]+/[REDACTED_GITHUB_TOKEN]/g' \
     -e 's/github_pat_[A-Za-z0-9_]+/[REDACTED_GITHUB_TOKEN]/g' \
+    -e 's/[A-Z2-7]{16,}/[REDACTED_BASE32]/g' \
+    -e 's/[a-z0-9]{5}-[a-z0-9]{5}/[REDACTED_RECOVERY_CODE]/gi' \
     -e 's/(Password: ).*/\1[REDACTED]/g' \
     -e 's/(GITHUB_PASSWORD=)[^[:space:]]+/\1[REDACTED]/g' \
+    -e 's/(GITHUB_TOTP_CODE=)[^[:space:]]+/\1[REDACTED_TOTP_CODE]/g' \
+    -e 's/([Tt][Oo][Tt][Pp][^0-9]{0,32})[0-9]{6}/\1[REDACTED_TOTP_CODE]/g' \
+    -e 's/(^|[^0-9])[0-9]{6}([^0-9]|$)/\1[REDACTED_TOTP_CODE]\2/g' \
     -e 's/^TOKEN:.*/TOKEN:[REDACTED_GITHUB_TOKEN]/'
+}
+
+redact_literal() {
+  local literal="$1"
+  local replacement="$2"
+  awk -v literal="$literal" -v replacement="$replacement" '
+    literal == "" { print; next }
+    {
+      out = ""
+      rest = $0
+      while ((idx = index(rest, literal)) > 0) {
+        out = out substr(rest, 1, idx - 1) replacement
+        rest = substr(rest, idx + length(literal))
+      }
+      print out rest
+    }
+  '
+}
+
+redact_sensitive() {
+  local password="$1"
+  redact | redact_literal "$password" "[REDACTED_PASSWORD]"
 }
 
 validate_agent() {
@@ -118,7 +145,16 @@ run_websites_create() {
   local totp_code=""
 
   if "$SECRETS_BIN" get "$agent/github-totp" >/dev/null 2>&1; then
-    totp_code=$("$SECRETS_BIN" totp "$agent/github-totp")
+    if ! totp_code=$("$SECRETS_BIN" totp "$agent/github-totp" 2>>"$stderr"); then
+      return 1
+    fi
+    case "$totp_code" in
+      [0-9][0-9][0-9][0-9][0-9][0-9]) ;;
+      *)
+        echo "ERROR: generated TOTP code has unexpected shape" >>"$stderr"
+        return 1
+        ;;
+    esac
     GITHUB_USERNAME="$username" GITHUB_PASSWORD="$password" GITHUB_TOTP_CODE="$totp_code" \
       "$WEBSITES_BIN" github:token:create "$agent" --login-id "$agent" >"$stdout" 2>"$stderr"
   else
@@ -210,7 +246,7 @@ while IFS= read -r agent; do
   if ! run_websites_create "$agent" "$username" "$password" "$stdout" "$stderr"; then
     printf '  ✗ token creation failed\n'
     printf '  sanitized diagnostics:\n'
-    redact <"$stderr" | sed 's/^/    /' | tail -100
+    redact_sensitive "$password" <"$stderr" | sed 's/^/    /' | tail -100
     exit 1
   fi
 
@@ -218,7 +254,7 @@ while IFS= read -r agent; do
   if [ -z "$new_token" ]; then
     printf '  ✗ token creation produced no token on stdout\n'
     printf '  sanitized diagnostics:\n'
-    redact <"$stderr" | sed 's/^/    /' | tail -100
+    redact_sensitive "$password" <"$stderr" | sed 's/^/    /' | tail -100
     exit 1
   fi
   printf '  ✓ created\n'

@@ -31,7 +31,32 @@ redact() {
     -e 's/[A-Z2-7]{16,}/[REDACTED_BASE32]/g' \
     -e 's/[a-z0-9]{5}-[a-z0-9]{5}/[REDACTED_RECOVERY_CODE]/gi' \
     -e 's/(Password: ).*/\1[REDACTED]/g' \
-    -e 's/(GITHUB_PASSWORD=)[^[:space:]]+/\1[REDACTED]/g'
+    -e 's/(GITHUB_PASSWORD=)[^[:space:]]+/\1[REDACTED]/g' \
+    -e 's/(GITHUB_TOTP_CODE=)[^[:space:]]+/\1[REDACTED_TOTP_CODE]/g' \
+    -e 's/([Tt][Oo][Tt][Pp][^0-9]{0,32})[0-9]{6}/\1[REDACTED_TOTP_CODE]/g' \
+    -e 's/(^|[^0-9])[0-9]{6}([^0-9]|$)/\1[REDACTED_TOTP_CODE]\2/g'
+}
+
+redact_literal() {
+  local literal="$1"
+  local replacement="$2"
+  awk -v literal="$literal" -v replacement="$replacement" '
+    literal == "" { print; next }
+    {
+      out = ""
+      rest = $0
+      while ((idx = index(rest, literal)) > 0) {
+        out = out substr(rest, 1, idx - 1) replacement
+        rest = substr(rest, idx + length(literal))
+      }
+      print out rest
+    }
+  '
+}
+
+redact_sensitive() {
+  local password="$1"
+  redact | redact_literal "$password" "[REDACTED_PASSWORD]"
 }
 
 validate_agent() {
@@ -118,12 +143,14 @@ while IFS= read -r agent; do
   enrollment_json="$agent_tmp/enrollment.json"
   stdout="$agent_tmp/stdout"
   stderr="$agent_tmp/stderr"
+  : > "$enrollment_json"
+  chmod 600 "$enrollment_json"
 
   if ! GITHUB_USERNAME="$username" GITHUB_PASSWORD="$password" \
     "$WEBSITES_BIN" github:2fa:enroll "$agent" --token-name "$token_name" --out "$enrollment_json" >"$stdout" 2>"$stderr"; then
     printf '  ✗ 2FA enrollment failed\n'
     printf '  sanitized diagnostics:\n'
-    { cat "$stdout"; cat "$stderr"; } | redact | sed 's/^/    /' | tail -120
+    { cat "$stdout"; cat "$stderr"; } | redact_sensitive "$password" | sed 's/^/    /' | tail -120
     exit 1
   fi
 

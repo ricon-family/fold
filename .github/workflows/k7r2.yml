@@ -2,7 +2,7 @@
 # Source: shimmer workflows generate
 # Regenerate: shimmer workflows generate
 
-name: k7r2
+name: 'k7r2'
 
 on:
   workflow_dispatch:
@@ -15,12 +15,45 @@ on:
         description: 'Provider-qualified model to use (e.g., openai-codex/gpt-5.5)'
         required: true
         type: string
+  workflow_call:
+    inputs:
+      message:
+        description: 'Message for the agent'
+        required: true
+        type: string
+      model:
+        description: 'Provider-qualified model to use (e.g., openai-codex/gpt-5.5)'
+        required: true
+        type: string
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: false
+      HF_TOKEN:
+        required: false
+      PI_AUTH_JSON:
+        required: false
+      K7R2_GITHUB_PAT:
+        required: true
+      K7R2_GPG_PRIVATE_KEY:
+        required: true
+      K7R2_EMAIL_PASSWORD:
+        required: true
+      K7R2_GITHUB_PASSWORD:
+        required: false
+      K7R2_B2_ENDPOINT:
+        required: false
+      K7R2_B2_KEY_ID:
+        required: false
+      K7R2_B2_APPLICATION_KEY:
+        required: false
+      K7R2_B2_BUCKET:
+        required: false
 
 jobs:
   run:
     uses: ./.github/workflows/agent-run.yml
     with:
-      agent: k7r2
+      agent: 'k7r2'
       message: ${{ inputs.message }}
       model: ${{ inputs.model }}
     secrets:

@@ -11,7 +11,7 @@ setup() {
   FAKE_SECRET_STORE="$BATS_TEST_TMPDIR/secrets"
   mkdir -p "$FAKE_SECRET_STORE"
   export FAKE_SECRET_STORE
-  write_fake_secret_tools
+  write_fake_github_auth_secret_tools
   export SECRETS_BIN="$TMPBIN/secrets"
   export WEBSITES_BIN="$TMPBIN/websites"
 }
@@ -41,7 +41,7 @@ EOF
 @test "github:2fa:enroll stores enrollment material without printing secrets" {
   write_fake_websites
 
-  run fold github:2fa:enroll --yes c0da
+  run fold_task github:2fa:enroll --yes c0da
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"✓ stored TOTP seed and 2 recovery code(s)"* ]]
@@ -57,7 +57,7 @@ EOF
 @test "github:2fa:enroll dry-run checks prerequisites without browser automation" {
   write_fake_websites
 
-  run fold github:2fa:enroll --dry-run x1f9
+  run fold_task github:2fa:enroll --dry-run x1f9
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"TOTP missing"* ]]
@@ -67,8 +67,36 @@ EOF
 @test "github:2fa:enroll requires visible approval" {
   write_fake_websites
 
-  run fold github:2fa:enroll c0da
+  run fold_task github:2fa:enroll c0da
 
   [ "$status" -ne 0 ]
-  [[ "$(cat "$BATS_TEST_TMPDIR/stderr")" == *"rerun with --yes"* ]]
+  [[ "$output" == *"rerun with --yes"* ]]
+}
+
+@test "github:2fa:enroll redacts credential material from browser diagnostics" {
+  cat > "$TMPBIN/websites" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "diagnostic GITHUB_PASSWORD=${GITHUB_PASSWORD:-unset}" >&2
+echo "diagnostic password ${GITHUB_PASSWORD:-unset}" >&2
+echo "diagnostic bare totp 123456" >&2
+echo "diagnostic seed JBSWY3DPEHPK3PXP" >&2
+echo "diagnostic recovery a1b2c-3d4e5" >&2
+exit 42
+EOF
+  chmod +x "$TMPBIN/websites"
+
+  run fold_task github:2fa:enroll --yes c0da
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"GITHUB_PASSWORD=[REDACTED]"* ]]
+  [[ "$output" == *"password [REDACTED_PASSWORD]"* ]]
+  [[ "$output" == *"bare totp [REDACTED_TOTP_CODE]"* ]]
+  [[ "$output" == *"[REDACTED_BASE32]"* ]]
+  [[ "$output" == *"[REDACTED_RECOVERY_CODE]"* ]]
+  [[ "$output" != *"GITHUB_PASSWORD=password-for-c0da"* ]]
+  [[ "$output" != *"password-for-c0da"* ]]
+  [[ "$output" != *"bare totp 123456"* ]]
+  [[ "$output" != *"JBSWY3DPEHPK3PXP"* ]]
+  [[ "$output" != *"a1b2c-3d4e5"* ]]
 }

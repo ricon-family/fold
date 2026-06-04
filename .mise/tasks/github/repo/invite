@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+#MISE description="Invite agents or GitHub users to collaborate on a personal repo"
+#USAGE flag "-y --yes" default=#false help="Actually send invitations"
+#USAGE flag "--as <agent>" default="" help="Use this agent's stored GitHub PAT as the inviting actor (default: ambient gh auth)"
+#USAGE flag "--to <agent>" var=#true default="" help="Agent to invite by stored <agent>/github-username (repeatable)"
+#USAGE flag "--to-login <login>" var=#true default="" help="Raw GitHub login to invite (repeatable; for humans or users without a secret key)"
+#USAGE flag "--all-fold-agents" default=#false help="Invite every fold agent from mise run agent:list"
+#USAGE flag "--permission <permission>" default="write" help="Permission: read, write, triage, maintain, admin"
+#USAGE arg "<repo>" help="Repository in OWNER/REPO form"
+#USAGE example "mise run github:repo:invite rikonor/ideas --to rho --permission write" header="Dry-run an agent invitation"
+#USAGE example "mise run github:repo:invite rikonor/ideas --to rho --permission write --yes" header="Invite an agent"
+#USAGE example "mise run github:repo:invite rho-ricon/ideas --as rho --to-login rikonor --permission write --yes" header="Invite using an agent token"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+source "$ROOT/.mise/lib/github/repo.sh"
+
+YES="${usage_yes:-false}"
+ACTOR_AGENT="${usage_as:-}"
+TO_AGENTS="${usage_to:-}"
+TO_LOGINS="${usage_to_login:-}"
+ALL_FOLD_AGENTS="${usage_all_fold_agents:-false}"
+REPO="${usage_repo:?repo required}"
+PERMISSION_REQUEST="${usage_permission:-write}"
+
+require_tool "$GH_BIN" "$SECRETS_BIN" gum xargs sort awk mktemp
+
+validate_repo "$REPO"
+permission_pair=$(normalize_permission "$PERMISSION_REQUEST")
+API_PERMISSION=${permission_pair%%$'\t'*}
+DISPLAY_PERMISSION=${permission_pair#*$'\t'}
+
+TMP_TARGETS=$(mktemp)
+TMP_UNIQ=$(mktemp)
+TMP_ERR=$(mktemp)
+TMP_RESULTS=$(mktemp)
+trap 'rm -f "$TMP_TARGETS" "$TMP_UNIQ" "$TMP_ERR" "$TMP_RESULTS"' EXIT
+
+add_agent_target() {
+  local agent="$1"
+  local login
+  validate_agent "$agent"
+  login=$(get_agent_github_login "$agent")
+  printf '%s\t%s\n' "$agent" "$login" >> "$TMP_TARGETS"
+}
+
+add_login_target() {
+  local login="$1"
+  validate_login "$login"
+  printf '%s\t%s\n' "$login" "$login" >> "$TMP_TARGETS"
+}
+
+if [ "$ALL_FOLD_AGENTS" = "true" ]; then
+  while IFS= read -r agent; do
+    [ -n "$agent" ] || continue
+    add_agent_target "$agent"
+  done < <(list_fold_agents "$ROOT")
+fi
+
+while IFS= read -r agent; do
+  [ -n "$agent" ] || continue
+  add_agent_target "$agent"
+done < <(parse_values "$TO_AGENTS")
+
+while IFS= read -r login; do
+  [ -n "$login" ] || continue
+  add_login_target "$login"
+done < <(parse_values "$TO_LOGINS")
+
+if ! grep -q '[^[:space:]]' "$TMP_TARGETS"; then
+  echo "ERROR: provide --to <agent>, --to-login <login>, or --all-fold-agents" >&2
+  exit 1
+fi
+
+awk -F'\t' '!seen[$2]++ { print }' "$TMP_TARGETS" > "$TMP_UNIQ"
+
+ACTOR_TOKEN=""
+if [ -n "$ACTOR_AGENT" ]; then
+  validate_agent "$ACTOR_AGENT"
+  ACTOR_TOKEN=$(get_agent_github_token "$ACTOR_AGENT")
+fi
+
+run_actor_gh() {
+  if [ -n "$ACTOR_TOKEN" ]; then
+    GH_TOKEN="$ACTOR_TOKEN" GITHUB_TOKEN= "$GH_BIN" "$@"
+  else
+    "$GH_BIN" "$@"
+  fi
+}
+
+if ! ACTOR_LOGIN=$(run_actor_gh api user --jq .login 2>"$TMP_ERR"); then
+  echo "ERROR: could not identify inviting GitHub actor" >&2
+  redact_github_tokens < "$TMP_ERR" | sed 's/^/  /' >&2
+  exit 1
+fi
+
+printf 'GitHub repo invitations\n\n'
+printf 'actor:     %s\n' "$ACTOR_LOGIN"
+printf 'repo:      %s\n' "$REPO"
+printf 'permission: %s\n\n' "$DISPLAY_PERMISSION"
+printf 'targets:\n'
+while IFS=$'\t' read -r entity login; do
+  [ -n "$login" ] || continue
+  printf '  - %s (%s)\n' "$entity" "$login"
+done < "$TMP_UNIQ"
+printf '\n'
+
+if [ "$YES" != "true" ]; then
+  echo "Dry run. Rerun with --yes to send invitations."
+  exit 0
+fi
+
+printf 'entity\tlogin\tresult\tnote\n' > "$TMP_RESULTS"
+while IFS=$'\t' read -r entity login; do
+  [ -n "$login" ] || continue
+
+  if ! run_actor_gh api -X PUT "/repos/$REPO/collaborators/$login" -f permission="$API_PERMISSION" >/dev/null 2>"$TMP_ERR"; then
+    note=$(redact_github_tokens < "$TMP_ERR" | tr '\n' ' ' | sed 's/[[:space:]]\{1,\}/ /g; s/^ //; s/ $//' | cut -c1-80)
+    printf '%s\t%s\t%s\t%s\n' "$entity" "$login" "error" "$note" >> "$TMP_RESULTS"
+    continue
+  fi
+
+  permission=$(run_actor_gh api "/repos/$REPO/collaborators/$login/permission" --jq .permission 2>/dev/null || true)
+  if [ "$permission" = "none" ]; then
+    note="invitation pending"
+  elif [ -n "$permission" ]; then
+    note="permission=$permission"
+  else
+    note="invitation sent or already pending"
+  fi
+  printf '%s\t%s\t%s\t%s\n' "$entity" "$login" "ok" "$note" >> "$TMP_RESULTS"
+done < "$TMP_UNIQ"
+
+gum table --print --separator "	" --border rounded < "$TMP_RESULTS"
