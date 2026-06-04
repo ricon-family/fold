@@ -1,0 +1,234 @@
+#!/usr/bin/env bash
+#MISE description="Preflight an already-provisioned agent home bootstrap"
+#USAGE flag "--home <path>" default="" help="Home repo path (default: ~/agents/<agent>/home)"
+#USAGE arg "<agent>" help="Agent name"
+#USAGE example "mise run homes:preflight iris --home ~/agents/iris/home" header="Preflight a specific home path"
+#USAGE example "mise run homes:preflight iris" header="Preflight the default agent home path"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck disable=SC1091 # repo-local shared helpers
+source "$ROOT/.mise/lib/common.sh"
+
+AGENT="${usage_agent:?agent required}"
+HOME_PATH="${usage_home:-}"
+GIT_BIN="${GIT:-git}"
+GPG_BIN="${GPG:-gpg}"
+
+failures=0
+warnings=0
+LAST_SECRET_VALUE=""
+
+record() {
+  local status="$1" check="$2" detail="$3"
+
+  case "$status" in
+    ok|info)
+      ;;
+    warn)
+      warnings=$((warnings + 1))
+      ;;
+    fail)
+      failures=$((failures + 1))
+      ;;
+    *)
+      echo "ERROR: internal invalid preflight status: $status" >&2
+      exit 1
+      ;;
+  esac
+
+  printf '%-6s %-28s %s\n' "$status" "$check" "$detail"
+}
+
+secret_present() {
+  local key="$1" value
+  LAST_SECRET_VALUE=""
+
+  if ! command -v "$SECRETS_BIN" >/dev/null 2>&1; then
+    record warn "secret:$key" "secrets tool unavailable; cannot check"
+    return 1
+  fi
+
+  if ! value=$("$SECRETS_BIN" get "$AGENT/$key" 2>/dev/null); then
+    record fail "secret:$key" "missing $AGENT/$key"
+    return 1
+  fi
+
+  if [ -z "$value" ]; then
+    record fail "secret:$key" "$AGENT/$key is empty"
+    return 1
+  fi
+
+  LAST_SECRET_VALUE="$value"
+  record ok "secret:$key" "present"
+  return 0
+}
+
+check_gpg_key() {
+  local fingerprint="$1"
+
+  if [ -z "$fingerprint" ]; then
+    record warn "gpg secret key" "skipped; no stored fingerprint"
+    return 0
+  fi
+
+  if ! command -v "$GPG_BIN" >/dev/null 2>&1; then
+    record warn "gpg secret key" "gpg tool unavailable; cannot check local keyring"
+    return 0
+  fi
+
+  if "$GPG_BIN" --list-secret-keys "$fingerprint" >/dev/null 2>&1; then
+    record ok "gpg secret key" "present for stored fingerprint"
+  else
+    record fail "gpg secret key" "missing for stored fingerprint"
+  fi
+}
+
+check_file() {
+  local path="$1" label="$2" hint="$3"
+
+  if [ -e "$HOME_PATH/$path" ]; then
+    record ok "$label" "$path present"
+  else
+    record warn "$label" "missing $path; $hint"
+  fi
+}
+
+check_tool_pin() {
+  local key="$1"
+
+  if [ ! -f "$HOME_PATH/mise.toml" ]; then
+    return 0
+  fi
+
+  if grep -Eq '^[[:space:]]*"?'"$key"'"?[[:space:]]*=' "$HOME_PATH/mise.toml"; then
+    record ok "mise:$key" "declared"
+  else
+    record warn "mise:$key" "not declared; later setup may need it"
+  fi
+}
+
+check_repo() {
+  local short_status origin head
+
+  if [ ! -e "$HOME_PATH" ]; then
+    record fail "home repo" "missing path: $HOME_PATH"
+    return 0
+  fi
+
+  if [ ! -d "$HOME_PATH" ]; then
+    record fail "home repo" "not a directory: $HOME_PATH"
+    return 0
+  fi
+
+  if ! "$GIT_BIN" -C "$HOME_PATH" rev-parse --git-dir >/dev/null 2>&1; then
+    record fail "home repo" "not a git repository: $HOME_PATH"
+    return 0
+  fi
+  record ok "home repo" "git repository present"
+
+  if short_status=$("$GIT_BIN" -C "$HOME_PATH" status --porcelain) && [ -z "$short_status" ]; then
+    record ok "worktree" "clean"
+  else
+    record fail "worktree" "dirty; commit/stash before bootstrap primitives mutate"
+    "$GIT_BIN" -C "$HOME_PATH" status --short | sed 's/^/       /'
+  fi
+
+  if head=$("$GIT_BIN" -C "$HOME_PATH" rev-parse --short HEAD 2>/dev/null); then
+    record ok "HEAD" "$head"
+  else
+    record warn "HEAD" "no commits yet; homes:commit-local will need to create one"
+  fi
+
+  if origin=$("$GIT_BIN" -C "$HOME_PATH" remote get-url origin 2>/dev/null); then
+    record info "origin" "$origin"
+  else
+    record info "origin" "not configured"
+  fi
+}
+
+check_notes() {
+  local tracked_readable
+
+  if [ -d "$HOME_PATH/notes" ]; then
+    record ok "notes dir" "notes/ present"
+  else
+    record warn "notes dir" "missing notes/; run homes:render or homes:setup-notes"
+  fi
+
+  if [ -f "$HOME_PATH/notes/.manifest" ]; then
+    record ok "notes manifest" "notes/.manifest present"
+  else
+    record warn "notes manifest" "missing; run homes:setup-notes"
+  fi
+
+  if "$GIT_BIN" -C "$HOME_PATH" rev-parse --git-dir >/dev/null 2>&1; then
+    if ! tracked_readable=$("$GIT_BIN" -C "$HOME_PATH" ls-files 'notes/*.md' 2>/dev/null); then
+      tracked_readable=""
+    fi
+    if [ -n "$tracked_readable" ]; then
+      record fail "tracked readable notes" "readable notes/*.md are tracked; obfuscate before publish"
+      printf '%s\n' "$tracked_readable" | sed 's/^/       /'
+    else
+      record ok "tracked readable notes" "none"
+    fi
+  fi
+}
+
+check_modules() {
+  if [ -f "$HOME_PATH/.modules/manifest" ]; then
+    record ok "modules manifest" ".modules/manifest present"
+  else
+    record warn "modules manifest" "missing; run homes:setup-modules if this home uses modules"
+  fi
+
+  if [ -d "$HOME_PATH/modules" ]; then
+    record info "modules clones" "modules/ directory present"
+  else
+    record info "modules clones" "modules/ not populated"
+  fi
+}
+
+validate_agent "$AGENT"
+if [ -z "$HOME_PATH" ]; then
+  HOME_PATH="$HOME/agents/$AGENT/home"
+fi
+
+printf 'Homes preflight\n\n'
+printf 'agent: %s\n' "$AGENT"
+printf 'home:  %s\n' "$HOME_PATH"
+printf 'mode:  read-only\n\n'
+printf '%-6s %-28s %s\n' "status" "check" "detail"
+printf '%-6s %-28s %s\n' "------" "----------------------------" "------"
+
+record ok "agent" "$AGENT"
+check_repo
+
+fingerprint=""
+if secret_present "gpg-fingerprint"; then
+  fingerprint="$LAST_SECRET_VALUE"
+fi
+if ! secret_present "github-username"; then
+  :
+fi
+if ! secret_present "github-pat"; then
+  :
+fi
+check_gpg_key "$fingerprint"
+
+check_file "AGENTS.md" "bootstrap:AGENTS" "run homes:render"
+check_file "mise.toml" "bootstrap:mise" "run homes:render"
+check_file ".mise/tasks/agent/prepare" "bootstrap:prepare" "run homes:render or add agent:prepare"
+check_tool_pin "shiv:notes"
+check_tool_pin "shiv:modules"
+
+check_notes
+check_modules
+
+printf '\n'
+if [ "$failures" -gt 0 ]; then
+  printf 'overall: fail (%s failures, %s warnings)\n' "$failures" "$warnings"
+  exit 1
+fi
+
+printf 'overall: pass (%s warnings)\n' "$warnings"
