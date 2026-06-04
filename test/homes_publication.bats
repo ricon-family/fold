@@ -94,6 +94,22 @@ SH
   export GIT="$path"
 }
 
+write_mock_notes_no_changes() {
+  local path="$BATS_TEST_TMPDIR/notes-clean"
+  cat > "$path" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+if [ "${1:-}" = "changes" ] && [ "${2:-}" = "--summary" ]; then
+  echo "No changes."
+  exit 0
+fi
+echo "unexpected notes command: $*" >&2
+exit 2
+SH
+  chmod +x "$path"
+  export NOTES="$path"
+}
+
 write_mock_notes_with_pending_changes() {
   local path="$BATS_TEST_TMPDIR/notes"
   cat > "$path" <<'SH'
@@ -122,6 +138,7 @@ SH
   remote="$BATS_TEST_TMPDIR/home.git"
   create_publishable_home "$home"
   create_bare_remote "$remote"
+  write_mock_notes_no_changes
 
   run fold_task homes:publish-fresh test-agent \
     --home "$home" \
@@ -138,6 +155,7 @@ SH
 @test "homes:publish-fresh dry-run fails when the remote is unreachable" {
   home="$BATS_TEST_TMPDIR/home"
   create_publishable_home "$home"
+  write_mock_notes_no_changes
 
   run fold_task homes:publish-fresh test-agent \
     --home "$home" \
@@ -153,6 +171,7 @@ SH
   remote="$BATS_TEST_TMPDIR/home.git"
   create_publishable_home "$home"
   create_bare_remote "$remote"
+  write_mock_notes_no_changes
   write_archive_guard_git
 
   run fold_task homes:publish-fresh test-agent \
@@ -176,6 +195,7 @@ SH
   remote="$BATS_TEST_TMPDIR/home.git"
   create_plaintext_home "$home"
   create_bare_remote "$remote"
+  write_mock_notes_no_changes
 
   run fold_task homes:publish-fresh test-agent \
     --home "$home" \
@@ -185,6 +205,29 @@ SH
 
   [ "$status" -eq 1 ]
   [[ "$output" == *"not a git-crypt blob"* ]]
+  run git --git-dir="$remote" show-ref --verify refs/heads/main
+  [ "$status" -ne 0 ]
+}
+
+
+@test "homes:publish-fresh rejects ignored readable note changes before publishing" {
+  home="$BATS_TEST_TMPDIR/home"
+  remote="$BATS_TEST_TMPDIR/home.git"
+  create_publishable_home "$home"
+  create_bare_remote "$remote"
+  printf 'notes/*.md\n' >> "$home/.git/info/exclude"
+  printf '# pending readable status\n' > "$home/notes/status.md"
+  write_mock_notes_with_pending_changes
+
+  run fold_task homes:publish-fresh test-agent \
+    --home "$home" \
+    --remote-url "$remote" \
+    --no-gpg-sign \
+    --yes
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"note changes remain"* ]]
+  [[ "$output" == *"modified:"*"status.md"* ]]
   run git --git-dir="$remote" show-ref --verify refs/heads/main
   [ "$status" -ne 0 ]
 }
