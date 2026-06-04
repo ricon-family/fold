@@ -14,6 +14,7 @@ AGENT="${usage_agent:?agent required}"
 HOME_PATH="${usage_home:-}"
 GIT_BIN="${GIT:-git}"
 GPG_BIN="${GPG:-gpg}"
+NOTES_BIN="${NOTES:-notes}"
 
 failures=0
 warnings=0
@@ -159,9 +160,9 @@ check_notes() {
 
   if [ -f "$HOME_PATH/notes/.manifest" ]; then
     record ok "notes manifest" "notes/.manifest present"
-    if ! command -v notes >/dev/null 2>&1; then
+    if ! command -v "$NOTES_BIN" >/dev/null 2>&1; then
       record fail "notes changes" "notes tool unavailable; cannot check readable note changes"
-    elif notes_changes=$(cd "$HOME_PATH" && notes changes --summary 2>&1); then
+    elif notes_changes=$(cd "$HOME_PATH" && "$NOTES_BIN" changes --summary 2>&1); then
       if [ "$notes_changes" = "No changes." ]; then
         record ok "notes changes" "clean"
       else
