@@ -72,3 +72,31 @@ EOF
   [ "$status" -ne 0 ]
   [[ "$output" == *"rerun with --yes"* ]]
 }
+
+@test "github:2fa:enroll redacts credential material from browser diagnostics" {
+  cat > "$TMPBIN/websites" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "diagnostic GITHUB_PASSWORD=${GITHUB_PASSWORD:-unset}" >&2
+echo "diagnostic password ${GITHUB_PASSWORD:-unset}" >&2
+echo "diagnostic bare totp 123456" >&2
+echo "diagnostic seed JBSWY3DPEHPK3PXP" >&2
+echo "diagnostic recovery a1b2c-3d4e5" >&2
+exit 42
+EOF
+  chmod +x "$TMPBIN/websites"
+
+  run fold_task github:2fa:enroll --yes c0da
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"GITHUB_PASSWORD=[REDACTED]"* ]]
+  [[ "$output" == *"password [REDACTED_PASSWORD]"* ]]
+  [[ "$output" == *"bare totp [REDACTED_TOTP_CODE]"* ]]
+  [[ "$output" == *"[REDACTED_BASE32]"* ]]
+  [[ "$output" == *"[REDACTED_RECOVERY_CODE]"* ]]
+  [[ "$output" != *"GITHUB_PASSWORD=password-for-c0da"* ]]
+  [[ "$output" != *"password-for-c0da"* ]]
+  [[ "$output" != *"bare totp 123456"* ]]
+  [[ "$output" != *"JBSWY3DPEHPK3PXP"* ]]
+  [[ "$output" != *"a1b2c-3d4e5"* ]]
+}
