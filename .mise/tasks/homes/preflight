@@ -45,7 +45,7 @@ secret_present() {
   LAST_SECRET_VALUE=""
 
   if ! command -v "$SECRETS_BIN" >/dev/null 2>&1; then
-    record warn "secret:$key" "secrets tool unavailable; cannot check"
+    record fail "secret:$key" "secrets tool unavailable; cannot check"
     return 1
   fi
 
@@ -73,7 +73,7 @@ check_gpg_key() {
   fi
 
   if ! command -v "$GPG_BIN" >/dev/null 2>&1; then
-    record warn "gpg secret key" "gpg tool unavailable; cannot check local keyring"
+    record fail "gpg secret key" "gpg tool unavailable; cannot check local keyring"
     return 0
   fi
 
@@ -141,6 +141,7 @@ check_repo() {
   fi
 
   if origin=$("$GIT_BIN" -C "$HOME_PATH" remote get-url origin 2>/dev/null); then
+    origin=$(printf '%s' "$origin" | redact_github_tokens)
     record info "origin" "$origin"
   else
     record info "origin" "not configured"
@@ -159,7 +160,7 @@ check_notes() {
   if [ -f "$HOME_PATH/notes/.manifest" ]; then
     record ok "notes manifest" "notes/.manifest present"
     if ! command -v notes >/dev/null 2>&1; then
-      record warn "notes changes" "notes tool unavailable; cannot check readable note changes"
+      record fail "notes changes" "notes tool unavailable; cannot check readable note changes"
     elif notes_changes=$(cd "$HOME_PATH" && notes changes --summary 2>&1); then
       if [ "$notes_changes" = "No changes." ]; then
         record ok "notes changes" "clean"
