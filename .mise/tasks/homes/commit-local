@@ -18,7 +18,6 @@ HOME_PATH=$(homes_resolve_home "$AGENT" "${usage_home:-}")
 YES="${usage_yes:-false}"
 MESSAGE="${usage_message:-}"
 NO_GPG_SIGN="${usage_no_gpg_sign:-false}"
-NOTES_BIN="${NOTES:-notes}"
 
 stage_bootstrap_surfaces() {
   local paths=() path notes_changes

@@ -12,7 +12,8 @@ source "$HOMES_LIB_DIR/common.sh"
 
 GIT_BIN="${GIT:-git}"
 GPG_BIN="${GPG:-gpg}"
-export GIT_BIN GPG_BIN
+NOTES_BIN="${NOTES:-notes}"
+export GIT_BIN GPG_BIN NOTES_BIN
 
 homes_agent_email() {
   printf '%s@ricon.family\n' "$1"
@@ -89,6 +90,29 @@ homes_fail_on_tracked_readable_notes() {
   fi
 }
 
+homes_fail_on_pending_note_changes() {
+  local home_path="$1" notes_changes
+
+  [ -f "$home_path/notes/.manifest" ] || return 0
+
+  if ! command -v "$NOTES_BIN" >/dev/null 2>&1; then
+    echo "ERROR: notes/.manifest exists but notes tool is unavailable" >&2
+    exit 1
+  fi
+
+  if ! notes_changes=$(cd "$home_path" && "$NOTES_BIN" changes --summary 2>&1); then
+    echo "ERROR: could not inspect notes workflow state before publishing" >&2
+    printf '%s\n' "$notes_changes" >&2
+    exit 1
+  fi
+
+  if [ "$notes_changes" != "No changes." ]; then
+    echo "ERROR: readable note changes are pending; use notes stage/commit before publishing" >&2
+    printf '%s\n' "$notes_changes" | sed 's/^/  /' >&2
+    exit 1
+  fi
+}
+
 homes_blob_hex10() {
   local repo="$1" refpath="$2" tmp hex
   tmp=$(mktemp)
@@ -138,6 +162,7 @@ homes_assert_publishable_tree() {
   homes_require_head "$home_path"
   homes_require_clean_worktree "$home_path"
   homes_fail_on_tracked_readable_notes "$home_path"
+  homes_fail_on_pending_note_changes "$home_path"
 
   homes_assert_gitcrypt_blob "$home_path" 'HEAD:notes/.manifest'
   homes_assert_gitcrypt_blob "$home_path" 'HEAD:.modules/manifest'

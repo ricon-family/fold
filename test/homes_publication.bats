@@ -94,9 +94,32 @@ SH
   export GIT="$path"
 }
 
-write_mock_notes_with_pending_changes() {
+write_mock_notes_clean() {
   local path="$BATS_TEST_TMPDIR/notes"
   cat > "$path" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  stage|obfuscate)
+    exit 0
+    ;;
+  changes)
+    if [ "${2:-}" = "--summary" ]; then
+      printf 'No changes.\n'
+      exit 0
+    fi
+    ;;
+esac
+echo "unexpected notes command: $*" >&2
+exit 2
+SH
+  chmod +x "$path"
+  export NOTES="$path"
+}
+
+write_mock_notes_with_pending_changes() {
+  write_mock_notes_clean
+  cat > "$NOTES" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
 case "${1:-}" in
@@ -113,8 +136,6 @@ esac
 echo "unexpected notes command: $*" >&2
 exit 2
 SH
-  chmod +x "$path"
-  export NOTES="$path"
 }
 
 @test "homes:publish-fresh dry-run verifies encrypted blobs without pushing" {
@@ -122,6 +143,7 @@ SH
   remote="$BATS_TEST_TMPDIR/home.git"
   create_publishable_home "$home"
   create_bare_remote "$remote"
+  write_mock_notes_clean
 
   run fold_task homes:publish-fresh test-agent \
     --home "$home" \
@@ -138,6 +160,7 @@ SH
 @test "homes:publish-fresh dry-run fails when the remote is unreachable" {
   home="$BATS_TEST_TMPDIR/home"
   create_publishable_home "$home"
+  write_mock_notes_clean
 
   run fold_task homes:publish-fresh test-agent \
     --home "$home" \
@@ -154,6 +177,7 @@ SH
   create_publishable_home "$home"
   create_bare_remote "$remote"
   write_archive_guard_git
+  write_mock_notes_clean
 
   run fold_task homes:publish-fresh test-agent \
     --home "$home" \
@@ -171,11 +195,31 @@ SH
   assert_remote_blob_matches_source "$home" "$remote" .modules/manifest
 }
 
+@test "homes:publish-fresh rejects pending readable note changes" {
+  home="$BATS_TEST_TMPDIR/home"
+  remote="$BATS_TEST_TMPDIR/home.git"
+  create_publishable_home "$home"
+  create_bare_remote "$remote"
+  write_mock_notes_with_pending_changes
+
+  run fold_task homes:publish-fresh test-agent \
+    --home "$home" \
+    --remote-url "$remote" \
+    --no-gpg-sign \
+    --yes
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"readable note changes are pending"* ]]
+  run git --git-dir="$remote" show-ref --verify refs/heads/main
+  [ "$status" -ne 0 ]
+}
+
 @test "homes:publish-fresh rejects plaintext publication blobs" {
   home="$BATS_TEST_TMPDIR/home"
   remote="$BATS_TEST_TMPDIR/home.git"
   create_plaintext_home "$home"
   create_bare_remote "$remote"
+  write_mock_notes_clean
 
   run fold_task homes:publish-fresh test-agent \
     --home "$home" \
