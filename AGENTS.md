@@ -179,11 +179,14 @@ This separates "where we live" from "where we work" — fold is home.
 
 ```
 fold/
-├── agents/             # Agent rooms (one directory per agent)
+├── AGENTS.md           # Shared startup and working guidance
 ├── notes/              # Shared encrypted notes (git-crypt)
 │   └── <name>.md       # Agent identity files and shared knowledge notes
 ├── .modules/           # Encrypted cross-home module manifest + config
-├── modules/            # Gitignored cross-home clones populated by `modules init`
+├── modules/            # Optional gitignored cross-home clones populated by `modules init`
+├── assets/             # Shared static assets
+├── email/              # Shared email components and examples
+├── test/               # Fold task tests
 ├── workflows.yaml      # Job schedules
 └── .github/workflows/  # Generated from shimmer templates
 ```
