@@ -75,6 +75,18 @@ SH
     commit -q -m "initial"
 }
 
+@test "homes:preflight redacts GitHub tokens embedded in origin URLs" {
+  home="$BATS_TEST_TMPDIR/home"
+  create_clean_home "$home"
+  git -C "$home" remote add origin "https://x-access-token:ghp_secretfixturetoken@github.com/test-agent/home.git"
+
+  run fold_task homes:preflight test-agent --home "$home"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"info   origin"*"[REDACTED_GITHUB_TOKEN]"* ]]
+  [[ "$output" != *"ghp_secretfixturetoken"* ]]
+}
+
 @test "homes:preflight passes a clean already-provisioned home" {
   home="$BATS_TEST_TMPDIR/home"
   create_clean_home "$home"
@@ -88,6 +100,41 @@ SH
   [[ "$output" == *"ok     secret:gpg-fingerprint"*"present"* ]]
   [[ "$output" == *"ok     gpg secret key"*"present for stored fingerprint"* ]]
   [[ "$output" == *"overall: pass"* ]]
+}
+
+@test "homes:preflight fails closed when the secrets tool is unavailable" {
+  home="$BATS_TEST_TMPDIR/home"
+  create_clean_home "$home"
+  export SECRETS="$TMPBIN/missing-secrets"
+
+  run fold_task homes:preflight test-agent --home "$home"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"fail   secret:gpg-fingerprint"*"secrets tool unavailable"* ]]
+  [[ "$output" == *"fail   secret:github-username"*"secrets tool unavailable"* ]]
+  [[ "$output" == *"fail   secret:github-pat"*"secrets tool unavailable"* ]]
+}
+
+@test "homes:preflight fails closed when gpg is unavailable" {
+  home="$BATS_TEST_TMPDIR/home"
+  create_clean_home "$home"
+  export GPG="$TMPBIN/missing-gpg"
+
+  run fold_task homes:preflight test-agent --home "$home"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"fail   gpg secret key"*"gpg tool unavailable"* ]]
+}
+
+@test "homes:preflight fails closed when notes is unavailable for a notes-managed home" {
+  home="$BATS_TEST_TMPDIR/home"
+  create_clean_home "$home"
+  export NOTES="$TMPBIN/missing-notes"
+
+  run fold_task homes:preflight test-agent --home "$home"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"fail   notes changes"*"notes tool unavailable"* ]]
 }
 
 @test "homes:preflight fails when the home path is missing" {
