@@ -148,7 +148,7 @@ check_repo() {
 }
 
 check_notes() {
-  local tracked_readable
+  local notes_changes tracked_readable
 
   if [ -d "$HOME_PATH/notes" ]; then
     record ok "notes dir" "notes/ present"
@@ -158,6 +158,19 @@ check_notes() {
 
   if [ -f "$HOME_PATH/notes/.manifest" ]; then
     record ok "notes manifest" "notes/.manifest present"
+    if ! command -v notes >/dev/null 2>&1; then
+      record warn "notes changes" "notes tool unavailable; cannot check readable note changes"
+    elif notes_changes=$(cd "$HOME_PATH" && notes changes --summary 2>&1); then
+      if [ "$notes_changes" = "No changes." ]; then
+        record ok "notes changes" "clean"
+      else
+        record fail "notes changes" "readable note changes pending; use notes stage/commit before bootstrap"
+        printf '%s\n' "$notes_changes" | sed 's/^/       /'
+      fi
+    else
+      record fail "notes changes" "could not inspect notes workflow state"
+      printf '%s\n' "$notes_changes" | sed 's/^/       /'
+    fi
   else
     record warn "notes manifest" "missing; run homes:setup-notes"
   fi

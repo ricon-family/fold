@@ -111,6 +111,20 @@ SH
   [[ "$output" == *"overall: fail"* ]]
 }
 
+@test "homes:preflight fails when ignored readable note changes are pending" {
+  home="$BATS_TEST_TMPDIR/home"
+  create_clean_home "$home"
+  printf 'notes/*.md\n' >> "$home/.git/info/exclude"
+  printf '# Status\n' > "$home/notes/status.md"
+
+  run fold_task homes:preflight test-agent --home "$home"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"ok     worktree"*"clean"* ]]
+  [[ "$output" == *"fail   notes changes"*"readable note changes pending"* ]]
+  [[ "$output" == *"new:"*"status.md"* ]]
+}
+
 @test "homes:preflight fails when readable note filenames are tracked" {
   home="$BATS_TEST_TMPDIR/home"
   create_clean_home "$home"
