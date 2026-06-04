@@ -13,6 +13,12 @@ DRY_RUN="${usage_dry_run:-false}"
 OPERATOR="${usage_operator:-${GIT_AUTHOR_NAME:-}}"
 NO_SYNC_CI="${usage_no_sync_ci:-false}"
 AGENTS_ARG="${usage_agents:-}"
+SECRETS_BIN="${SECRETS_BIN:-secrets}"
+WEBSITES_BIN="${WEBSITES_BIN:-websites}"
+SHIMMER_BIN="${SHIMMER_BIN:-shimmer}"
+GH_BIN="${GH_BIN:-gh}"
+AWK_BIN="${AWK_BIN:-awk}"
+XARGS_BIN="${XARGS_BIN:-xargs}"
 
 require_tool() {
   local tool="$1"
@@ -26,8 +32,35 @@ redact() {
   sed -E \
     -e 's/gh[pousr]_[A-Za-z0-9_]+/[REDACTED_GITHUB_TOKEN]/g' \
     -e 's/github_pat_[A-Za-z0-9_]+/[REDACTED_GITHUB_TOKEN]/g' \
+    -e 's/[A-Z2-7]{16,}/[REDACTED_BASE32]/g' \
+    -e 's/[a-z0-9]{5}-[a-z0-9]{5}/[REDACTED_RECOVERY_CODE]/gi' \
     -e 's/(Password: ).*/\1[REDACTED]/g' \
-    -e 's/(GITHUB_PASSWORD=)[^[:space:]]+/\1[REDACTED]/g'
+    -e 's/(GITHUB_PASSWORD=)[^[:space:]]+/\1[REDACTED]/g' \
+    -e 's/(GITHUB_TOTP_CODE=)[^[:space:]]+/\1[REDACTED_TOTP_CODE]/g' \
+    -e 's/([Tt][Oo][Tt][Pp][^0-9]{0,32})[0-9]{6}/\1[REDACTED_TOTP_CODE]/g' \
+    -e 's/(^|[^0-9])[0-9]{6}([^0-9]|$)/\1[REDACTED_TOTP_CODE]\2/g'
+}
+
+redact_literal() {
+  local literal="$1"
+  local replacement="$2"
+  awk -v literal="$literal" -v replacement="$replacement" '
+    literal == "" { print; next }
+    {
+      out = ""
+      rest = $0
+      while ((idx = index(rest, literal)) > 0) {
+        out = out substr(rest, 1, idx - 1) replacement
+        rest = substr(rest, idx + length(literal))
+      }
+      print out rest
+    }
+  '
+}
+
+redact_sensitive() {
+  local password="$1"
+  redact | redact_literal "$password" "[REDACTED_PASSWORD]"
 }
 
 validate_agent() {
@@ -39,7 +72,7 @@ validate_agent() {
 }
 
 parse_explicit_agents() {
-  printf '%s' "$AGENTS_ARG" | xargs printf '%s\n' | while IFS= read -r agent; do
+  printf '%s' "$AGENTS_ARG" | "$XARGS_BIN" printf '%s\n' | while IFS= read -r agent; do
     [ -n "$agent" ] || continue
     validate_agent "$agent"
     printf '%s\n' "$agent"
@@ -62,7 +95,7 @@ load_operator_token() {
   fi
   validate_agent "$OPERATOR"
 
-  if ! OPERATOR_TOKEN=$(secrets get "$OPERATOR/github-pat" 2>/dev/null); then
+  if ! OPERATOR_TOKEN=$("$SECRETS_BIN" get "$OPERATOR/github-pat" 2>/dev/null); then
     echo "ERROR: could not read $OPERATOR/github-pat for CI sync operator" >&2
     exit 1
   fi
@@ -80,7 +113,7 @@ verify_operator_access() {
 
   local err
   err=$(mktemp)
-  if GH_TOKEN="$OPERATOR_TOKEN" gh api repos/ricon-family/fold/actions/secrets/public-key --jq .key >/dev/null 2>"$err"; then
+  if GH_TOKEN="$OPERATOR_TOKEN" "$GH_BIN" api repos/ricon-family/fold/actions/secrets/public-key --jq .key >/dev/null 2>"$err"; then
     rm -f "$err"
     return 0
   fi
@@ -102,12 +135,39 @@ sync_ci() {
   echo "  ✓ synced fold CI secrets"
 }
 
-require_tool secrets
-require_tool websites
-require_tool shimmer
-require_tool gh
-require_tool awk
-require_tool xargs
+run_websites_rotate() {
+  local agent="$1"
+  local username="$2"
+  local password="$3"
+  local stdout="$4"
+  local stderr="$5"
+  local totp_code=""
+
+  if "$SECRETS_BIN" get "$agent/github-totp" >/dev/null 2>&1; then
+    if ! totp_code=$("$SECRETS_BIN" totp "$agent/github-totp" 2>>"$stderr"); then
+      return 1
+    fi
+    case "$totp_code" in
+      [0-9][0-9][0-9][0-9][0-9][0-9]) ;;
+      *)
+        echo "ERROR: generated TOTP code has unexpected shape" >>"$stderr"
+        return 1
+        ;;
+    esac
+    GITHUB_USERNAME="$username" GITHUB_PASSWORD="$password" GITHUB_TOTP_CODE="$totp_code" \
+      "$WEBSITES_BIN" github:token:rotate "$agent" --login-id "$agent" >"$stdout" 2>"$stderr"
+  else
+    GITHUB_USERNAME="$username" GITHUB_PASSWORD="$password" \
+      "$WEBSITES_BIN" github:token:rotate "$agent" --login-id "$agent" >"$stdout" 2>"$stderr"
+  fi
+}
+
+require_tool "$SECRETS_BIN"
+require_tool "$WEBSITES_BIN"
+require_tool "$SHIMMER_BIN"
+require_tool "$GH_BIN"
+require_tool "$AWK_BIN"
+require_tool "$XARGS_BIN"
 
 TMP_AGENTS=$(mktemp)
 TMP_ROOT=$(mktemp -d)
@@ -160,15 +220,15 @@ while IFS= read -r agent; do
   validate_agent "$agent"
   printf '== %s ==\n' "$agent"
 
-  username=$(secrets get "$agent/github-username" 2>/dev/null || true)
-  password=$(secrets get "$agent/github-password" 2>/dev/null || true)
+  username=$("$SECRETS_BIN" get "$agent/github-username" 2>/dev/null || true)
+  password=$("$SECRETS_BIN" get "$agent/github-password" 2>/dev/null || true)
   if [ -z "$username" ] || [ -z "$password" ]; then
     printf '  ✗ missing github username/password secret\n'
     exit 1
   fi
 
   if [ "$DRY_RUN" = "true" ]; then
-    if secrets get "$agent/github-pat" >/dev/null 2>&1; then
+    if "$SECRETS_BIN" get "$agent/github-pat" >/dev/null 2>&1; then
       printf '  ✓ credentials present; current PAT present\n\n'
     else
       printf '  ⚠ credentials present; current PAT missing\n\n'
@@ -182,23 +242,23 @@ while IFS= read -r agent; do
   stdout="$agent_tmp/stdout"
   stderr="$agent_tmp/stderr"
 
-  if ! GITHUB_USERNAME="$username" GITHUB_PASSWORD="$password" websites github:token:rotate "$agent" --login-id "$agent" >"$stdout" 2>"$stderr"; then
+  if ! run_websites_rotate "$agent" "$username" "$password" "$stdout" "$stderr"; then
     printf '  ✗ rotation failed\n'
     printf '  sanitized diagnostics:\n'
-    redact <"$stderr" | sed 's/^/    /' | tail -80
+    redact_sensitive "$password" <"$stderr" | sed 's/^/    /' | tail -80
     exit 1
   fi
 
-  new_token=$(awk '/^ghp_/ { value=$0 } END { print value }' "$stdout")
+  new_token=$("$AWK_BIN" '/^(ghp_|github_pat_)/ { value=$0 } END { print value }' "$stdout")
   if [ -z "$new_token" ]; then
     printf '  ✗ rotation produced no token on stdout\n'
     printf '  sanitized diagnostics:\n'
-    redact <"$stderr" | sed 's/^/    /' | tail -80
+    redact_sensitive "$password" <"$stderr" | sed 's/^/    /' | tail -80
     exit 1
   fi
   printf '  ✓ rotated\n'
 
-  shimmer github:token:store "$agent" "$new_token" >/dev/null
+  "$SHIMMER_BIN" github:token:store "$agent" "$new_token" >/dev/null
   printf '  ✓ stored\n'
 
   if [ "$agent" = "$OPERATOR" ]; then
@@ -208,8 +268,8 @@ while IFS= read -r agent; do
 
   sync_ci "$agent"
 
-  stored_token=$(secrets get "$agent/github-pat")
-  login=$(GH_TOKEN="$stored_token" gh api /user --jq .login 2>/dev/null || true)
+  stored_token=$("$SECRETS_BIN" get "$agent/github-pat")
+  login=$(GH_TOKEN="$stored_token" "$GH_BIN" api /user --jq .login 2>/dev/null || true)
   if [ -z "$login" ]; then
     printf '  ✗ verification failed\n'
     exit 1
