@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+#MISE description="Replace a local home with a fresh remote clone"
+#USAGE flag "-y --yes" default=#false help="Move existing local home aside and clone the remote"
+#USAGE flag "--home <path>" default="" help="Home repo path (default: ~/agents/<agent>/home)"
+#USAGE flag "--repo <repo>" default="" help="GitHub repo label OWNER/REPO; used to derive remote URL when --remote-url is omitted"
+#USAGE flag "--remote-url <url>" default="" help="Remote URL to clone; overrides --repo and is useful for local bare-repo tests"
+#USAGE flag "--branch <branch>" default="main" help="Remote branch to clone"
+#USAGE flag "--no-prepare" default=#false help="Skip mise trust/install and agent:prepare after clone"
+#USAGE arg "<agent>" help="Agent name"
+#USAGE example "mise run homes:adopt-remote iris --home ~/agents/iris/home --repo iris-ricon/home" header="Dry-run local adoption"
+#USAGE example "mise run homes:adopt-remote iris --home ~/agents/iris/home --repo iris-ricon/home --yes" header="Move old home aside and clone fresh remote"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck source=.mise/lib/homes.sh
+source "$ROOT/.mise/lib/homes.sh"
+
+AGENT="${usage_agent:?agent required}"
+HOME_PATH=$(homes_resolve_home "$AGENT" "${usage_home:-}")
+REPO="${usage_repo:-}"
+REMOTE_URL=$(homes_resolve_remote_url "$REPO" "${usage_remote_url:-}")
+BRANCH="${usage_branch:-main}"
+YES="${usage_yes:-false}"
+NO_PREPARE="${usage_no_prepare:-false}"
+
+validate_branch() {
+  local branch="$1"
+  if [[ ! "$branch" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+    echo "ERROR: invalid branch name: $branch" >&2
+    exit 1
+  fi
+}
+
+run_prepare() {
+  if [ "$NO_PREPARE" = "true" ]; then
+    echo "prepare: skipped"
+    return 0
+  fi
+
+  require_tool mise
+  (cd "$HOME_PATH" && mise trust && mise install)
+  if [ -x "$HOME_PATH/.mise/tasks/agent/prepare" ]; then
+    (cd "$HOME_PATH" && mise run agent:prepare)
+  else
+    echo "prepare: no agent:prepare task"
+  fi
+}
+
+validate_agent "$AGENT"
+validate_branch "$BRANCH"
+require_tool "$GIT_BIN" date
+
+printf 'Homes adopt-remote\n\n'
+printf 'agent:  %s\n' "$AGENT"
+printf 'home:   %s\n' "$HOME_PATH"
+printf 'remote: %s\n' "$REMOTE_URL"
+printf 'branch: %s\n' "$BRANCH"
+printf 'mode:   %s\n\n' "$( [ "$YES" = "true" ] && echo mutate || echo dry-run )"
+
+if ! homes_remote_branch_exists "$REMOTE_URL" "$BRANCH"; then
+  echo "ERROR: remote branch not found: $BRANCH" >&2
+  exit 1
+fi
+
+if [ -e "$HOME_PATH" ] && [ ! -d "$HOME_PATH/.git" ]; then
+  echo "ERROR: home path exists but is not a git repo: $HOME_PATH" >&2
+  exit 1
+fi
+
+if [ -d "$HOME_PATH/.git" ]; then
+  homes_require_clean_worktree "$HOME_PATH"
+fi
+
+if [ "$YES" != "true" ]; then
+  echo "dry-run: would move any existing clean home aside and clone the remote"
+  echo "rerun with --yes to mutate"
+  exit 0
+fi
+
+backup=""
+if [ -d "$HOME_PATH/.git" ]; then
+  backup="$HOME_PATH.local-history-$(date +%Y%m%d%H%M%S)-$$"
+  mv "$HOME_PATH" "$backup"
+  printf 'moved old local history to: %s\n' "$backup"
+fi
+
+restore_on_error() {
+  local status=$?
+  if [ "$status" -ne 0 ] && [ -n "$backup" ] && [ ! -e "$HOME_PATH" ]; then
+    mv "$backup" "$HOME_PATH"
+    echo "restored old home after failure" >&2
+  fi
+  exit "$status"
+}
+trap restore_on_error EXIT
+
+mkdir -p "$(dirname "$HOME_PATH")"
+"$GIT_BIN" clone --branch "$BRANCH" "$REMOTE_URL" "$HOME_PATH"
+run_prepare
+
+trap - EXIT
+printf '\nnew home status:\n'
+"$GIT_BIN" -C "$HOME_PATH" status --short --branch
+printf '\nbackup retained: %s\n' "${backup:-none}"
