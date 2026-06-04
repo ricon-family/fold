@@ -126,6 +126,17 @@ SH
   [[ "$output" == *"fail   gpg secret key"*"gpg tool unavailable"* ]]
 }
 
+@test "homes:preflight fails closed when notes is unavailable for a notes-managed home" {
+  home="$BATS_TEST_TMPDIR/home"
+  create_clean_home "$home"
+  export NOTES="$TMPBIN/missing-notes"
+
+  run fold_task homes:preflight test-agent --home "$home"
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"fail   notes changes"*"notes tool unavailable"* ]]
+}
+
 @test "homes:preflight fails when the home path is missing" {
   run fold_task homes:preflight test-agent --home "$BATS_TEST_TMPDIR/missing-home"
 
