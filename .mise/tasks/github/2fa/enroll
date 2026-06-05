@@ -143,8 +143,6 @@ while IFS= read -r agent; do
   enrollment_json="$agent_tmp/enrollment.json"
   stdout="$agent_tmp/stdout"
   stderr="$agent_tmp/stderr"
-  : > "$enrollment_json"
-  chmod 600 "$enrollment_json"
 
   if ! GITHUB_USERNAME="$username" GITHUB_PASSWORD="$password" \
     "$WEBSITES_BIN" github:2fa:enroll "$agent" --token-name "$token_name" --out "$enrollment_json" >"$stdout" 2>"$stderr"; then
@@ -155,6 +153,12 @@ while IFS= read -r agent; do
   fi
 
   status=$("$JQ_BIN" -r '.status // ""' "$enrollment_json")
+  if [ "$status" = "already_enabled" ]; then
+    printf '  - 2FA already enabled; existing setup seed cannot be exported without reset/re-enroll\n\n'
+    unset username password token_name status
+    rm -rf "$agent_tmp"
+    continue
+  fi
   if [ "$status" = "not_available" ]; then
     printf '  - enrollment not available; account may already have 2FA or page shape changed\n\n'
     unset username password token_name status
