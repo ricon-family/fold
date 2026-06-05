@@ -40,7 +40,7 @@ verify_remote() {
   verify_dir=$(mktemp -d "${TMPDIR:-/tmp}/homes-publish-verify.XXXXXX")
   trap 'rm -rf "$verify_dir"' RETURN
 
-  "$GIT_BIN" clone --no-checkout --branch "$BRANCH" "$REMOTE_URL" "$verify_dir/repo" >/dev/null
+  homes_git_redacted clone --no-checkout --branch "$BRANCH" "$REMOTE_URL" "$verify_dir/repo" >/dev/null
   homes_assert_gitcrypt_blob "$verify_dir/repo" 'HEAD:notes/.manifest'
   homes_assert_gitcrypt_blob "$verify_dir/repo" 'HEAD:.modules/manifest'
   remote_note=$(homes_first_obfuscated_note "$verify_dir/repo")
@@ -61,7 +61,7 @@ fi
 printf 'Homes publish-fresh\n\n'
 printf 'agent:  %s\n' "$AGENT"
 printf 'home:   %s\n' "$HOME_PATH"
-printf 'remote: %s\n' "$REMOTE_URL"
+printf 'remote: %s\n' "$(homes_redact_url "$REMOTE_URL")"
 printf 'branch: %s\n' "$BRANCH"
 printf 'mode:   %s\n' "$( [ "$YES" = "true" ] && echo mutate || echo dry-run )"
 printf 'create: no (remote must already exist)\n'
@@ -92,7 +92,7 @@ else
 fi
 
 printf 'fresh root commit: %s\n' "$commit"
-"$GIT_BIN" -C "$HOME_PATH" push "$REMOTE_URL" "$commit:refs/heads/$BRANCH" >/dev/null
+homes_git_redacted -C "$HOME_PATH" push "$REMOTE_URL" "$commit:refs/heads/$BRANCH" >/dev/null
 
 printf '\n== remote verification ==\n'
 verify_remote

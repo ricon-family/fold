@@ -53,7 +53,7 @@ require_tool "$GIT_BIN" date
 printf 'Homes adopt-remote\n\n'
 printf 'agent:  %s\n' "$AGENT"
 printf 'home:   %s\n' "$HOME_PATH"
-printf 'remote: %s\n' "$REMOTE_URL"
+printf 'remote: %s\n' "$(homes_redact_url "$REMOTE_URL")"
 printf 'branch: %s\n' "$BRANCH"
 printf 'mode:   %s\n\n' "$( [ "$YES" = "true" ] && echo mutate || echo dry-run )"
 
@@ -78,6 +78,7 @@ if [ "$YES" != "true" ]; then
 fi
 
 backup=""
+clone_started=false
 if [ -d "$HOME_PATH/.git" ]; then
   backup="$HOME_PATH.local-history-$(date +%Y%m%d%H%M%S)-$$"
   mv "$HOME_PATH" "$backup"
@@ -86,16 +87,22 @@ fi
 
 restore_on_error() {
   local status=$?
-  if [ "$status" -ne 0 ] && [ -n "$backup" ] && [ ! -e "$HOME_PATH" ]; then
-    mv "$backup" "$HOME_PATH"
-    echo "restored old home after failure" >&2
+  if [ "$status" -ne 0 ]; then
+    if $clone_started && [ -e "$HOME_PATH" ]; then
+      rm -rf "$HOME_PATH"
+    fi
+    if [ -n "$backup" ]; then
+      mv "$backup" "$HOME_PATH"
+      echo "restored old home after failure" >&2
+    fi
   fi
   exit "$status"
 }
 trap restore_on_error EXIT
 
 mkdir -p "$(dirname "$HOME_PATH")"
-"$GIT_BIN" clone --branch "$BRANCH" "$REMOTE_URL" "$HOME_PATH"
+clone_started=true
+homes_git_redacted clone --branch "$BRANCH" "$REMOTE_URL" "$HOME_PATH"
 run_prepare
 
 trap - EXIT

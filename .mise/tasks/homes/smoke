@@ -47,18 +47,20 @@ fi
 
 if [ -f "$HOME_PATH/notes/.manifest" ]; then
   printf '\n== notes ==\n'
-  if command -v notes >/dev/null 2>&1; then
-    (cd "$HOME_PATH" && notes status && notes changes --summary)
+  if command -v "$NOTES_BIN" >/dev/null 2>&1; then
+    (cd "$HOME_PATH" && "$NOTES_BIN" status && "$NOTES_BIN" changes --summary)
   else
-    echo "notes tool unavailable; skipped"
+    echo "ERROR: notes/.manifest exists but notes tool is unavailable" >&2
+    exit 1
   fi
 fi
 
 if [ -f "$HOME_PATH/.modules/manifest" ]; then
   printf '\n== modules ==\n'
-  if command -v modules >/dev/null 2>&1; then
-    (cd "$HOME_PATH" && modules status)
+  if command -v "$MODULES_BIN" >/dev/null 2>&1; then
+    (cd "$HOME_PATH" && "$MODULES_BIN" status)
   else
-    echo "modules tool unavailable; skipped"
+    echo "ERROR: .modules/manifest exists but modules tool is unavailable" >&2
+    exit 1
   fi
 fi

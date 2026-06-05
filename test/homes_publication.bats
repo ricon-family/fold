@@ -94,6 +94,77 @@ SH
   export GIT="$path"
 }
 
+write_mock_git_leaking_ls_remote_failure() {
+  local path="$BATS_TEST_TMPDIR/git-leak-ls-remote"
+  local real_git
+  real_git=$(command -v git)
+
+  cat > "$path" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+for arg in "$@"; do
+  if [ "$arg" = "ls-remote" ]; then
+    echo "fatal: could not read from https://x-access-token:ghp_secretfixturetoken@github.com/test-agent/home.git" >&2
+    exit 128
+  fi
+done
+exec "$REAL_GIT" "$@"
+SH
+  chmod +x "$path"
+  export REAL_GIT="$real_git"
+  export GIT="$path"
+}
+
+write_mock_git_ls_remote_success() {
+  local path="$BATS_TEST_TMPDIR/git-ls-remote-success"
+  local real_git
+  real_git=$(command -v git)
+
+  cat > "$path" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+for arg in "$@"; do
+  if [ "$arg" = "ls-remote" ]; then
+    printf '0000000000000000000000000000000000000000\trefs/heads/main\n'
+    exit 0
+  fi
+done
+exec "$REAL_GIT" "$@"
+SH
+  chmod +x "$path"
+  export REAL_GIT="$real_git"
+  export GIT="$path"
+}
+
+write_mock_git_clone_partial_failure() {
+  local path="$BATS_TEST_TMPDIR/git-clone-partial-fail"
+  local real_git
+  real_git=$(command -v git)
+
+  cat > "$path" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+for arg in "$@"; do
+  if [ "$arg" = "ls-remote" ]; then
+    printf '0000000000000000000000000000000000000000\trefs/heads/main\n'
+    exit 0
+  fi
+  if [ "$arg" = "clone" ]; then
+    target=""
+    for value in "$@"; do target="$value"; done
+    mkdir -p "$target"
+    printf 'partial clone\n' > "$target/PARTIAL_CLONE"
+    echo "fatal: clone failed after creating target" >&2
+    exit 42
+  fi
+done
+exec "$REAL_GIT" "$@"
+SH
+  chmod +x "$path"
+  export REAL_GIT="$real_git"
+  export GIT="$path"
+}
+
 write_mock_notes_no_changes() {
   local path="$BATS_TEST_TMPDIR/notes-clean"
   cat > "$path" <<'SH'
@@ -164,6 +235,22 @@ SH
 
   [ "$status" -eq 1 ]
   [[ "$output" == *"remote is not reachable"* ]]
+}
+
+@test "homes:publish-fresh redacts tokens in remote output and errors" {
+  home="$BATS_TEST_TMPDIR/home"
+  create_publishable_home "$home"
+  write_mock_notes_no_changes
+  write_mock_git_leaking_ls_remote_failure
+
+  run fold_task homes:publish-fresh test-agent \
+    --home "$home" \
+    --remote-url "https://x-access-token:ghp_secretfixturetoken@github.com/test-agent/home.git" \
+    --no-gpg-sign
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"[REDACTED_GITHUB_TOKEN]"* ]]
+  [[ "$output" != *"ghp_secretfixturetoken"* ]]
 }
 
 @test "homes:publish-fresh creates a root commit preserving encrypted tree blobs" {
@@ -291,6 +378,21 @@ SH
   [ "$before" = "$after" ]
 }
 
+@test "homes:adopt-remote redacts tokens in remote output" {
+  home="$BATS_TEST_TMPDIR/workspace/home"
+  create_simple_home "$home"
+  write_mock_git_ls_remote_success
+
+  run fold_task homes:adopt-remote test-agent \
+    --home "$home" \
+    --remote-url "https://x-access-token:ghp_secretfixturetoken@github.com/test-agent/home.git" \
+    --no-prepare
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[REDACTED_GITHUB_TOKEN]"* ]]
+  [[ "$output" != *"ghp_secretfixturetoken"* ]]
+}
+
 @test "homes:adopt-remote --yes backs up clean local history and clones remote" {
   source_home="$BATS_TEST_TMPDIR/source-home"
   remote="$BATS_TEST_TMPDIR/home.git"
@@ -313,6 +415,24 @@ SH
   [ -d "${backups[0]}" ]
 }
 
+@test "homes:adopt-remote restores the old home if clone leaves a partial target" {
+  home="$BATS_TEST_TMPDIR/workspace/home"
+  create_simple_home "$home"
+  write_mock_git_clone_partial_failure
+
+  run fold_task homes:adopt-remote test-agent \
+    --home "$home" \
+    --remote-url "$BATS_TEST_TMPDIR/home.git" \
+    --no-prepare \
+    --yes
+
+  [ "$status" -eq 42 ]
+  [[ "$output" == *"restored old home after failure"* ]]
+  [ -f "$home/AGENTS.md" ]
+  [[ "$(cat "$home/AGENTS.md")" == *"test-agent home"* ]]
+  [ ! -f "$home/PARTIAL_CLONE" ]
+}
+
 @test "homes:smoke --skip-mise passes a clean simple home" {
   home="$BATS_TEST_TMPDIR/home"
   create_simple_home "$home"
@@ -323,4 +443,42 @@ SH
   [[ "$output" == *"Homes smoke"* ]]
   [[ "$output" == *"== repo =="* ]]
   [[ "$output" == *"== mise =="*"skipped"* ]]
+}
+
+@test "homes:smoke fails closed when notes is unavailable for a notes-managed home" {
+  home="$BATS_TEST_TMPDIR/home"
+  create_simple_home "$home"
+  mkdir -p "$home/notes"
+  printf 'fake manifest\n' > "$home/notes/.manifest"
+  git -C "$home" add notes/.manifest
+  git -C "$home" \
+    -c user.name="fixture" \
+    -c user.email="fixture@example.test" \
+    -c commit.gpgsign=false \
+    commit -q -m "add notes manifest"
+  export NOTES="$BATS_TEST_TMPDIR/missing-notes"
+
+  run fold_task homes:smoke test-agent --home "$home" --skip-mise
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"notes tool is unavailable"* ]]
+}
+
+@test "homes:smoke fails closed when modules is unavailable for a modules-managed home" {
+  home="$BATS_TEST_TMPDIR/home"
+  create_simple_home "$home"
+  mkdir -p "$home/.modules"
+  printf 'fake manifest\n' > "$home/.modules/manifest"
+  git -C "$home" add .modules/manifest
+  git -C "$home" \
+    -c user.name="fixture" \
+    -c user.email="fixture@example.test" \
+    -c commit.gpgsign=false \
+    commit -q -m "add modules manifest"
+  export MODULES="$BATS_TEST_TMPDIR/missing-modules"
+
+  run fold_task homes:smoke test-agent --home "$home" --skip-mise
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"modules tool is unavailable"* ]]
 }

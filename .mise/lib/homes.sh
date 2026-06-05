@@ -13,7 +13,8 @@ source "$HOMES_LIB_DIR/common.sh"
 GIT_BIN="${GIT:-git}"
 GPG_BIN="${GPG:-gpg}"
 NOTES_BIN="${NOTES:-notes}"
-export GIT_BIN GPG_BIN NOTES_BIN
+MODULES_BIN="${MODULES:-modules}"
+export GIT_BIN GPG_BIN NOTES_BIN MODULES_BIN
 
 homes_agent_email() {
   printf '%s@ricon.family\n' "$1"
@@ -187,10 +188,18 @@ homes_resolve_remote_url() {
   printf 'https://github.com/%s.git\n' "$repo"
 }
 
+homes_redact_url() {
+  printf '%s' "$1" | redact_github_tokens
+}
+
+homes_git_redacted() {
+  "$GIT_BIN" "$@" 2> >(redact_github_tokens >&2)
+}
+
 homes_require_remote_reachable() {
   local remote_url="$1"
-  if ! "$GIT_BIN" ls-remote "$remote_url" >/dev/null 2>&1; then
-    echo "ERROR: remote is not reachable: $remote_url" >&2
+  if ! homes_git_redacted ls-remote "$remote_url" >/dev/null; then
+    echo "ERROR: remote is not reachable: $(homes_redact_url "$remote_url")" >&2
     exit 1
   fi
 }
