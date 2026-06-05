@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+#MISE description="Run fold tests, lint, and welcome smoke"
+#USAGE arg "[args]" var=#true default="" help="Test files, suite names, BATS flags, or 'codebase'"
+#USAGE example "mise run test" header="Run all tests"
+#USAGE example "mise run test github_repo_invitations" header="Run one suite by bare name"
+#USAGE example "mise run test codebase" header="Run only codebase lint"
+#USAGE example "mise run test --filter accept" header="Filter tests by name"
+set -euo pipefail
+
+TEST_DIR="$MISE_CONFIG_ROOT/test"
+CODEBASE_BIN="${CODEBASE_BIN:-codebase}"
+
+args=()
+if [ -n "${usage_args:-}" ]; then
+  while IFS= read -r arg; do
+    [ -n "$arg" ] || continue
+    args+=("$arg")
+  done < <(printf '%s' "$usage_args" | xargs printf '%s\n')
+fi
+
+run_bats=false
+run_codebase=false
+run_welcome=false
+bats_args=()
+has_target=false
+
+if [ "${#args[@]}" -eq 0 ]; then
+  run_bats=true
+  run_codebase=true
+  run_welcome=true
+else
+  for arg in ${args[@]+"${args[@]}"}; do
+    if [ "$arg" = "codebase" ]; then
+      run_codebase=true
+      continue
+    fi
+
+    run_bats=true
+    run_codebase=true
+    run_welcome=true
+    if [[ "$arg" != -* && "$arg" != *.bats && -f "$TEST_DIR/$arg.bats" ]]; then
+      bats_args+=("$TEST_DIR/$arg.bats")
+      has_target=true
+    else
+      [[ "$arg" == *.bats || -d "$arg" ]] && has_target=true
+      bats_args+=("$arg")
+    fi
+  done
+fi
+
+if [ "$run_bats" = "true" ]; then
+  if ! $has_target; then
+    bats_args+=("$TEST_DIR/")
+  fi
+
+  printf '\n== bats ==\n'
+  bats "${bats_args[@]}"
+fi
+
+if [ "$run_codebase" = "true" ]; then
+  printf '\n== codebase lint ==\n'
+  "$CODEBASE_BIN" lint
+fi
+
+if [ "$run_welcome" = "true" ]; then
+  printf '\n== welcome smoke (no HUMAN_MD) ==\n'
+  env -u HUMAN_MD mise run -q welcome >/dev/null
+fi

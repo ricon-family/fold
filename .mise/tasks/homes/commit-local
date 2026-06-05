@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+#MISE description="Commit local agent home bootstrap state"
+#USAGE flag "-y --yes" default=#false help="Stage and commit local home changes"
+#USAGE flag "--home <path>" default="" help="Home repo path (default: ~/agents/<agent>/home)"
+#USAGE flag "--message <message>" default="" help="Commit message (default: bootstrap <agent> home)"
+#USAGE flag "--no-gpg-sign" default=#false help="Do not GPG-sign the commit (intended for tests or emergency recovery)"
+#USAGE arg "<agent>" help="Agent name"
+#USAGE example "mise run homes:commit-local iris --home ~/agents/iris/home" header="Dry-run local home commit"
+#USAGE example "mise run homes:commit-local iris --home ~/agents/iris/home --yes" header="Stage and commit local home state"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck source=.mise/lib/homes.sh
+source "$ROOT/.mise/lib/homes.sh"
+
+AGENT="${usage_agent:?agent required}"
+HOME_PATH=$(homes_resolve_home "$AGENT" "${usage_home:-}")
+YES="${usage_yes:-false}"
+MESSAGE="${usage_message:-}"
+NO_GPG_SIGN="${usage_no_gpg_sign:-false}"
+NOTES_BIN="${NOTES:-notes}"
+
+stage_bootstrap_surfaces() {
+  local paths=() path notes_changes
+
+  if [ -f "$HOME_PATH/notes/.manifest" ]; then
+    if ! command -v "$NOTES_BIN" >/dev/null 2>&1; then
+      echo "ERROR: notes/.manifest exists but notes tool is unavailable" >&2
+      exit 1
+    fi
+    (cd "$HOME_PATH" && "$NOTES_BIN" stage && "$NOTES_BIN" obfuscate)
+    if ! notes_changes=$(cd "$HOME_PATH" && "$NOTES_BIN" changes --summary 2>&1); then
+      echo "ERROR: could not inspect notes workflow state after staging" >&2
+      printf '%s\n' "$notes_changes" >&2
+      exit 1
+    fi
+    if [ "$notes_changes" != "No changes." ]; then
+      echo "ERROR: note changes remain after staging; resolve notes workflow before committing" >&2
+      printf '%s\n' "$notes_changes" | sed 's/^/  /' >&2
+      exit 1
+    fi
+  fi
+
+  for path in \
+    AGENTS.md README.md README.tsx mise.toml \
+    .github .mise .gitattributes .gitignore .git-crypt .modules; do
+    [ -e "$HOME_PATH/$path" ] && paths+=("$path")
+  done
+
+  if [ "${#paths[@]}" -gt 0 ]; then
+    "$GIT_BIN" -C "$HOME_PATH" add "${paths[@]}"
+  fi
+}
+
+validate_agent "$AGENT"
+require_tool "$GIT_BIN"
+homes_require_git_repo "$HOME_PATH"
+
+if [ -z "$MESSAGE" ]; then
+  MESSAGE="bootstrap $AGENT home"
+fi
+
+printf 'Homes commit-local\n\n'
+printf 'agent:   %s\n' "$AGENT"
+printf 'home:    %s\n' "$HOME_PATH"
+printf 'message: %s\n' "$MESSAGE"
+printf 'mode:    %s\n\n' "$( [ "$YES" = "true" ] && echo mutate || echo dry-run )"
+
+if [ "$YES" != "true" ]; then
+  "$GIT_BIN" -C "$HOME_PATH" status --short
+  echo "dry-run: would stage bootstrap surfaces and commit local home state"
+  echo "rerun with --yes to mutate"
+  exit 0
+fi
+
+stage_bootstrap_surfaces
+homes_fail_on_tracked_readable_notes "$HOME_PATH"
+
+if "$GIT_BIN" -C "$HOME_PATH" diff --cached --quiet; then
+  echo "nothing staged"
+  exit 0
+fi
+
+if [ "$NO_GPG_SIGN" = "true" ]; then
+  homes_agent_git "$AGENT" false -C "$HOME_PATH" commit --no-gpg-sign -m "$MESSAGE"
+else
+  homes_agent_git "$AGENT" true -C "$HOME_PATH" commit -m "$MESSAGE"
+fi
+
+"$GIT_BIN" -C "$HOME_PATH" status --short --branch

@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+#MISE description="Push a fresh encrypted root commit for an agent home"
+#USAGE flag "-y --yes" default=#false help="Create and push the fresh root commit"
+#USAGE flag "--home <path>" default="" help="Home repo path (default: ~/agents/<agent>/home)"
+#USAGE flag "--repo <repo>" default="" help="GitHub repo label OWNER/REPO; used to derive remote URL when --remote-url is omitted"
+#USAGE flag "--remote-url <url>" default="" help="Remote URL to push; overrides --repo and is useful for local bare-repo tests"
+#USAGE flag "--branch <branch>" default="main" help="Remote branch to create"
+#USAGE flag "--message <message>" default="" help="Fresh root commit message (default: bootstrap <agent> home)"
+#USAGE flag "--private" default=#false help="Document intended remote privacy; this task does not create repos"
+#USAGE flag "--no-gpg-sign" default=#false help="Do not GPG-sign the fresh root commit (intended for tests or emergency recovery)"
+#USAGE arg "<agent>" help="Agent name"
+#USAGE example "mise run homes:publish-fresh iris --home ~/agents/iris/home --repo iris-ricon/home" header="Dry-run GitHub publish"
+#USAGE example "mise run homes:publish-fresh iris --home ~/agents/iris/home --repo iris-ricon/home --private --yes" header="Push fresh encrypted root commit"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck source=.mise/lib/homes.sh
+source "$ROOT/.mise/lib/homes.sh"
+
+AGENT="${usage_agent:?agent required}"
+HOME_PATH=$(homes_resolve_home "$AGENT" "${usage_home:-}")
+REPO="${usage_repo:-}"
+REMOTE_URL=$(homes_resolve_remote_url "$REPO" "${usage_remote_url:-}")
+BRANCH="${usage_branch:-main}"
+MESSAGE="${usage_message:-}"
+YES="${usage_yes:-false}"
+PRIVATE="${usage_private:-false}"
+NO_GPG_SIGN="${usage_no_gpg_sign:-false}"
+
+validate_branch() {
+  local branch="$1"
+  if [[ ! "$branch" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+    echo "ERROR: invalid branch name: $branch" >&2
+    exit 1
+  fi
+}
+
+verify_remote() {
+  local verify_dir
+  verify_dir=$(mktemp -d "${TMPDIR:-/tmp}/homes-publish-verify.XXXXXX")
+  trap 'rm -rf "$verify_dir"' RETURN
+
+  homes_git_redacted clone --no-checkout --branch "$BRANCH" "$REMOTE_URL" "$verify_dir/repo" >/dev/null
+  homes_assert_gitcrypt_blob "$verify_dir/repo" 'HEAD:notes/.manifest'
+  homes_assert_gitcrypt_blob "$verify_dir/repo" 'HEAD:.modules/manifest'
+  homes_assert_encrypted_note_blobs "$verify_dir/repo"
+
+  rm -rf "$verify_dir"
+  trap - RETURN
+}
+
+validate_agent "$AGENT"
+validate_branch "$BRANCH"
+require_tool "$GIT_BIN" mktemp od awk
+
+if [ -z "$MESSAGE" ]; then
+  MESSAGE="bootstrap $AGENT home"
+fi
+
+printf 'Homes publish-fresh\n\n'
+printf 'agent:  %s\n' "$AGENT"
+printf 'home:   %s\n' "$HOME_PATH"
+printf 'remote: %s\n' "$(homes_redact_url "$REMOTE_URL")"
+printf 'branch: %s\n' "$BRANCH"
+printf 'mode:   %s\n' "$( [ "$YES" = "true" ] && echo mutate || echo dry-run )"
+printf 'create: no (remote must already exist)\n'
+if [ "$PRIVATE" = "true" ]; then
+  printf 'privacy: operator asserted private remote intent\n'
+fi
+printf '\n'
+
+homes_assert_publishable_tree "$HOME_PATH"
+
+homes_require_remote_reachable "$REMOTE_URL"
+if homes_remote_branch_exists "$REMOTE_URL" "$BRANCH"; then
+  echo "ERROR: remote branch already exists: $BRANCH" >&2
+  exit 1
+fi
+
+if [ "$YES" != "true" ]; then
+  echo "dry-run: would create a fresh root commit from HEAD^{tree} and push it"
+  echo "rerun with --yes to mutate"
+  exit 0
+fi
+
+tree=$("$GIT_BIN" -C "$HOME_PATH" rev-parse 'HEAD^{tree}')
+if [ "$NO_GPG_SIGN" = "true" ]; then
+  commit=$(printf '%s\n' "$MESSAGE" | homes_agent_git "$AGENT" false -C "$HOME_PATH" commit-tree "$tree")
+else
+  commit=$(printf '%s\n' "$MESSAGE" | homes_agent_git "$AGENT" true -C "$HOME_PATH" commit-tree -S "$tree")
+fi
+
+printf 'fresh root commit: %s\n' "$commit"
+homes_git_redacted -C "$HOME_PATH" push "$REMOTE_URL" "$commit:refs/heads/$BRANCH" >/dev/null
+
+printf '\n== remote verification ==\n'
+verify_remote

@@ -1,0 +1,193 @@
+#!/usr/bin/env bash
+#MISE description="Enroll agent GitHub 2FA and store TOTP/recovery secrets"
+#USAGE flag "-y --yes" default=#false help="Actually enroll and store secrets without prompting"
+#USAGE flag "--dry-run" default=#false help="Check prerequisites without browser automation or storage"
+#USAGE flag "--token-name <name>" default="" help="Token name used only to trigger GitHub's 2FA gate (default: agent name)"
+#USAGE arg "[agents]" var=#true default="" help="Agent names to enroll"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+YES="${usage_yes:-false}"
+DRY_RUN="${usage_dry_run:-false}"
+TOKEN_NAME_ARG="${usage_token_name:-}"
+AGENTS_ARG="${usage_agents:-}"
+SECRETS_BIN="${SECRETS_BIN:-secrets}"
+WEBSITES_BIN="${WEBSITES_BIN:-websites}"
+JQ_BIN="${JQ_BIN:-jq}"
+XARGS_BIN="${XARGS_BIN:-xargs}"
+
+require_tool() {
+  local tool="$1"
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "ERROR: required tool not found: $tool" >&2
+    exit 1
+  fi
+}
+
+redact() {
+  sed -E \
+    -e 's/gh[pousr]_[A-Za-z0-9_]+/[REDACTED_GITHUB_TOKEN]/g' \
+    -e 's/github_pat_[A-Za-z0-9_]+/[REDACTED_GITHUB_TOKEN]/g' \
+    -e 's/[A-Z2-7]{16,}/[REDACTED_BASE32]/g' \
+    -e 's/[a-z0-9]{5}-[a-z0-9]{5}/[REDACTED_RECOVERY_CODE]/gi' \
+    -e 's/(Password: ).*/\1[REDACTED]/g' \
+    -e 's/(GITHUB_PASSWORD=)[^[:space:]]+/\1[REDACTED]/g' \
+    -e 's/(GITHUB_TOTP_CODE=)[^[:space:]]+/\1[REDACTED_TOTP_CODE]/g' \
+    -e 's/([Tt][Oo][Tt][Pp][^0-9]{0,32})[0-9]{6}/\1[REDACTED_TOTP_CODE]/g' \
+    -e 's/(^|[^0-9])[0-9]{6}([^0-9]|$)/\1[REDACTED_TOTP_CODE]\2/g'
+}
+
+redact_literal() {
+  local literal="$1"
+  local replacement="$2"
+  awk -v literal="$literal" -v replacement="$replacement" '
+    literal == "" { print; next }
+    {
+      out = ""
+      rest = $0
+      while ((idx = index(rest, literal)) > 0) {
+        out = out substr(rest, 1, idx - 1) replacement
+        rest = substr(rest, idx + length(literal))
+      }
+      print out rest
+    }
+  '
+}
+
+redact_sensitive() {
+  local password="$1"
+  redact | redact_literal "$password" "[REDACTED_PASSWORD]"
+}
+
+validate_agent() {
+  local agent="$1"
+  if [[ ! "$agent" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    echo "ERROR: invalid agent name: $agent" >&2
+    exit 1
+  fi
+}
+
+parse_explicit_agents() {
+  printf '%s' "$AGENTS_ARG" | "$XARGS_BIN" printf '%s\n' | while IFS= read -r agent; do
+    [ -n "$agent" ] || continue
+    validate_agent "$agent"
+    printf '%s\n' "$agent"
+  done
+}
+
+store_secret_stdin() {
+  local key="$1"
+  "$SECRETS_BIN" set "$key" >/dev/null
+}
+
+require_tool "$SECRETS_BIN"
+require_tool "$WEBSITES_BIN"
+require_tool "$JQ_BIN"
+require_tool "$XARGS_BIN"
+
+TMP_AGENTS=$(mktemp)
+TMP_ROOT=$(mktemp -d)
+chmod 700 "$TMP_ROOT"
+trap 'rm -rf "$TMP_ROOT" "$TMP_AGENTS"' EXIT
+
+parse_explicit_agents > "$TMP_AGENTS"
+if ! grep -q '[^[:space:]]' "$TMP_AGENTS"; then
+  echo "ERROR: pass at least one agent to enroll" >&2
+  exit 1
+fi
+sort -u "$TMP_AGENTS" -o "$TMP_AGENTS"
+
+printf 'GitHub 2FA enrollment for fold agents\n\n'
+printf 'Agents:\n'
+while IFS= read -r agent; do
+  [ -n "$agent" ] || continue
+  validate_agent "$agent"
+  printf '  - %s\n' "$agent"
+done < "$TMP_AGENTS"
+printf '\n'
+printf 'Consent reminder: only enroll another agent credential with that agent or Or approving. See fold notes/credential-rotation-consent.md.\n\n'
+
+if [ "$DRY_RUN" = "true" ]; then
+  printf 'Dry run: checking required credentials only; no browser automation or storage.\n\n'
+elif [ "$YES" != "true" ]; then
+  echo "ERROR: 2FA enrollment mutates agent credentials; rerun with --yes after confirming consent, or --dry-run to inspect." >&2
+  exit 1
+fi
+
+while IFS= read -r agent; do
+  [ -n "$agent" ] || continue
+  validate_agent "$agent"
+  printf '== %s ==\n' "$agent"
+
+  username=$("$SECRETS_BIN" get "$agent/github-username" 2>/dev/null || true)
+  password=$("$SECRETS_BIN" get "$agent/github-password" 2>/dev/null || true)
+  if [ -z "$username" ] || [ -z "$password" ]; then
+    printf '  ✗ missing github username/password secret\n'
+    exit 1
+  fi
+
+  if [ "$DRY_RUN" = "true" ]; then
+    if "$SECRETS_BIN" get "$agent/github-totp" >/dev/null 2>&1; then
+      printf '  ✓ credentials present; TOTP already present\n\n'
+    else
+      printf '  ✓ credentials present; TOTP missing\n\n'
+    fi
+    unset username password
+    continue
+  fi
+
+  token_name="${TOKEN_NAME_ARG:-$agent}"
+  agent_tmp="$TMP_ROOT/$agent"
+  mkdir -p "$agent_tmp"
+  chmod 700 "$agent_tmp"
+  enrollment_json="$agent_tmp/enrollment.json"
+  stdout="$agent_tmp/stdout"
+  stderr="$agent_tmp/stderr"
+
+  if ! GITHUB_USERNAME="$username" GITHUB_PASSWORD="$password" \
+    "$WEBSITES_BIN" github:2fa:enroll "$agent" --token-name "$token_name" --out "$enrollment_json" >"$stdout" 2>"$stderr"; then
+    printf '  ✗ 2FA enrollment failed\n'
+    printf '  sanitized diagnostics:\n'
+    { cat "$stdout"; cat "$stderr"; } | redact_sensitive "$password" | sed 's/^/    /' | tail -120
+    exit 1
+  fi
+
+  status=$("$JQ_BIN" -r '.status // ""' "$enrollment_json")
+  if [ "$status" = "already_enabled" ]; then
+    printf '  - 2FA already enabled; existing setup seed cannot be exported without reset/re-enroll\n\n'
+    unset username password token_name status
+    rm -rf "$agent_tmp"
+    continue
+  fi
+  if [ "$status" = "not_available" ]; then
+    printf '  - enrollment not available; account may already have 2FA or page shape changed\n\n'
+    unset username password token_name status
+    rm -rf "$agent_tmp"
+    continue
+  fi
+  if [ "$status" != "enrolled" ]; then
+    printf '  ✗ unexpected enrollment status: %s\n' "$status"
+    exit 1
+  fi
+
+  seed=$("$JQ_BIN" -r '.totp_seed // ""' "$enrollment_json")
+  recovery_codes=$("$JQ_BIN" -r '.recovery_codes[]?' "$enrollment_json")
+  if [ -z "$seed" ] || [ -z "$recovery_codes" ]; then
+    printf '  ✗ enrollment output missing TOTP seed or recovery codes\n'
+    exit 1
+  fi
+
+  printf '%s' "$seed" | store_secret_stdin "$agent/github-totp"
+  printf '%s\n' "$recovery_codes" | store_secret_stdin "$agent/github-recovery-codes"
+  recovery_count=$(printf '%s\n' "$recovery_codes" | grep -c '[^[:space:]]' || true)
+  printf '  ✓ stored TOTP seed and %s recovery code(s)\n\n' "$recovery_count"
+
+  unset username password token_name status seed recovery_codes recovery_count
+  rm -rf "$agent_tmp"
+done < "$TMP_AGENTS"
+
+if [ "$DRY_RUN" = "true" ]; then
+  printf 'Dry run complete. No 2FA enrollment was attempted.\n'
+else
+  printf '2FA enrollment complete for selected agents.\n'
+fi
