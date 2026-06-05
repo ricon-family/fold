@@ -36,15 +36,14 @@ validate_branch() {
 }
 
 verify_remote() {
-  local verify_dir remote_note
+  local verify_dir
   verify_dir=$(mktemp -d "${TMPDIR:-/tmp}/homes-publish-verify.XXXXXX")
   trap 'rm -rf "$verify_dir"' RETURN
 
   homes_git_redacted clone --no-checkout --branch "$BRANCH" "$REMOTE_URL" "$verify_dir/repo" >/dev/null
   homes_assert_gitcrypt_blob "$verify_dir/repo" 'HEAD:notes/.manifest'
   homes_assert_gitcrypt_blob "$verify_dir/repo" 'HEAD:.modules/manifest'
-  remote_note=$(homes_first_obfuscated_note "$verify_dir/repo")
-  homes_assert_gitcrypt_blob "$verify_dir/repo" "HEAD:$remote_note"
+  homes_assert_encrypted_note_blobs "$verify_dir/repo"
 
   rm -rf "$verify_dir"
   trap - RETURN

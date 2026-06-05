@@ -140,24 +140,25 @@ homes_assert_gitcrypt_blob() {
   printf 'encrypted: %s\n' "$refpath"
 }
 
-homes_first_obfuscated_note() {
-  local home_path="$1" first
+homes_assert_encrypted_note_blobs() {
+  local repo="$1" path count
+  count=0
 
-  if ! first=$("$GIT_BIN" -C "$home_path" ls-tree -r --name-only HEAD notes 2>/dev/null \
-      | awk '$0 != "notes/.manifest" { print; exit }'); then
-    first=""
-  fi
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    [ "$path" = "notes/.manifest" ] && continue
+    count=$((count + 1))
+    homes_assert_gitcrypt_blob "$repo" "HEAD:$path"
+  done < <("$GIT_BIN" -C "$repo" ls-tree -r --name-only HEAD notes 2>/dev/null)
 
-  if [ -z "$first" ]; then
+  if [ "$count" -eq 0 ]; then
     echo "ERROR: no obfuscated notes found in HEAD" >&2
     exit 1
   fi
-
-  printf '%s\n' "$first"
 }
 
 homes_assert_publishable_tree() {
-  local home_path="$1" first_note
+  local home_path="$1"
 
   homes_require_git_repo "$home_path"
   homes_require_head "$home_path"
@@ -167,8 +168,7 @@ homes_assert_publishable_tree() {
 
   homes_assert_gitcrypt_blob "$home_path" 'HEAD:notes/.manifest'
   homes_assert_gitcrypt_blob "$home_path" 'HEAD:.modules/manifest'
-  first_note=$(homes_first_obfuscated_note "$home_path")
-  homes_assert_gitcrypt_blob "$home_path" "HEAD:$first_note"
+  homes_assert_encrypted_note_blobs "$home_path"
 }
 
 homes_resolve_remote_url() {

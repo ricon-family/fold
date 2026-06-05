@@ -58,6 +58,27 @@ MD
     commit -q -m "bootstrap plaintext home"
 }
 
+create_mixed_note_home() {
+  local home="$1"
+  mkdir -p "$home/notes" "$home/.modules"
+  git init -q -b main "$home"
+
+  cat > "$home/AGENTS.md" <<'MD'
+# test-agent home
+MD
+  printf '\0GITCRYPT\0notes manifest\n' > "$home/notes/.manifest"
+  printf '\0GITCRYPT\0first private note\n' > "$home/notes/aaaa1111"
+  printf 'PLAINTEXT SECOND NOTE SHOULD NOT PUBLISH\n' > "$home/notes/zzzz9999"
+  printf '\0GITCRYPT\0modules manifest\n' > "$home/.modules/manifest"
+
+  git -C "$home" add AGENTS.md notes/.manifest notes/aaaa1111 notes/zzzz9999 .modules/manifest
+  git -C "$home" \
+    -c user.name="fixture" \
+    -c user.email="fixture@example.test" \
+    -c commit.gpgsign=false \
+    commit -q -m "bootstrap mixed-note home"
+}
+
 create_bare_remote() {
   local remote="$1"
   git init -q --bare -b main "$remote"
@@ -296,6 +317,24 @@ SH
   [ "$status" -ne 0 ]
 }
 
+@test "homes:publish-fresh rejects a plaintext second obfuscated note" {
+  home="$BATS_TEST_TMPDIR/home"
+  remote="$BATS_TEST_TMPDIR/home.git"
+  create_mixed_note_home "$home"
+  create_bare_remote "$remote"
+  write_mock_notes_no_changes
+
+  run fold_task homes:publish-fresh test-agent \
+    --home "$home" \
+    --remote-url "$remote" \
+    --no-gpg-sign \
+    --yes
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"HEAD:notes/zzzz9999 is not a git-crypt blob"* ]]
+  run git --git-dir="$remote" show-ref --verify refs/heads/main
+  [ "$status" -ne 0 ]
+}
 
 @test "homes:publish-fresh rejects ignored readable note changes before publishing" {
   home="$BATS_TEST_TMPDIR/home"
