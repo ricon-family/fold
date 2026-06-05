@@ -60,7 +60,7 @@ When a session starts, orient before engaging. Start from your own home repo:
 1. `cd ~/agents/<name>/home && mise welcome` — personal overview, routine pulls, modules init, HUMAN/BULLETIN summaries.
 1. Read your home `AGENTS.md` and its status/scratchpad note (use the path named there; don't assume a literal `Status.md`) — remember where you left off, what's open, what you planned next.
 1. Read your personal adhered-patterns note if you maintain one, then read fold's shared `notes/adhered-patterns.md` — personal commitments plus fold house commitments are both active.
-1. For fold's collective view, `cd ~/agents/<name>/fold && mise welcome`.
+1. For fold's collective view, `cd ~/agents/<name>/home/modules/fold && mise welcome`.
 1. Check recent chat/email when relevant (`chat read`, `emails welcome`).
 1. Read HUMAN.md via `$HUMAN_MD` (or `mise run human`) and `notes/BULLETIN.md` when they have threads involving you or the current task. Do not guess a HUMAN.md path.
 
@@ -158,7 +158,7 @@ For significant changes, two reviewers is a cap, not a default. Prefer serial re
 **Clean up before you leave.** At the end of every session, clean up your workspace:
 - **Check `git status`** on every repo you touched during the session — commit+push or stash anything outstanding
 - **Check for unpushed commits** — don't leave local-only work that could be lost
-- **Push fold** — push your fold clone; other agents pick up changes when they pull
+- **Push fold** — push your fold module checkout; other agents pick up changes when they pull
 - **Update your session log** — this is already practice, but it's part of cleanup, not separate from it
 - **Garden touched durable surfaces** — do one bounded end-of-session gardening pass guided by `notes/garden-patterns.md`; if the first pass feels empty, apply `Cultus Novus` once before giving up.
 - **Plan the next session** — talk through what's next with Or, not just a priority list but what you'd actually work on and in what order. The plan goes in your status/scratchpad note so the next session has a running start.
@@ -254,7 +254,7 @@ Agents have **two** places to store information:
 
 Key commands:
 - `mise welcome` from your home repo — personal orientation and current plate
-- `mise welcome` from this fold clone — fold collective overview
+- `mise welcome` from this fold module checkout — fold collective overview
 - `emails welcome` — Check for messages from humans or other agents
 - `shimmer code:welcome` — Info about the current codebase
 - `shimmer tasks` — See all available commands
@@ -278,23 +278,28 @@ Always use `gh repo clone`, not `git clone` — private repos need auth, and `gh
 
 ## Working with Fold
 
-**Each agent works in their own clone of fold** at `~/agents/<name>/fold/`. This is where you read and edit notes and everything else in this repo. HUMAN.md has moved to Or's home repo (see `$HUMAN_MD`). Multiple agents can work concurrently without conflicting because each has their own copy.
+**Each agent works in their home-managed fold module** at `~/agents/<name>/home/modules/fold/`. This is where you read and edit notes and everything else in this repo. HUMAN.md has moved to Or's home repo (see `$HUMAN_MD`). Multiple agents can work concurrently without conflicting because each has their own module checkout.
 
-**Home repos are not global commands.** `fold` and `den` are home repos for collectives, same as `~/agents/<name>/home` is yours. Orient by `cd`-ing into the clone and running `mise welcome`. Treat shiv-installed copies of *tools* (`~/.local/share/shiv/packages/*` for things like `shimmer`, `notes`, `modules`, `chat`) as read-only — always edit tools in their own working clone, push, then `shiv update <pkg>` to sync. But **home repos themselves are not shiv packages anymore** — the old `fold` and `den` global shims are retired.
+**Home repos are not global commands.** `fold` and `den` are home repos for collectives, same as `~/agents/<name>/home` is yours. Orient by `cd`-ing into the module checkout and running `mise welcome`. Treat shiv-installed copies of *tools* (`~/.local/share/shiv/packages/*` for things like `shimmer`, `notes`, `modules`, `chat`) as read-only — always edit tools in their own working clone, push, then `shiv update <pkg>` to sync. But **home repos themselves are not shiv packages anymore** — the old `fold` and `den` global shims are retired.
 
 ### First-time setup
 
 ```bash
-gh repo clone ricon-family/fold ~/agents/<name>/fold/
-cd ~/agents/<name>/fold/ && notes unlock && modules unlock && modules init && mise trust
+cd ~/agents/<name>/home/
+mise welcome        # or the home setup flow that initializes modules
+cd modules/fold/
+notes unlock
+modules unlock
+modules init
+mise trust
 ```
 
 ### Daily workflow
 
-1. **Pull at session start** — `git pull` in your fold clone, then `modules init` to sync cross-home clones to the currently-pinned SHAs. (`modules update` deliberately advances pins; don't use it as a startup ritual.)
-1. **Edit files** in `~/agents/<name>/fold/`
+1. **Pull at session start** — `git pull` in `~/agents/<name>/home/modules/fold/`, then `modules init` to sync cross-home clones to the currently-pinned SHAs. (`modules update` deliberately advances pins; don't use it as a startup ritual.)
+1. **Edit files** in `~/agents/<name>/home/modules/fold/`
 1. **Commit and push** — commits are GPG-signed automatically (your workspace is under `~/agents/<name>/`)
-1. **Push** — that's it. There's no global shim to sync anymore; other agents will see your changes when they next pull their own fold clone.
+1. **Push** — that's it. There's no global shim to sync anymore; other agents will see your changes when they next pull their own fold module checkout.
 
 ### Obfuscated notes and `git status`
 
