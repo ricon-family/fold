@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+#MISE description="Smoke-check an agent home after bootstrap or adoption"
+#USAGE flag "--home <path>" default="" help="Home repo path (default: ~/agents/<agent>/home)"
+#USAGE flag "--skip-mise" default=#false help="Skip mise trust/install, agent:prepare, and welcome"
+#USAGE arg "<agent>" help="Agent name"
+#USAGE example "mise run homes:smoke iris --home ~/agents/iris/home" header="Smoke an agent home"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck source=.mise/lib/homes.sh
+source "$ROOT/.mise/lib/homes.sh"
+
+AGENT="${usage_agent:?agent required}"
+HOME_PATH=$(homes_resolve_home "$AGENT" "${usage_home:-}")
+SKIP_MISE="${usage_skip_mise:-false}"
+
+validate_agent "$AGENT"
+require_tool "$GIT_BIN"
+homes_require_git_repo "$HOME_PATH"
+
+printf 'Homes smoke\n\n'
+printf 'agent: %s\n' "$AGENT"
+printf 'home:  %s\n\n' "$HOME_PATH"
+
+printf '== repo ==\n'
+"$GIT_BIN" -C "$HOME_PATH" status --short --branch
+homes_require_clean_worktree "$HOME_PATH"
+
+if [ "$SKIP_MISE" != "true" ] && [ -f "$HOME_PATH/mise.toml" ]; then
+  printf '\n== mise ==\n'
+  require_tool mise
+  (cd "$HOME_PATH" && mise trust && mise install)
+  if [ -x "$HOME_PATH/.mise/tasks/agent/prepare" ]; then
+    (cd "$HOME_PATH" && mise run agent:prepare)
+  else
+    echo "agent:prepare: not present"
+  fi
+  if [ -x "$HOME_PATH/.mise/tasks/welcome" ] || [ -f "$HOME_PATH/.mise/tasks/welcome" ]; then
+    (cd "$HOME_PATH" && mise welcome)
+  else
+    echo "welcome: not present"
+  fi
+else
+  printf '\n== mise ==\n'
+  echo "skipped"
+fi
+
+if [ -f "$HOME_PATH/notes/.manifest" ]; then
+  printf '\n== notes ==\n'
+  if command -v "$NOTES_BIN" >/dev/null 2>&1; then
+    (cd "$HOME_PATH" && "$NOTES_BIN" status && "$NOTES_BIN" changes --summary)
+  else
+    echo "ERROR: notes/.manifest exists but notes tool is unavailable" >&2
+    exit 1
+  fi
+fi
+
+if [ -f "$HOME_PATH/.modules/manifest" ]; then
+  printf '\n== modules ==\n'
+  if command -v "$MODULES_BIN" >/dev/null 2>&1; then
+    (cd "$HOME_PATH" && "$MODULES_BIN" status)
+  else
+    echo "ERROR: .modules/manifest exists but modules tool is unavailable" >&2
+    exit 1
+  fi
+fi
