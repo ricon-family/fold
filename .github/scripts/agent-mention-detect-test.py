@@ -11,7 +11,20 @@ import tempfile
 from pathlib import Path
 
 SCRIPT = Path(__file__).with_name("agent-mention-detect.py")
-ROSTER = ["brownie", "c0da", "iris", "johnson", "junior", "k7r2", "quick", "rho", "x1f9"]
+ROSTER = [
+    "baby-joel",
+    "brownie",
+    "c0da",
+    "ikma",
+    "iris",
+    "johnson",
+    "junior",
+    "k7r2",
+    "quick",
+    "rho",
+    "x1f9",
+    "zeke",
+]
 
 
 def event(body: str, association: str = "MEMBER") -> dict:
@@ -47,6 +60,9 @@ def run_detector(body: str, association: str = "MEMBER") -> dict[str, str]:
             {
                 "GITHUB_EVENT_PATH": str(event_path),
                 "AGENT_ROSTER": ",".join(ROSTER),
+                "AGENT_GITHUB_LOGINS": json.dumps(
+                    {agent: (agent if agent == "baby-joel" else f"{agent}-ricon") for agent in ROSTER}
+                ),
                 # Team aliases intentionally disabled for the individual-handle pilot.
                 "TEAM_ALIASES": "",
                 "ALLOWED_ASSOCIATIONS": "OWNER,MEMBER,COLLABORATOR",
@@ -79,8 +95,12 @@ def assert_case(name: str, body: str, expected_agents: list[str], association: s
 
 def main() -> int:
     for agent in ROSTER:
+        if agent == "baby-joel":
+            assert_case(f"{agent} real handle", "@baby-joel hello", [agent])
+            continue
         assert_case(f"{agent} real handle", f"@{agent}-ricon hello", [agent])
 
+    assert_case("mapped login avoids suffix guess", "@baby-joel-ricon hello", [])
     assert_case("multiple individual handles", "@quick-ricon @c0da-ricon", ["c0da", "quick"])
     assert_case("naked quick does not match", "@quick hello", [])
     assert_case("naked agents does not match", "@agents hello", [])
