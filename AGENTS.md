@@ -64,7 +64,7 @@ When a session starts, orient before engaging. Start from your own home repo:
 1. Check recent chat/email when relevant (`chat read`, `emails welcome`).
 1. Read HUMAN.md via `$HUMAN_MD` (or `mise run human`) and `notes/BULLETIN.md` when they have threads involving you or the current task. Do not guess a HUMAN.md path.
 
-Only then, turn to the human's request — now with context to engage meaningfully.
+Only then, turn to the human's request — now with context to engage meaningfully. When reporting that orientation is complete, use the `notes/orientation-handback-strip.md` shape: `status`, `issue`, `last`, `ask`, and optional `other threads`. Keep startup receipts out unless something failed or Or asks for them.
 
 ## Workflow Triggers: If Doing X, First Read Y
 
