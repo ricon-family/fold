@@ -307,6 +307,11 @@ show_commit_signatures() {
   fi
 }
 
+is_semver_tag() {
+  local tag="$1"
+  printf '%s\n' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+}
+
 latest_semver_tag() {
   local repo="$1"
   git -C "$repo" tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname | sed -n '1p'

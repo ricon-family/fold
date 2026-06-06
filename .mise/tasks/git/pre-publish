@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Check a repo before publishing a release tag"
-#USAGE flag "--tag <tag>" default="" help="Intended semver tag, e.g. v0.5.2"
+#USAGE flag "--tag <tag>" default="" help="Intended semver tag, e.g. v0.5.2 or v1.2.0-kkl.2"
 #USAGE arg "[path]" default="" help="Repository path to check (default: caller cwd when invoked through fold git shims, otherwise current dir)"
 set -euo pipefail
 
@@ -76,8 +76,8 @@ fi
 
 if [ -z "$tag" ]; then
   warn "no --tag provided; pass the intended semver tag to check collisions"
-elif ! printf '%s\n' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
-  fail "tag '$tag' is not a vMAJOR.MINOR.PATCH semver tag"
+elif ! is_semver_tag "$tag"; then
+  fail "tag '$tag' is not a vMAJOR.MINOR.PATCH[-PRERELEASE][+BUILD] semver tag"
 else
   ok "tag shape looks like semver: $tag"
   if git -C "$repo" rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
@@ -110,7 +110,7 @@ if [ -n "$tag" ]; then
   info "create signed tag: git -C '$repo' tag -s '$tag' -F '$msg_file'"
   info "push tag: git -C '$repo' push origin '$tag'"
 else
-  info "rerun with intended tag: mise run -C '$MISE_CONFIG_ROOT' git:pre-publish --tag vX.Y.Z '$repo'"
+  info "rerun with intended tag: mise run -C '$MISE_CONFIG_ROOT' git:pre-publish --tag vX.Y.Z[-PRERELEASE] '$repo'"
 fi
 
 summarize
