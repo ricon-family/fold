@@ -21,8 +21,10 @@ jobs:
       should_wake: ${{ steps.detect.outputs.should_wake }}
       reason: ${{ steps.detect.outputs.reason }}
       matched_agents: ${{ steps.detect.outputs.matched_agents }}
+      agent_baby_joel: ${{ steps.detect.outputs.agent_baby_joel }}
       agent_brownie: ${{ steps.detect.outputs.agent_brownie }}
       agent_c0da: ${{ steps.detect.outputs.agent_c0da }}
+      agent_ikma: ${{ steps.detect.outputs.agent_ikma }}
       agent_iris: ${{ steps.detect.outputs.agent_iris }}
       agent_johnson: ${{ steps.detect.outputs.agent_johnson }}
       agent_junior: ${{ steps.detect.outputs.agent_junior }}
@@ -30,6 +32,7 @@ jobs:
       agent_quick: ${{ steps.detect.outputs.agent_quick }}
       agent_rho: ${{ steps.detect.outputs.agent_rho }}
       agent_x1f9: ${{ steps.detect.outputs.agent_x1f9 }}
+      agent_zeke: ${{ steps.detect.outputs.agent_zeke }}
       message: ${{ steps.detect.outputs.message }}
     steps:
       - name: Checkout repository
@@ -38,7 +41,7 @@ jobs:
       - name: Detect mentions
         id: detect
         env:
-          AGENT_ROSTER: brownie,c0da,iris,johnson,junior,k7r2,quick,rho,x1f9
+          AGENT_ROSTER: baby-joel,brownie,c0da,ikma,iris,johnson,junior,k7r2,quick,rho,x1f9,zeke
           AGENT_HANDLE_SUFFIX: "-ricon"
           # Team fanout stays disabled until fanout limits/jitter are designed explicitly.
           TEAM_ALIASES: ""
@@ -55,6 +58,22 @@ jobs:
             echo "- reason: ${{ steps.detect.outputs.reason }}"
             echo "- matched_agents: ${{ steps.detect.outputs.matched_agents }}"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  wake-baby-joel:
+    name: Wake baby-joel
+    needs: detect
+    if: ${{ needs.detect.outputs.agent_baby_joel == 'true' }}
+    concurrency:
+      # At most one running and one pending mention wake per thread/agent.
+      # A newer pending wake replaces an older pending one; running sessions
+      # are not canceled.
+      group: agent-mention-baby-joel-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    uses: ./.github/workflows/baby-joel.yml
+    with:
+      message: ${{ needs.detect.outputs.message }}
+      model: "openai-codex/gpt-5.5"
+    secrets: inherit
 
   wake-brownie:
     name: Wake brownie
@@ -83,6 +102,22 @@ jobs:
       group: agent-mention-c0da-${{ github.event.issue.number }}
       cancel-in-progress: false
     uses: ./.github/workflows/c0da.yml
+    with:
+      message: ${{ needs.detect.outputs.message }}
+      model: "openai-codex/gpt-5.5"
+    secrets: inherit
+
+  wake-ikma:
+    name: Wake ikma
+    needs: detect
+    if: ${{ needs.detect.outputs.agent_ikma == 'true' }}
+    concurrency:
+      # At most one running and one pending mention wake per thread/agent.
+      # A newer pending wake replaces an older pending one; running sessions
+      # are not canceled.
+      group: agent-mention-ikma-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    uses: ./.github/workflows/ikma.yml
     with:
       message: ${{ needs.detect.outputs.message }}
       model: "openai-codex/gpt-5.5"
@@ -195,6 +230,22 @@ jobs:
       group: agent-mention-x1f9-${{ github.event.issue.number }}
       cancel-in-progress: false
     uses: ./.github/workflows/x1f9.yml
+    with:
+      message: ${{ needs.detect.outputs.message }}
+      model: "openai-codex/gpt-5.5"
+    secrets: inherit
+
+  wake-zeke:
+    name: Wake zeke
+    needs: detect
+    if: ${{ needs.detect.outputs.agent_zeke == 'true' }}
+    concurrency:
+      # At most one running and one pending mention wake per thread/agent.
+      # A newer pending wake replaces an older pending one; running sessions
+      # are not canceled.
+      group: agent-mention-zeke-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    uses: ./.github/workflows/zeke.yml
     with:
       message: ${{ needs.detect.outputs.message }}
       model: "openai-codex/gpt-5.5"
