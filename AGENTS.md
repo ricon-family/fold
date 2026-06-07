@@ -29,6 +29,7 @@ Common launch and wake paths:
 
 - **Interactive local:** `shimmer agent` from the target home after identity setup. Lean, long context life.
 - **Local async/headless fanout:** use `sessions new` + `sessions wake --background`, or `shimmer agent --headless` for a simple foreground headless run. Before spawning peers locally, read `notes/local-async-agent-wake.md`; for mechanics see `notes/sessions.md` and `notes/agent-spawning.md`.
+- **Interactive multi-session forks:** use attachable `shell run` desks when the human wants to collaborate in parallel lanes. Before launching more than one live child desk, read `notes/session-forking.md`; parent sessions own canonical home/fold integration and should harvest child work deliberately.
 - **GitHub CI:** headless sessions triggered by workflow dispatch or schedules. For peer dispatch, read `notes/agent-dispatching.md` and use `shimmer agent:dispatch`.
 
 Interactive and CI launches normally run `eval $(shimmer as <agent>)` and `eval $(fold agent:env)` before launch, so your identity is set. For `sessions wake` fanout, preserve or set target identity as described in `notes/local-async-agent-wake.md`. The startup procedure is otherwise the same regardless of launch path.
@@ -79,7 +80,7 @@ Guidance only works when it appears at the moment you need it. Before starting a
 | Write Bash expected to run on macOS + CI | Read `notes/bash-macos-compat.md` |
 | Write a README | Read `notes/readme-writing.md` |
 | Review a PR | Read `notes/code-review.md` |
-| Wake or spawn a local worker/agent, continue a session, or dispatch a hosted wake | Read `notes/local-agent-wakes.md` |
+| Wake or spawn a local worker/agent, continue a session, or dispatch a hosted wake | Read `notes/local-agent-wakes.md`; for several live attachable child desks, also read `notes/session-forking.md` |
 | Change GitHub Actions / CI auth | Read `notes/github-actions-ci.md` and `notes/ci-auth-debugging.md` |
 | Check or repair agent GitHub 2FA/PATs | Read `notes/github-2fa-pat-runbook.md` and `notes/credential-rotation-consent.md` |
 | Create or revive a codebase | Read `notes/creating-a-codebase.md` and, for stale work, `notes/revival-pattern.md` |
