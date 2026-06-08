@@ -52,19 +52,33 @@ homes_agent_dir() {
   printf '%s/%s\n' "$agents_root" "$agent"
 }
 
-homes_agent_gitconfig_path() {
-  local agent="$1" agents_root="$2"
-  printf '%s/.gitconfig\n' "$(homes_agent_dir "$agent" "$agents_root")"
+homes_agent_dir_for_home() {
+  local home_path="$1"
+  dirname "$home_path"
 }
 
-homes_agent_include_key() {
-  local agent="$1" agents_root="$2" agent_dir
-  if [ "$agents_root" = "$HOME/agents" ]; then
+homes_agent_gitconfig_path_for_dir() {
+  local agent_dir="$1"
+  printf '%s/.gitconfig\n' "$agent_dir"
+}
+
+homes_agent_gitconfig_path() {
+  local agent="$1" agents_root="$2"
+  homes_agent_gitconfig_path_for_dir "$(homes_agent_dir "$agent" "$agents_root")"
+}
+
+homes_agent_include_key_for_dir() {
+  local agent="$1" agent_dir="$2"
+  if [ "$agent_dir" = "$HOME/agents/$agent" ]; then
     printf 'includeIf.gitdir:~/agents/%s/.path\n' "$agent"
     return 0
   fi
-  agent_dir=$(homes_agent_dir "$agent" "$agents_root")
   printf 'includeIf.gitdir:%s/.path\n' "$agent_dir"
+}
+
+homes_agent_include_key() {
+  local agent="$1" agents_root="$2"
+  homes_agent_include_key_for_dir "$agent" "$(homes_agent_dir "$agent" "$agents_root")"
 }
 
 homes_infer_agent_from_home() {
@@ -77,6 +91,47 @@ homes_infer_agent_from_home() {
     return 0
   fi
   return 1
+}
+
+homes_strip_wrapping_quotes() {
+  local value="$1"
+  if [[ "$value" == \"*\" ]]; then
+    value="${value#\"}"
+    value="${value%\"}"
+  fi
+  printf '%s\n' "$value"
+}
+
+homes_gpg_import_key_data() (
+  local key_data="$1" tmp
+  shift
+
+  tmp=$(mktemp) || return 1
+  trap 'rm -f "$tmp"' EXIT HUP INT TERM
+  printf '%s' "$key_data" > "$tmp" || return 1
+  "$GPG_BIN" --batch --import "$@" "$tmp"
+)
+
+homes_validate_gpg_key_data() {
+  local key_data="$1"
+
+  if [ -z "$key_data" ]; then
+    echo "ERROR: GPG key is empty" >&2
+    return 1
+  fi
+  if [[ "$key_data" == \"* ]]; then
+    echo "ERROR: GPG key starts with a double quote — likely corrupted" >&2
+    return 1
+  fi
+  if ! printf '%s' "$key_data" | head -1 | grep -q '^-----BEGIN PGP'; then
+    echo "ERROR: GPG key does not start with a PGP armor header" >&2
+    return 1
+  fi
+
+  if ! homes_gpg_import_key_data "$key_data" --dry-run >/dev/null 2>&1; then
+    echo "ERROR: GPG cannot parse key" >&2
+    return 1
+  fi
 }
 
 homes_json_string() {
