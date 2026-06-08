@@ -1,0 +1,562 @@
+#!/usr/bin/env bash
+#MISE description="Show aggregate read-only readiness for an agent home"
+#USAGE flag "--agents-root <path>" default="" help="Agents workspace root (default: ~/agents)"
+#USAGE flag "--home <path>" default="" help="Home repo path (default: <agents-root>/<agent>/home)"
+#USAGE flag "--json" default=#false help="Emit machine-readable JSON"
+#USAGE flag "--check" default=#false help="Exit nonzero when the home is not ready"
+#USAGE arg "[agent]" default="" help="Agent name"
+#USAGE example "mise run homes:status iris" header="Show Iris home readiness"
+#USAGE example "mise run homes:status iris --json --check" header="Machine-check Iris home readiness"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck source=.mise/lib/homes.sh
+source "$ROOT/.mise/lib/homes.sh"
+# shellcheck source=.mise/lib/homes_render.sh
+source "$ROOT/.mise/lib/homes_render.sh"
+
+AGENT="${usage_agent:-iris}"
+HOME_PATH="${usage_home:-}"
+AGENTS_ROOT=$(homes_resolve_agents_root "${usage_agents_root:-}")
+JSON="${usage_json:-false}"
+CHECK="${usage_check:-false}"
+JQ_BIN="${JQ:-jq}"
+validate_agent "$AGENT"
+
+if [ -z "$HOME_PATH" ]; then
+  HOME_PATH="$AGENTS_ROOT/$AGENT/home"
+fi
+
+TEXT_MODE=true
+[ "$JSON" = "true" ] && TEXT_MODE=false
+COLOR_MODE=false
+if [ "$TEXT_MODE" = "true" ] && [ -t 1 ] && command -v gum >/dev/null 2>&1; then
+  COLOR_MODE=true
+fi
+
+SECTION_COUNT=0
+SECTION_NAMES=()
+SECTION_FILES=()
+NEXT_ACTION=""
+HOME_EXISTS=false
+HOME_IS_GIT=false
+
+TMP_ROOT=$(mktemp -d)
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+set_next_once() {
+  local action="$1"
+  if [ -z "$NEXT_ACTION" ]; then
+    NEXT_ACTION="$action"
+  fi
+}
+
+begin_section() {
+  local title="$1" out_file
+  out_file="$TMP_ROOT/section-$SECTION_COUNT.tsv"
+  : > "$out_file"
+  SECTION_NAMES+=("$title")
+  SECTION_FILES+=("$out_file")
+  SECTION_OUT="$out_file"
+  SECTION_COUNT=$((SECTION_COUNT + 1))
+}
+
+record_row() {
+  homes_render_record_row "$SECTION_OUT" "$@"
+}
+
+record_fail() {
+  local label="$1" detail="$2" next="$3"
+  record_row "$label" fail "$detail"
+  set_next_once "$next"
+}
+
+run_section() {
+  local title="$1" check_func="$2"
+  begin_section "$title"
+  "$check_func"
+}
+
+section_in_group() {
+  local section="$1" group="$2"
+  case "$section" in
+    "$group"|"$group: "*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+group_status() {
+  local group="$1" i section status result=ok found=false
+  for ((i = 0; i < ${#SECTION_NAMES[@]}; i++)); do
+    section="${SECTION_NAMES[$i]}"
+    section_in_group "$section" "$group" || continue
+    found=true
+    status=$(homes_render_file_status "${SECTION_FILES[$i]}")
+    if [ "$status" = fail ]; then
+      printf 'fail\n'
+      return 0
+    fi
+    [ "$status" = warn ] && result=warn
+  done
+  if [ "$found" != "true" ]; then
+    printf 'warn\n'
+  else
+    printf '%s\n' "$result"
+  fi
+}
+
+group_first_non_ok_detail() {
+  local group="$1" i section file name status detail
+  for ((i = 0; i < ${#SECTION_NAMES[@]}; i++)); do
+    section="${SECTION_NAMES[$i]}"
+    section_in_group "$section" "$group" || continue
+    file="${SECTION_FILES[$i]}"
+    while IFS=$'\t' read -r name status detail; do
+      [ -n "$name" ] || continue
+      [ "$status" = ok ] && continue
+      if [ "$section" = "$group" ]; then
+        printf '%s: %s\n' "$name" "$detail"
+      else
+        printf '%s / %s: %s\n' "${section#$group: }" "$name" "$detail"
+      fi
+      return 0
+    done < "$file"
+  done
+  printf 'review details\n'
+}
+
+section_detail() {
+  local group="$1" label="$2" file name status detail
+  for ((i = 0; i < ${#SECTION_NAMES[@]}; i++)); do
+    [ "${SECTION_NAMES[$i]}" = "$group" ] || continue
+    file="${SECTION_FILES[$i]}"
+    while IFS=$'\t' read -r name status detail; do
+      [ "$name" = "$label" ] || continue
+      printf '%s\n' "$detail"
+      return 0
+    done < "$file"
+  done
+  return 1
+}
+
+group_ok_detail() {
+  local group="$1" head modules=0
+  case "$group" in
+    Auth)
+      printf 'ready\n'
+      ;;
+    Home)
+      head=$(section_detail Home HEAD || true)
+      if [ -n "$head" ]; then
+        printf 'clean %s\n' "$head"
+      else
+        printf 'ready\n'
+      fi
+      ;;
+    Notes)
+      printf 'clean\n'
+      ;;
+    Modules)
+      modules=$(count_module_rows)
+      printf '%s module(s) at pin\n' "$modules"
+      ;;
+    *)
+      printf 'ready\n'
+      ;;
+  esac
+}
+
+group_detail() {
+  local group="$1" status="$2"
+  if [ "$status" = ok ]; then
+    group_ok_detail "$group"
+  else
+    group_first_non_ok_detail "$group"
+  fi
+}
+
+section_warning_count() {
+  local file count=0
+  for file in ${SECTION_FILES[@]+"${SECTION_FILES[@]}"}; do
+    count=$((count + $(homes_render_file_warning_count "$file")))
+  done
+  printf '%s\n' "$count"
+}
+
+section_has_failures() {
+  local file
+  for file in ${SECTION_FILES[@]+"${SECTION_FILES[@]}"}; do
+    homes_render_file_has_failure "$file" && return 0
+  done
+  return 1
+}
+
+is_ready() {
+  ! section_has_failures
+}
+
+count_module_rows() {
+  local i file name status detail count=0
+  for ((i = 0; i < ${#SECTION_NAMES[@]}; i++)); do
+    [ "${SECTION_NAMES[$i]}" = "Modules" ] || continue
+    file="${SECTION_FILES[$i]}"
+    while IFS=$'\t' read -r name status detail; do
+      case "$name" in
+        module:*) [ "$status" = ok ] && count=$((count + 1)) ;;
+      esac
+    done < "$file"
+  done
+  printf '%s\n' "$count"
+}
+
+timeout_command() {
+  command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null
+}
+
+collect_auth() {
+  local auth_output auth_status=0 auth_rows auth_next current_section section name status detail timeout_bin auth_timeout auth_stderr
+  auth_rows="$TMP_ROOT/auth.tsv"
+  auth_stderr="$TMP_ROOT/auth.stderr"
+  auth_timeout="${HOMES_STATUS_AUTH_TIMEOUT:-20}"
+
+  if ! command -v "$JQ_BIN" >/dev/null 2>&1; then
+    begin_section "Auth"
+    record_fail "jq" "not available for parsing homes:auth JSON" "mise install"
+    return 0
+  fi
+
+  if timeout_bin=$(timeout_command); then
+    if auth_output=$(
+      cd "$ROOT" && "$timeout_bin" "$auth_timeout" mise run -q homes:auth "$AGENT" \
+        --agents-root "$AGENTS_ROOT" \
+        --home "$HOME_PATH" \
+        --json \
+        --check 2>"$auth_stderr"
+    ); then
+      auth_status=0
+    else
+      auth_status=$?
+    fi
+  elif auth_output=$(
+    cd "$ROOT" && mise run -q homes:auth "$AGENT" \
+      --agents-root "$AGENTS_ROOT" \
+      --home "$HOME_PATH" \
+      --json \
+      --check 2>"$auth_stderr"
+  ); then
+    auth_status=0
+  else
+    auth_status=$?
+  fi
+
+  if [ "$auth_status" -eq 124 ]; then
+    begin_section "Auth"
+    record_fail "homes:auth" "timed out after ${auth_timeout}s" "mise run homes:auth $AGENT --home $HOME_PATH"
+    return 0
+  fi
+
+  if [ "$auth_status" -ne 0 ] && [ "$auth_status" -ne 1 ]; then
+    begin_section "Auth"
+    record_fail "homes:auth" "failed unexpectedly (exit $auth_status)" "mise run homes:auth $AGENT --home $HOME_PATH"
+    return 0
+  fi
+
+  if ! printf '%s' "$auth_output" | "$JQ_BIN" -r '.sections[] as $section | $section.checks[] | [$section.name, .name, .status, .detail] | @tsv' > "$auth_rows"; then
+    begin_section "Auth"
+    record_fail "homes:auth" "did not emit parseable JSON" "mise run homes:auth $AGENT --json"
+    return 0
+  fi
+
+  auth_next=$(printf '%s' "$auth_output" | "$JQ_BIN" -r '.next // empty')
+  [ "$auth_status" -eq 1 ] && set_next_once "${auth_next:-auth setup needed; setup task is pending follow-up}"
+
+  current_section=""
+  while IFS=$'\t' read -r section name status detail; do
+    [ -n "$section" ] || continue
+    if [ "$section" != "$current_section" ]; then
+      begin_section "Auth: $section"
+      current_section="$section"
+    fi
+    record_row "$name" "$status" "$detail"
+  done < "$auth_rows"
+
+  if [ "$current_section" = "" ]; then
+    begin_section "Auth"
+    record_fail "homes:auth" "emitted no checks" "mise run homes:auth $AGENT --json"
+  fi
+}
+
+check_home() {
+  local status head branch origin
+
+  if [ ! -e "$HOME_PATH" ]; then
+    HOME_EXISTS=false
+    record_fail "Home path" "missing $HOME_PATH" "mise run homes:adopt-remote $AGENT --repo <owner/repo> --yes"
+    return 0
+  fi
+  HOME_EXISTS=true
+
+  if [ ! -d "$HOME_PATH" ]; then
+    record_fail "Home path" "not a directory: $HOME_PATH" "resolve home path before continuing"
+    return 0
+  fi
+  record_row "Home path" ok "$HOME_PATH"
+
+  if ! "$GIT_BIN" -C "$HOME_PATH" rev-parse --git-dir >/dev/null 2>&1; then
+    HOME_IS_GIT=false
+    record_fail "Git repo" "not a git repository" "clone or adopt the agent home repo"
+    return 0
+  fi
+  HOME_IS_GIT=true
+  record_row "Git repo" ok "present"
+
+  if head=$("$GIT_BIN" -C "$HOME_PATH" rev-parse --short HEAD 2>/dev/null); then
+    branch=$("$GIT_BIN" -C "$HOME_PATH" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+    [ -n "$branch" ] || branch="detached"
+    [ "$branch" = "HEAD" ] && branch="detached"
+    record_row "HEAD" ok "$branch @ $head"
+  else
+    record_fail "HEAD" "no commits" "finish or adopt the home bootstrap commit"
+  fi
+
+  if status=$("$GIT_BIN" -C "$HOME_PATH" status --porcelain 2>/dev/null); then
+    if [ -z "$status" ]; then
+      record_row "Worktree" ok "clean"
+    else
+      record_fail "Worktree" "dirty; run git status --short in the home" "git -C $HOME_PATH status --short"
+    fi
+  else
+    record_fail "Worktree" "could not inspect worktree" "git -C $HOME_PATH status --short"
+  fi
+
+  if origin=$("$GIT_BIN" -C "$HOME_PATH" remote get-url origin 2>/dev/null); then
+    record_row "Origin" ok "$(homes_redact_url "$origin")"
+  else
+    record_row "Origin" warn "not configured"
+  fi
+
+  if [ -f "$HOME_PATH/AGENTS.md" ]; then
+    record_row "AGENTS.md" ok "present"
+  else
+    record_fail "AGENTS.md" "missing" "restore or render the home scaffold"
+  fi
+
+  if [ -f "$HOME_PATH/mise.toml" ]; then
+    record_row "mise.toml" ok "present"
+  else
+    record_row "mise.toml" warn "missing"
+  fi
+
+  if [ -x "$HOME_PATH/.mise/tasks/agent/prepare" ]; then
+    record_row "agent:prepare" ok "present"
+  else
+    record_row "agent:prepare" warn "missing"
+  fi
+}
+
+check_notes() {
+  local manifest notes_changes tracked_readable
+  manifest="$HOME_PATH/notes/.manifest"
+
+  if [ "$HOME_EXISTS" != "true" ] || [ ! -d "$HOME_PATH" ]; then
+    record_row "Notes" warn "skipped; home path unavailable"
+    return 0
+  fi
+
+  if [ ! -d "$HOME_PATH/notes" ]; then
+    record_row "Notes dir" warn "missing notes/"
+    return 0
+  fi
+  record_row "Notes dir" ok "present"
+
+  if [ ! -f "$manifest" ]; then
+    record_row "Notes manifest" warn "missing notes/.manifest"
+  elif homes_file_is_gitcrypt_blob "$manifest"; then
+    record_fail "Notes manifest" "locked git-crypt blob" "cd $HOME_PATH && notes unlock"
+  else
+    record_row "Notes manifest" ok "readable"
+
+    if ! command -v "$NOTES_BIN" >/dev/null 2>&1; then
+      record_fail "Notes tool" "not available" "install notes or run mise install in the home"
+    elif notes_changes=$(cd "$HOME_PATH" && "$NOTES_BIN" changes --summary 2>&1); then
+      if [ "$notes_changes" = "No changes." ]; then
+        record_row "Notes changes" ok "clean"
+      else
+        record_fail "Notes changes" "pending readable note changes" "cd $HOME_PATH && notes changes --summary"
+      fi
+    else
+      record_fail "Notes changes" "could not inspect notes workflow" "cd $HOME_PATH && notes changes --summary"
+    fi
+  fi
+
+  if [ "$HOME_IS_GIT" = "true" ]; then
+    if ! tracked_readable=$("$GIT_BIN" -C "$HOME_PATH" ls-files 'notes/*.md' 2>/dev/null); then
+      tracked_readable=""
+    fi
+    if [ -n "$tracked_readable" ]; then
+      record_fail "Tracked readable notes" "readable notes/*.md are tracked" "cd $HOME_PATH && notes stage"
+    else
+      record_row "Tracked readable notes" ok "none"
+    fi
+  fi
+}
+
+check_modules() {
+  local manifest name url pin track module_dir head any_modules=false
+  manifest="$HOME_PATH/.modules/manifest"
+
+  if [ "$HOME_EXISTS" != "true" ] || [ ! -d "$HOME_PATH" ]; then
+    record_row "Modules" warn "skipped; home path unavailable"
+    return 0
+  fi
+
+  if [ ! -f "$manifest" ]; then
+    record_row "Modules manifest" warn "missing .modules/manifest"
+    return 0
+  fi
+
+  if homes_file_is_gitcrypt_blob "$manifest"; then
+    record_fail "Modules manifest" "locked git-crypt blob" "cd $HOME_PATH && modules unlock"
+    return 0
+  fi
+  record_row "Modules manifest" ok "readable"
+
+  if command -v "$MODULES_BIN" >/dev/null 2>&1; then
+    record_row "Modules tool" ok "available"
+  else
+    record_fail "Modules tool" "not available" "install modules or run mise install in the home"
+  fi
+
+  while IFS=$'\t' read -r name url pin track; do
+    [ -n "$name" ] || continue
+    any_modules=true
+    head=""
+    module_dir="$HOME_PATH/modules/$name"
+    if [ ! -d "$module_dir" ]; then
+      record_fail "module:$name" "missing clone" "cd $HOME_PATH && modules init"
+      continue
+    fi
+    if ! "$GIT_BIN" -C "$module_dir" rev-parse --git-dir >/dev/null 2>&1; then
+      record_fail "module:$name" "not a git repository" "cd $HOME_PATH && modules init"
+      continue
+    fi
+    if head=$("$GIT_BIN" -C "$module_dir" rev-parse HEAD 2>/dev/null) && [ -n "$pin" ] && [ "$head" = "$pin" ]; then
+      record_row "module:$name" ok "at pin ${pin:0:12}"
+    elif [ -n "${head:-}" ] && [ -n "$pin" ]; then
+      record_fail "module:$name" "at ${head:0:12}; expected ${pin:0:12}" "cd $HOME_PATH && modules init"
+    else
+      record_fail "module:$name" "could not inspect pin" "cd $HOME_PATH && modules status"
+    fi
+  done < "$manifest"
+
+  if [ "$any_modules" != "true" ]; then
+    record_row "Modules" warn "manifest has no modules"
+  fi
+}
+
+default_next_action() {
+  local warnings
+  if [ -n "$NEXT_ACTION" ]; then
+    printf '%s\n' "$NEXT_ACTION"
+    return 0
+  fi
+  warnings=$(section_warning_count)
+  if [ "$warnings" -gt 0 ]; then
+    printf 'review warnings above\n'
+  else
+    printf 'home ready\n'
+  fi
+}
+
+print_summary() {
+  local group status detail badge
+  homes_render_heading "Summary" "$COLOR_MODE"
+  if command -v gum >/dev/null 2>&1; then
+    {
+      printf 'Section\tStatus\tDetail\n'
+      for group in Auth Home Notes Modules; do
+        status=$(group_status "$group")
+        detail=$(group_detail "$group" "$status")
+        badge=$(homes_render_status_badge "$status" "$COLOR_MODE")
+        printf '%s\t%s\t%s\n' "$group" "$badge" "$detail"
+      done
+    } | gum table --print --separator $'\t' --border rounded
+  else
+    printf 'Section\tStatus\tDetail\n'
+    for group in Auth Home Notes Modules; do
+      status=$(group_status "$group")
+      detail=$(group_detail "$group" "$status")
+      badge=$(homes_render_status_badge "$status" "$COLOR_MODE")
+      printf '%s\t%s\t%s\n' "$group" "$badge" "$detail"
+    done
+  fi
+}
+
+print_expanded_sections() {
+  local group status i section printed=false
+  for group in Auth Home Notes Modules; do
+    status=$(group_status "$group")
+    [ "$status" = ok ] && continue
+    for ((i = 0; i < ${#SECTION_NAMES[@]}; i++)); do
+      section="${SECTION_NAMES[$i]}"
+      section_in_group "$section" "$group" || continue
+      printf '\n'
+      homes_render_heading "$section" "$COLOR_MODE"
+      homes_render_table "${SECTION_FILES[$i]}" "$COLOR_MODE"
+      printed=true
+    done
+  done
+  $printed || return 0
+}
+
+print_next() {
+  [ "$TEXT_MODE" = "true" ] || return 0
+  printf '\n'
+  homes_render_heading "Next" "$COLOR_MODE"
+  default_next_action
+}
+
+print_json() {
+  local ready="true" warnings next i file first_section="true"
+  is_ready || ready="false"
+  warnings=$(section_warning_count)
+  next=$(default_next_action)
+
+  printf '{'
+  printf '"agent":'; homes_json_string "$AGENT"
+  printf ',"home":'; homes_json_string "$HOME_PATH"
+  printf ',"ready":%s' "$ready"
+  printf ',"warnings":%s' "$warnings"
+  printf ',"next":'; homes_json_string "$next"
+  printf ',"sections":['
+  for ((i = 0; i < ${#SECTION_NAMES[@]}; i++)); do
+    if [ "$first_section" = "true" ]; then first_section="false"; else printf ','; fi
+    file="${SECTION_FILES[$i]}"
+    homes_render_json_section "${SECTION_NAMES[$i]}" "$file"
+  done
+  printf ']}'
+  printf '\n'
+}
+
+if [ "$TEXT_MODE" = "true" ]; then
+  printf 'Homes status: %s\n' "$AGENT"
+  printf 'home: %s\n\n' "$HOME_PATH"
+fi
+
+collect_auth
+run_section "Home" check_home
+run_section "Notes" check_notes
+run_section "Modules" check_modules
+
+if [ "$TEXT_MODE" = "true" ]; then
+  print_summary
+  print_expanded_sections
+  print_next
+else
+  print_json
+fi
+
+if [ "$CHECK" = "true" ] && ! is_ready; then
+  exit 1
+fi
+exit 0

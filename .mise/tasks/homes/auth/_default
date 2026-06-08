@@ -1,0 +1,291 @@
+#!/usr/bin/env bash
+#MISE description="Show local auth/signing readiness for an agent home"
+#USAGE flag "--agents-root <path>" default="" help="Agents workspace root (default: ~/agents)"
+#USAGE flag "--home <path>" default="" help="Home repo path (default: <agents-root>/<agent>/home)"
+#USAGE flag "--json" default=#false help="Emit machine-readable JSON"
+#USAGE flag "--check" default=#false help="Exit nonzero when local auth is not ready"
+#USAGE arg "[agent]" default="" help="Agent name"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck source=.mise/lib/homes.sh
+source "$ROOT/.mise/lib/homes.sh"
+# shellcheck source=.mise/lib/homes_render.sh
+source "$ROOT/.mise/lib/homes_render.sh"
+
+AGENT="${usage_agent:-iris}"
+HOME_PATH="${usage_home:-}"
+AGENTS_ROOT=$(homes_resolve_agents_root "${usage_agents_root:-}")
+JSON="${usage_json:-false}"
+CHECK="${usage_check:-false}"
+validate_agent "$AGENT"
+
+if [ -z "$HOME_PATH" ]; then
+  HOME_PATH="$AGENTS_ROOT/$AGENT/home"
+fi
+EMAIL=$(homes_agent_email "$AGENT")
+AGENT_DIR=$(homes_agent_dir "$AGENT" "$AGENTS_ROOT")
+GITCONFIG=$(homes_agent_gitconfig_path "$AGENT" "$AGENTS_ROOT")
+INCLUDE_KEY=$(homes_agent_include_key "$AGENT" "$AGENTS_ROOT")
+
+TEXT_MODE=true
+[ "$JSON" = "true" ] && TEXT_MODE=false
+SPINNER_MODE=false
+if [ "$TEXT_MODE" = "true" ] && [ -t 0 ] && [ -w /dev/tty ] && command -v gum >/dev/null 2>&1; then
+  SPINNER_MODE=true
+fi
+COLOR_MODE="$SPINNER_MODE"
+PHASE_COUNT=0
+PHASE_NAMES=()
+PHASE_FILES=()
+
+TMP_ROOT=$(mktemp -d)
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+record_row() {
+  homes_render_record_row "$PHASE_OUT" "$@"
+}
+
+parse_github_expiry_epoch() {
+  local value="$1" epoch
+  if epoch=$(date -u -d "$value" +%s 2>/dev/null); then
+    printf '%s\n' "$epoch"
+    return 0
+  fi
+  if epoch=$(date -j -u -f "%Y-%m-%d %H:%M:%S %Z" "$value" +%s 2>/dev/null); then
+    printf '%s\n' "$epoch"
+    return 0
+  fi
+  return 1
+}
+
+check_secrets() {
+  local key label value
+
+  if ! command -v "$SECRETS_BIN" >/dev/null 2>&1; then
+    record_row "Secrets tool" fail "not available"
+    record_row "GPG fingerprint" fail "secrets tool unavailable"
+    record_row "GPG private key" fail "secrets tool unavailable"
+    record_row "GitHub username" fail "secrets tool unavailable"
+    record_row "GitHub PAT" fail "secrets tool unavailable"
+    return 0
+  fi
+
+  record_row "Secrets tool" ok "available"
+  while IFS='|' read -r key label; do
+    [ -n "$key" ] || continue
+    if value=$("$SECRETS_BIN" get "$AGENT/$key" 2>/dev/null) && [ -n "$value" ]; then
+      record_row "$label" ok "present"
+    else
+      record_row "$label" fail "missing or empty"
+    fi
+    unset value
+  done <<'EOF_SECRETS'
+gpg-fingerprint|GPG fingerprint
+gpg-private-key|GPG private key
+github-username|GitHub username
+github-pat|GitHub PAT
+EOF_SECRETS
+}
+
+check_signing() {
+  local fingerprint configured_name configured_email configured_key configured_sign include_values
+
+  if ! fingerprint=$("$SECRETS_BIN" get "$AGENT/gpg-fingerprint" 2>/dev/null) || [ -z "$fingerprint" ]; then
+    record_row "GPG secret key" fail "skipped; no stored fingerprint"
+  elif ! command -v "$GPG_BIN" >/dev/null 2>&1; then
+    record_row "GPG secret key" fail "gpg tool unavailable"
+  elif "$GPG_BIN" --list-secret-keys "$fingerprint" >/dev/null 2>&1; then
+    record_row "GPG secret key" ok "present for stored fingerprint"
+  else
+    record_row "GPG secret key" fail "missing for stored fingerprint"
+  fi
+
+  if [ -f "$GITCONFIG" ]; then
+    configured_name=$("$GIT_BIN" config --file "$GITCONFIG" user.name 2>/dev/null || true)
+    configured_email=$("$GIT_BIN" config --file "$GITCONFIG" user.email 2>/dev/null || true)
+    configured_key=$("$GIT_BIN" config --file "$GITCONFIG" user.signingkey 2>/dev/null || true)
+    configured_sign=$("$GIT_BIN" config --file "$GITCONFIG" commit.gpgsign 2>/dev/null || true)
+    if [ "$configured_name" = "$AGENT" ] && [ "$configured_email" = "$EMAIL" ] && [ -n "${fingerprint:-}" ] && [ "$configured_key" = "$fingerprint" ] && [ "$configured_sign" = "true" ]; then
+      record_row "Git config" ok "$GITCONFIG"
+    else
+      record_row "Git config" fail "present but does not match expected agent identity"
+    fi
+  else
+    record_row "Git config" fail "missing $GITCONFIG"
+  fi
+
+  include_values=""
+  if include_values=$("$GIT_BIN" config --global --get-all "$INCLUDE_KEY" 2>/dev/null); then
+    :
+  else
+    include_values=""
+  fi
+  if printf '%s\n' "$include_values" | grep -Fxq "$GITCONFIG"; then
+    record_row "Git includeIf" ok "$INCLUDE_KEY"
+  else
+    record_row "Git includeIf" fail "missing include for $AGENT_DIR"
+  fi
+}
+
+check_github() {
+  local username token response login expiry epoch now days note
+
+  if ! username=$("$SECRETS_BIN" get "$AGENT/github-username" 2>/dev/null) || [ -z "$username" ]; then
+    record_row "GitHub token" fail "missing GitHub username secret"
+    return 0
+  fi
+  if ! token=$("$SECRETS_BIN" get "$AGENT/github-pat" 2>/dev/null) || [ -z "$token" ]; then
+    record_row "GitHub token" fail "missing GitHub PAT secret"
+    return 0
+  fi
+  if ! command -v "$GH_BIN" >/dev/null 2>&1; then
+    record_row "GitHub token" fail "gh tool unavailable"
+    return 0
+  fi
+
+  if ! response=$(GH_TOKEN="$token" "$GH_BIN" api /user -i 2>&1); then
+    record_row "GitHub token" fail "validation failed"
+    return 0
+  fi
+  unset token
+
+  login=$(printf '%s\n' "$response" | sed -n 's/.*"login"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+  [ -n "$login" ] || login="-"
+  if [ "$login" != "$username" ]; then
+    record_row "GitHub token" fail "valid as $login, expected $username"
+    return 0
+  fi
+
+  expiry=$(printf '%s\n' "$response" | awk '
+    tolower($0) ~ /^github-authentication-token-expiration:/ {
+      sub(/^[^:]*:[[:space:]]*/, "")
+      sub(/\r$/, "")
+      print
+      exit
+    }
+  ')
+
+  if [ -z "$expiry" ]; then
+    record_row "GitHub token" ok "valid as $username; no expiration"
+    return 0
+  fi
+
+  if epoch=$(parse_github_expiry_epoch "$expiry"); then
+    now=$(date -u +%s)
+    days=$(( (epoch - now) / 86400 ))
+    note=""
+    if [ "$days" -lt 0 ]; then
+      note="; expired"
+    elif [ "$days" -le 7 ]; then
+      note="; rotate soon"
+    fi
+    record_row "GitHub token" ok "valid as $username; expires in $days day(s)$note"
+  else
+    record_row "GitHub token" ok "valid as $username; expires $expiry"
+  fi
+}
+
+run_phase_check() {
+  local check_func="$1" out_file="$2"
+  PHASE_OUT="$out_file"
+  export PHASE_OUT AGENT EMAIL AGENT_DIR GITCONFIG INCLUDE_KEY GIT_BIN GPG_BIN GH_BIN SECRETS_BIN
+  export -f homes_render_record_row record_row parse_github_expiry_epoch check_secrets check_signing check_github
+
+  if [ "$SPINNER_MODE" = "true" ]; then
+    PHASE_OUT="$out_file" gum spin --title "$PHASE_SPINNER" -- bash -c '
+      set -euo pipefail
+      start=$SECONDS
+      status=0
+      "$1" || status=$?
+      elapsed=$((SECONDS - start))
+      [ "$elapsed" -lt 1 ] && sleep $((1 - elapsed))
+      exit "$status"
+    ' phase-runner "$check_func"
+  else
+    "$check_func"
+  fi
+}
+
+run_phase() {
+  local title="$1" spinner="$2" check_func="$3" out_file
+  out_file="$TMP_ROOT/${title// /-}.tsv"
+  : > "$out_file"
+  PHASE_NAMES+=("$title")
+  PHASE_FILES+=("$out_file")
+
+  if [ "$TEXT_MODE" = "true" ]; then
+    [ "$PHASE_COUNT" -gt 0 ] && printf '\n'
+    PHASE_SPINNER="$spinner" run_phase_check "$check_func" "$out_file"
+    homes_render_heading "$title" "$COLOR_MODE"
+    homes_render_table "$out_file" "$COLOR_MODE"
+  else
+    PHASE_SPINNER="$spinner" run_phase_check "$check_func" "$out_file"
+  fi
+
+  PHASE_COUNT=$((PHASE_COUNT + 1))
+}
+
+is_ready() {
+  local file name status detail
+  for file in ${PHASE_FILES[@]+"${PHASE_FILES[@]}"}; do
+    while IFS=$'\t' read -r name status detail; do
+      [ -n "$name" ] || continue
+      [ "$status" = ok ] || return 1
+    done < "$file"
+  done
+  return 0
+}
+
+auth_next() {
+  if is_ready; then
+    printf 'auth ready\n'
+  else
+    printf 'auth setup needed; homes:auth:setup is pending follow-up\n'
+  fi
+}
+
+print_next() {
+  [ "$TEXT_MODE" = "true" ] || return 0
+  printf '\n'
+  homes_render_heading "Next" "$COLOR_MODE"
+  auth_next
+}
+
+print_json() {
+  local ready="true" i file first_section="true" first_check name status detail next
+  is_ready || ready="false"
+  next=$(auth_next)
+
+  printf '{'
+  printf '"agent":'; homes_json_string "$AGENT"
+  printf ',"home":'; homes_json_string "$HOME_PATH"
+  printf ',"ready":%s' "$ready"
+  printf ',"next":'; homes_json_string "$next"
+  printf ',"sections":['
+  for ((i = 0; i < ${#PHASE_NAMES[@]}; i++)); do
+    if [ "$first_section" = "true" ]; then first_section="false"; else printf ','; fi
+    file="${PHASE_FILES[$i]}"
+    homes_render_json_section "${PHASE_NAMES[$i]}" "$file"
+  done
+  printf ']}'
+  printf '\n'
+}
+
+if [ "$TEXT_MODE" = "true" ]; then
+  printf 'Homes auth: %s\n\n' "$AGENT"
+fi
+
+run_phase "Secrets" "Checking: secrets" check_secrets
+run_phase "Signing" "Checking: signing" check_signing
+run_phase "GitHub" "Checking: GitHub token" check_github
+print_next
+
+if [ "$JSON" = "true" ]; then
+  print_json
+fi
+
+if [ "$CHECK" = "true" ] && ! is_ready; then
+  exit 1
+fi
+exit 0

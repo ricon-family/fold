@@ -34,6 +34,61 @@ homes_resolve_home() {
   fi
 }
 
+homes_default_agents_root() {
+  printf '%s/agents\n' "$HOME"
+}
+
+homes_resolve_agents_root() {
+  local agents_root="$1"
+  if [ -n "$agents_root" ]; then
+    printf '%s\n' "$agents_root"
+  else
+    homes_default_agents_root
+  fi
+}
+
+homes_agent_dir() {
+  local agent="$1" agents_root="$2"
+  printf '%s/%s\n' "$agents_root" "$agent"
+}
+
+homes_agent_gitconfig_path() {
+  local agent="$1" agents_root="$2"
+  printf '%s/.gitconfig\n' "$(homes_agent_dir "$agent" "$agents_root")"
+}
+
+homes_agent_include_key() {
+  local agent="$1" agents_root="$2" agent_dir
+  if [ "$agents_root" = "$HOME/agents" ]; then
+    printf 'includeIf.gitdir:~/agents/%s/.path\n' "$agent"
+    return 0
+  fi
+  agent_dir=$(homes_agent_dir "$agent" "$agents_root")
+  printf 'includeIf.gitdir:%s/.path\n' "$agent_dir"
+}
+
+homes_infer_agent_from_home() {
+  local home_path="$1" base parent
+  [ -n "$home_path" ] || return 1
+  base=$(basename "$home_path")
+  parent=$(basename "$(dirname "$home_path")")
+  if [ "$base" = "home" ] && [ -n "$parent" ]; then
+    printf '%s\n' "$parent"
+    return 0
+  fi
+  return 1
+}
+
+homes_json_string() {
+  local value="$1"
+  value=${value//\\/\\\\}
+  value=${value//\"/\\\"}
+  value=${value//$'\n'/\\n}
+  value=${value//$'\r'/\\r}
+  value=${value//$'\t'/\\t}
+  printf '"%s"' "$value"
+}
+
 homes_require_git_repo() {
   local home_path="$1"
 
@@ -121,6 +176,21 @@ homes_blob_hex10() {
   hex=$(LC_ALL=C od -An -tx1 -N10 "$tmp" | tr -d ' \n')
   rm -f "$tmp"
   printf '%s\n' "$hex"
+}
+
+homes_file_hex10() {
+  local path="$1" tmp hex
+  tmp=$(mktemp)
+  LC_ALL=C od -An -tx1 -N10 "$path" > "$tmp"
+  hex=$(tr -d ' \n' < "$tmp")
+  rm -f "$tmp"
+  printf '%s\n' "$hex"
+}
+
+homes_file_is_gitcrypt_blob() {
+  local path="$1"
+  [ -f "$path" ] || return 1
+  [ "$(homes_file_hex10 "$path")" = "00474954435259505400" ]
 }
 
 homes_assert_gitcrypt_blob() {
