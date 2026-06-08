@@ -76,16 +76,11 @@ validate_github_token() {
 }
 
 import_private_key() {
-  local key_data="$1" tmp output
-  tmp=$(mktemp)
-  printf '%s' "$key_data" > "$tmp"
-  if ! output=$("$GPG_BIN" --batch --import "$tmp" 2>&1); then
-    rm -f "$tmp"
-    output=$(clean_error "$output")
-    echo "ERROR: GPG import failed: ${output:-unknown failure}" >&2
+  local key_data="$1"
+  if ! homes_gpg_import_key_data "$key_data" >/dev/null 2>&1; then
+    echo "ERROR: GPG import failed" >&2
     exit 1
   fi
-  rm -f "$tmp"
 }
 
 fingerprint=$(get_secret_required "gpg-fingerprint")

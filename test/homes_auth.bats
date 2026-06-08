@@ -72,13 +72,17 @@ fi
 
 if has_arg "--import" "$@" && has_arg "--dry-run" "$@"; then
   grep -q "BEGIN PGP" "$last_arg"
+  if [ "${FAKE_GPG_DRY_RUN_FAIL:-false}" = "true" ]; then
+    echo "parse failed intentionally: fixture-secret-material" >&2
+    exit 43
+  fi
   exit 0
 fi
 
 if has_arg "--import" "$@"; then
   grep -q "BEGIN PGP" "$last_arg"
   if [ "${FAKE_GPG_IMPORT_FAIL:-false}" = "true" ]; then
-    echo "import failed intentionally" >&2
+    echo "import failed intentionally: fixture-secret-material" >&2
     exit 42
   fi
   touch "${FAKE_GPG_STATE:?}"
@@ -216,6 +220,21 @@ GITCONFIG
   [ ! -f "$AGENTS_ROOT/test-agent/.gitconfig" ]
   [ ! -s "$GIT_CONFIG_GLOBAL" ]
   [[ "$output" != *"fixture-github-token"* ]]
+  [[ "$output" != *"PGP FIXTURE KEY"* ]]
+}
+
+@test "homes:auth:setup dry-run does not leak private key data when parse fails" {
+  parse_tmp="$BATS_TEST_TMPDIR/parse-tmp"
+  mkdir -p "$parse_tmp"
+  export TMPDIR="$parse_tmp"
+  export FAKE_GPG_DRY_RUN_FAIL=true
+
+  run fold_task homes:auth:setup test-agent --agents-root "$AGENTS_ROOT"
+
+  [ "$status" -eq 1 ]
+  [ -z "$(find "$parse_tmp" -type f -print -quit)" ]
+  [[ "$output" == *"GPG cannot parse key"* ]]
+  [[ "$output" != *"fixture-secret-material"* ]]
   [[ "$output" != *"PGP FIXTURE KEY"* ]]
 }
 

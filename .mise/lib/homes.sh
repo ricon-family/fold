@@ -88,8 +88,18 @@ homes_strip_wrapping_quotes() {
   printf '%s\n' "$value"
 }
 
+homes_gpg_import_key_data() (
+  local key_data="$1" tmp
+  shift
+
+  tmp=$(mktemp) || return 1
+  trap 'rm -f "$tmp"' EXIT HUP INT TERM
+  printf '%s' "$key_data" > "$tmp" || return 1
+  "$GPG_BIN" --batch --import "$@" "$tmp"
+)
+
 homes_validate_gpg_key_data() {
-  local key_data="$1" tmp output
+  local key_data="$1"
 
   if [ -z "$key_data" ]; then
     echo "ERROR: GPG key is empty" >&2
@@ -104,14 +114,10 @@ homes_validate_gpg_key_data() {
     return 1
   fi
 
-  tmp=$(mktemp)
-  printf '%s' "$key_data" > "$tmp"
-  if ! output=$("$GPG_BIN" --batch --import --dry-run "$tmp" 2>&1); then
-    rm -f "$tmp"
-    echo "ERROR: GPG cannot parse key: $output" >&2
+  if ! homes_gpg_import_key_data "$key_data" --dry-run >/dev/null 2>&1; then
+    echo "ERROR: GPG cannot parse key" >&2
     return 1
   fi
-  rm -f "$tmp"
 }
 
 homes_json_string() {
