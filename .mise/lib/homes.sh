@@ -79,6 +79,41 @@ homes_infer_agent_from_home() {
   return 1
 }
 
+homes_strip_wrapping_quotes() {
+  local value="$1"
+  if [[ "$value" == \"*\" ]]; then
+    value="${value#\"}"
+    value="${value%\"}"
+  fi
+  printf '%s\n' "$value"
+}
+
+homes_validate_gpg_key_data() {
+  local key_data="$1" tmp output
+
+  if [ -z "$key_data" ]; then
+    echo "ERROR: GPG key is empty" >&2
+    return 1
+  fi
+  if [[ "$key_data" == \"* ]]; then
+    echo "ERROR: GPG key starts with a double quote — likely corrupted" >&2
+    return 1
+  fi
+  if ! printf '%s' "$key_data" | head -1 | grep -q '^-----BEGIN PGP'; then
+    echo "ERROR: GPG key does not start with a PGP armor header" >&2
+    return 1
+  fi
+
+  tmp=$(mktemp)
+  printf '%s' "$key_data" > "$tmp"
+  if ! output=$("$GPG_BIN" --batch --import --dry-run "$tmp" 2>&1); then
+    rm -f "$tmp"
+    echo "ERROR: GPG cannot parse key: $output" >&2
+    return 1
+  fi
+  rm -f "$tmp"
+}
+
 homes_json_string() {
   local value="$1"
   value=${value//\\/\\\\}

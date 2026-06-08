@@ -241,7 +241,7 @@ auth_next() {
   if is_ready; then
     printf 'auth ready\n'
   else
-    printf 'auth setup needed; homes:auth:setup is pending follow-up\n'
+    printf 'mise run homes:auth:setup %s --home %s --yes\n' "$AGENT" "$HOME_PATH"
   fi
 }
 

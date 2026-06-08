@@ -233,7 +233,7 @@ SH
   [ "$status" -eq 1 ]
   assert_json_output
   [[ "$output" == *'"ready":false'* ]]
-  [[ "$output" == *"auth setup needed"* ]]
+  [[ "$output" == *"homes:auth:setup test-agent"* ]]
   [[ "$output" == *'"name":"Auth: Signing"'* ]]
   [[ "$output" == *'"name":"GPG secret key","status":"fail"'* ]]
   [[ "$output" != *"Homes status:"* ]]
