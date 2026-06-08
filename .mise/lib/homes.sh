@@ -89,6 +89,58 @@ homes_json_string() {
   printf '"%s"' "$value"
 }
 
+homes_timeout_command() {
+  command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null
+}
+
+homes_git_is_repo() {
+  "$GIT_BIN" -C "$1" rev-parse --git-dir >/dev/null 2>&1
+}
+
+homes_git_head_label() {
+  local repo="$1" head branch
+  head=$("$GIT_BIN" -C "$repo" rev-parse --short HEAD 2>/dev/null) || return 1
+  branch=$("$GIT_BIN" -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+  [ -n "$branch" ] || branch="detached"
+  [ "$branch" = "HEAD" ] && branch="detached"
+  printf '%s @ %s\n' "$branch" "$head"
+}
+
+homes_git_worktree_state() {
+  local repo="$1" status
+  if ! status=$("$GIT_BIN" -C "$repo" status --porcelain 2>/dev/null); then
+    printf 'unknown\n'
+    return 1
+  fi
+  if [ -z "$status" ]; then
+    printf 'clean\n'
+  else
+    printf 'dirty\n'
+  fi
+}
+
+homes_git_origin_redacted() {
+  local repo="$1" origin
+  origin=$("$GIT_BIN" -C "$repo" remote get-url origin 2>/dev/null) || return 1
+  homes_redact_url "$origin"
+}
+
+homes_manifest_state() {
+  local manifest="$1"
+  if [ ! -f "$manifest" ]; then
+    printf 'missing\n'
+  elif homes_file_is_gitcrypt_blob "$manifest"; then
+    printf 'locked\n'
+  else
+    printf 'readable\n'
+  fi
+}
+
+homes_notes_changes_summary() {
+  local home_path="$1"
+  (cd "$home_path" && "$NOTES_BIN" changes --summary)
+}
+
 homes_require_git_repo() {
   local home_path="$1"
 
@@ -107,13 +159,13 @@ homes_require_git_repo() {
 }
 
 homes_require_clean_worktree() {
-  local home_path="$1" status
+  local home_path="$1" state
 
-  if ! status=$("$GIT_BIN" -C "$home_path" status --porcelain); then
+  if ! state=$(homes_git_worktree_state "$home_path"); then
     echo "ERROR: could not inspect worktree: $home_path" >&2
     exit 1
   fi
-  if [ -n "$status" ]; then
+  if [ "$state" = "dirty" ]; then
     echo "ERROR: home worktree is dirty; commit/stash before continuing: $home_path" >&2
     "$GIT_BIN" -C "$home_path" status --short >&2
     exit 1
@@ -156,7 +208,7 @@ homes_require_no_pending_note_changes() {
     exit 1
   fi
 
-  if ! notes_changes=$(cd "$home_path" && "$NOTES_BIN" changes --summary 2>&1); then
+  if ! notes_changes=$(homes_notes_changes_summary "$home_path" 2>&1); then
     echo "ERROR: could not inspect notes workflow state before publishing" >&2
     printf '%s\n' "$notes_changes" >&2
     exit 1
