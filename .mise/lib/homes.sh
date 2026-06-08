@@ -34,6 +34,113 @@ homes_resolve_home() {
   fi
 }
 
+homes_default_agents_root() {
+  printf '%s/agents\n' "$HOME"
+}
+
+homes_resolve_agents_root() {
+  local agents_root="$1"
+  if [ -n "$agents_root" ]; then
+    printf '%s\n' "$agents_root"
+  else
+    homes_default_agents_root
+  fi
+}
+
+homes_agent_dir() {
+  local agent="$1" agents_root="$2"
+  printf '%s/%s\n' "$agents_root" "$agent"
+}
+
+homes_agent_gitconfig_path() {
+  local agent="$1" agents_root="$2"
+  printf '%s/.gitconfig\n' "$(homes_agent_dir "$agent" "$agents_root")"
+}
+
+homes_agent_include_key() {
+  local agent="$1" agents_root="$2" agent_dir
+  if [ "$agents_root" = "$HOME/agents" ]; then
+    printf 'includeIf.gitdir:~/agents/%s/.path\n' "$agent"
+    return 0
+  fi
+  agent_dir=$(homes_agent_dir "$agent" "$agents_root")
+  printf 'includeIf.gitdir:%s/.path\n' "$agent_dir"
+}
+
+homes_infer_agent_from_home() {
+  local home_path="$1" base parent
+  [ -n "$home_path" ] || return 1
+  base=$(basename "$home_path")
+  parent=$(basename "$(dirname "$home_path")")
+  if [ "$base" = "home" ] && [ -n "$parent" ]; then
+    printf '%s\n' "$parent"
+    return 0
+  fi
+  return 1
+}
+
+homes_json_string() {
+  local value="$1"
+  value=${value//\\/\\\\}
+  value=${value//\"/\\\"}
+  value=${value//$'\n'/\\n}
+  value=${value//$'\r'/\\r}
+  value=${value//$'\t'/\\t}
+  printf '"%s"' "$value"
+}
+
+homes_timeout_command() {
+  command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null
+}
+
+homes_git_is_repo() {
+  "$GIT_BIN" -C "$1" rev-parse --git-dir >/dev/null 2>&1
+}
+
+homes_git_head_label() {
+  local repo="$1" head branch
+  head=$("$GIT_BIN" -C "$repo" rev-parse --short HEAD 2>/dev/null) || return 1
+  branch=$("$GIT_BIN" -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+  [ -n "$branch" ] || branch="detached"
+  [ "$branch" = "HEAD" ] && branch="detached"
+  printf '%s @ %s\n' "$branch" "$head"
+}
+
+homes_git_worktree_state() {
+  local repo="$1" status
+  if ! status=$("$GIT_BIN" -C "$repo" status --porcelain 2>/dev/null); then
+    printf 'unknown\n'
+    return 1
+  fi
+  if [ -z "$status" ]; then
+    printf 'clean\n'
+  else
+    printf 'dirty\n'
+  fi
+}
+
+homes_git_origin_redacted() {
+  local repo="$1" origin
+  origin=$("$GIT_BIN" -C "$repo" remote get-url origin 2>/dev/null) || return 1
+  homes_redact_url "$origin"
+}
+
+homes_manifest_state() {
+  local manifest="$1"
+  if [ ! -f "$manifest" ]; then
+    printf 'missing\n'
+  elif homes_file_is_gitcrypt_blob "$manifest"; then
+    printf 'locked\n'
+  else
+    printf 'readable\n'
+  fi
+}
+
+homes_notes_changes_summary() {
+  local home_path="$1"
+  (cd "$home_path" && "$NOTES_BIN" changes --summary)
+}
+
 homes_require_git_repo() {
   local home_path="$1"
 
@@ -52,13 +159,13 @@ homes_require_git_repo() {
 }
 
 homes_require_clean_worktree() {
-  local home_path="$1" status
+  local home_path="$1" state
 
-  if ! status=$("$GIT_BIN" -C "$home_path" status --porcelain); then
+  if ! state=$(homes_git_worktree_state "$home_path"); then
     echo "ERROR: could not inspect worktree: $home_path" >&2
     exit 1
   fi
-  if [ -n "$status" ]; then
+  if [ "$state" = "dirty" ]; then
     echo "ERROR: home worktree is dirty; commit/stash before continuing: $home_path" >&2
     "$GIT_BIN" -C "$home_path" status --short >&2
     exit 1
@@ -101,7 +208,7 @@ homes_require_no_pending_note_changes() {
     exit 1
   fi
 
-  if ! notes_changes=$(cd "$home_path" && "$NOTES_BIN" changes --summary 2>&1); then
+  if ! notes_changes=$(homes_notes_changes_summary "$home_path" 2>&1); then
     echo "ERROR: could not inspect notes workflow state before publishing" >&2
     printf '%s\n' "$notes_changes" >&2
     exit 1
@@ -121,6 +228,21 @@ homes_blob_hex10() {
   hex=$(LC_ALL=C od -An -tx1 -N10 "$tmp" | tr -d ' \n')
   rm -f "$tmp"
   printf '%s\n' "$hex"
+}
+
+homes_file_hex10() {
+  local path="$1" tmp hex
+  tmp=$(mktemp)
+  LC_ALL=C od -An -tx1 -N10 "$path" > "$tmp"
+  hex=$(tr -d ' \n' < "$tmp")
+  rm -f "$tmp"
+  printf '%s\n' "$hex"
+}
+
+homes_file_is_gitcrypt_blob() {
+  local path="$1"
+  [ -f "$path" ] || return 1
+  [ "$(homes_file_hex10 "$path")" = "00474954435259505400" ]
 }
 
 homes_assert_gitcrypt_blob() {
