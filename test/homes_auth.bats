@@ -288,3 +288,29 @@ GITCONFIG
   [[ "$output" == *'"ready":true'* ]]
   [[ "$output" == *"valid as test-agent-ricon; expires in"* ]]
 }
+
+@test "homes:auth:setup --home targets the supplied home parent" {
+  custom_agent_dir="$BATS_TEST_TMPDIR/custom-workspace/test-agent"
+  custom_home="$custom_agent_dir/home"
+
+  run fold_task homes:auth:setup test-agent \
+    --agents-root "$AGENTS_ROOT" \
+    --home "$custom_home" \
+    --yes
+
+  [ "$status" -eq 0 ]
+  [ -f "$FAKE_GPG_STATE" ]
+  [ -f "$custom_agent_dir/.gitconfig" ]
+  [ ! -f "$AGENTS_ROOT/test-agent/.gitconfig" ]
+  [ "$(git config --file "$custom_agent_dir/.gitconfig" user.name)" = "test-agent" ]
+  git config --global --get-all "includeIf.gitdir:$custom_agent_dir/.path" | grep -Fx "$custom_agent_dir/.gitconfig"
+
+  run fold_task homes:auth test-agent \
+    --agents-root "$AGENTS_ROOT" \
+    --home "$custom_home" \
+    --json
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"ready":true'* ]]
+  [[ "$output" == *"$custom_agent_dir/.gitconfig"* ]]
+  [[ "$output" != *"$AGENTS_ROOT/test-agent/.gitconfig"* ]]
+}

@@ -27,9 +27,9 @@ if [ -z "$HOME_PATH" ]; then
 fi
 
 EMAIL=$(homes_agent_email "$AGENT")
-AGENT_DIR=$(homes_agent_dir "$AGENT" "$AGENTS_ROOT")
-GITCONFIG=$(homes_agent_gitconfig_path "$AGENT" "$AGENTS_ROOT")
-INCLUDE_KEY=$(homes_agent_include_key "$AGENT" "$AGENTS_ROOT")
+AGENT_DIR=$(homes_agent_dir_for_home "$HOME_PATH")
+GITCONFIG=$(homes_agent_gitconfig_path_for_dir "$AGENT_DIR")
+INCLUDE_KEY=$(homes_agent_include_key_for_dir "$AGENT" "$AGENT_DIR")
 MODE="dry-run"
 [ "$YES" = "true" ] && MODE="mutate"
 
