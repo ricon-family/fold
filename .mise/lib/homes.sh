@@ -12,9 +12,10 @@ source "$HOMES_LIB_DIR/common.sh"
 
 GIT_BIN="${GIT:-git}"
 GPG_BIN="${GPG:-gpg}"
+MISE_BIN="${MISE_BIN:-${MISE:-mise}}"
 NOTES_BIN="${NOTES:-notes}"
 MODULES_BIN="${MODULES:-modules}"
-export GIT_BIN GPG_BIN NOTES_BIN MODULES_BIN
+export GIT_BIN GPG_BIN MISE_BIN NOTES_BIN MODULES_BIN
 
 homes_agent_email() {
   printf '%s@ricon.family\n' "$1"
