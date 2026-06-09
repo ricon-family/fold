@@ -1,0 +1,203 @@
+#!/usr/bin/env bash
+#MISE description="Set up local auth/signing for an already-provisioned agent home"
+#USAGE flag "-y --yes" default=#false help="Import GPG material and write local git signing config"
+#USAGE flag "--agents-root <path>" default="" help="Agents workspace root (default: ~/agents)"
+#USAGE flag "--home <path>" default="" help="Home repo path (default: <agents-root>/<agent>/home)"
+#USAGE flag "--json" default=#false help="Emit machine-readable JSON"
+#USAGE arg "<agent>" help="Agent name"
+#USAGE example "mise run homes:auth:setup iris" header="Dry-run Iris local auth setup"
+#USAGE example "mise run homes:auth:setup iris --yes" header="Set up Iris local auth"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck source=.mise/lib/homes.sh
+source "$ROOT/.mise/lib/homes.sh"
+
+AGENT="${usage_agent:?agent required}"
+YES="${usage_yes:-false}"
+HOME_PATH="${usage_home:-}"
+AGENTS_ROOT=$(homes_resolve_agents_root "${usage_agents_root:-}")
+JSON="${usage_json:-false}"
+
+validate_agent "$AGENT"
+require_tool "$GIT_BIN" "$GPG_BIN" "$SECRETS_BIN" "$GH_BIN" mktemp grep sed
+
+if [ -z "$HOME_PATH" ]; then
+  HOME_PATH="$AGENTS_ROOT/$AGENT/home"
+fi
+
+EMAIL=$(homes_agent_email "$AGENT")
+AGENT_DIR=$(homes_agent_dir_for_home "$HOME_PATH")
+GITCONFIG=$(homes_agent_gitconfig_path_for_dir "$AGENT_DIR")
+INCLUDE_KEY=$(homes_agent_include_key_for_dir "$AGENT" "$AGENT_DIR")
+MODE="dry-run"
+[ "$YES" = "true" ] && MODE="mutate"
+
+ACTION_NAMES=()
+ACTION_STATUSES=()
+ACTION_DETAILS=()
+
+add_action() {
+  ACTION_NAMES+=("$1")
+  ACTION_STATUSES+=("$2")
+  ACTION_DETAILS+=("$3")
+}
+
+get_secret_required() {
+  local key="$1" value
+  if ! value=$("$SECRETS_BIN" get "$AGENT/$key" 2>/dev/null); then
+    echo "ERROR: missing $AGENT/$key" >&2
+    exit 1
+  fi
+  if [ -z "$value" ]; then
+    echo "ERROR: $AGENT/$key is empty" >&2
+    exit 1
+  fi
+  printf '%s\n' "$value"
+}
+
+clean_error() {
+  printf '%s' "$1" | redact_github_tokens | tr '\n' ' ' | sed 's/[[:space:]]\{1,\}/ /g; s/^ //; s/ $//' | cut -c1-160
+}
+
+validate_github_token() {
+  local token="$1" expected_login="$2" login clean_login
+  if ! login=$(GH_TOKEN="$token" "$GH_BIN" api user --jq .login 2>&1); then
+    login=$(clean_error "$login")
+    echo "ERROR: GitHub token validation failed: ${login:-unknown failure}" >&2
+    exit 1
+  fi
+  if [ "$login" != "$expected_login" ]; then
+    clean_login=$(clean_error "$login")
+    echo "ERROR: GitHub token login mismatch: got ${clean_login:-unknown}, expected $expected_login" >&2
+    exit 1
+  fi
+  add_action "github token" "ok" "valid as $expected_login"
+}
+
+import_private_key() {
+  local key_data="$1"
+  if ! homes_gpg_import_key_data "$key_data" >/dev/null 2>&1; then
+    echo "ERROR: GPG import failed" >&2
+    exit 1
+  fi
+}
+
+fingerprint=$(get_secret_required "gpg-fingerprint")
+private_key=$(get_secret_required "gpg-private-key")
+private_key=$(homes_strip_wrapping_quotes "$private_key")
+github_username=$(get_secret_required "github-username")
+github_pat=$(get_secret_required "github-pat")
+add_action "secrets" "ok" "required auth secrets present"
+
+homes_validate_gpg_key_data "$private_key"
+add_action "gpg key data" "ok" "stored key parses"
+validate_github_token "$github_pat" "$github_username"
+
+key_present=false
+if "$GPG_BIN" --list-secret-keys "$fingerprint" >/dev/null 2>&1; then
+  key_present=true
+fi
+
+if [ "$YES" != "true" ]; then
+  if $key_present; then
+    add_action "gpg import" "ok" "secret key already present"
+  else
+    add_action "gpg import" "plan" "would import existing private key"
+  fi
+  add_action "gitconfig" "plan" "would write $GITCONFIG"
+  add_action "git includeIf" "plan" "would ensure $INCLUDE_KEY"
+else
+  if $key_present; then
+    add_action "gpg import" "ok" "secret key already present"
+  else
+    import_private_key "$private_key"
+    if ! "$GPG_BIN" --list-secret-keys "$fingerprint" >/dev/null 2>&1; then
+      echo "ERROR: imported GPG key but stored fingerprint is still unavailable" >&2
+      exit 1
+    fi
+    add_action "gpg import" "ok" "imported existing private key"
+  fi
+
+  if printf '5\ny\n' | "$GPG_BIN" --batch --command-fd 0 --expert --edit-key "$EMAIL" trust quit >/dev/null 2>&1; then
+    add_action "gpg trust" "ok" "set local trust for $EMAIL"
+  else
+    add_action "gpg trust" "warn" "could not set local trust; signing may show untrusted"
+  fi
+
+  mkdir -p "$AGENT_DIR"
+  cat > "$GITCONFIG" <<GITCONFIG
+[user]
+	name = $AGENT
+	email = $EMAIL
+	signingkey = $fingerprint
+[commit]
+	gpgsign = true
+[tag]
+	gpgsign = true
+GITCONFIG
+  add_action "gitconfig" "ok" "wrote $GITCONFIG"
+
+  include_values=""
+  if include_values=$("$GIT_BIN" config --global --get-all "$INCLUDE_KEY" 2>/dev/null); then
+    :
+  else
+    include_values=""
+  fi
+  if printf '%s\n' "$include_values" | grep -Fxq "$GITCONFIG"; then
+    add_action "git includeIf" "ok" "already configured"
+  else
+    "$GIT_BIN" config --global --add "$INCLUDE_KEY" "$GITCONFIG"
+    add_action "git includeIf" "ok" "added $INCLUDE_KEY"
+  fi
+
+fi
+
+print_json() {
+  printf '{'
+  printf '"agent":'; homes_json_string "$AGENT"
+  printf ',"home":'; homes_json_string "$HOME_PATH"
+  printf ',"agents_root":'; homes_json_string "$AGENTS_ROOT"
+  printf ',"agent_dir":'; homes_json_string "$AGENT_DIR"
+  printf ',"gitconfig":'; homes_json_string "$GITCONFIG"
+  printf ',"mode":'; homes_json_string "$MODE"
+  printf ',"actions":['
+  local i
+  for ((i = 0; i < ${#ACTION_NAMES[@]}; i++)); do
+    [ "$i" -gt 0 ] && printf ','
+    printf '{"name":'; homes_json_string "${ACTION_NAMES[$i]}"
+    printf ',"status":'; homes_json_string "${ACTION_STATUSES[$i]}"
+    printf ',"detail":'; homes_json_string "${ACTION_DETAILS[$i]}"
+    printf '}'
+  done
+  printf ']}'
+  printf '\n'
+}
+
+if [ "$JSON" = "true" ]; then
+  print_json
+else
+  require_tool gum
+  printf 'Homes auth setup: %s\n\n' "$AGENT"
+  printf 'mode: %s\n\n' "$MODE"
+  {
+    printf 'Action\tStatus\tDetail\n'
+    for ((i = 0; i < ${#ACTION_NAMES[@]}; i++)); do
+      case "${ACTION_STATUSES[$i]}" in
+        ok) signal="✓" ;;
+        warn) signal="⚠" ;;
+        plan) signal="→" ;;
+        *) signal="✗" ;;
+      esac
+      printf '%s\t%s %s\t%s\n' "${ACTION_NAMES[$i]}" "$signal" "${ACTION_STATUSES[$i]}" "${ACTION_DETAILS[$i]}"
+    done
+  } | gum table --print --separator $'\t' --border rounded
+  printf '\n'
+  if [ "$YES" = "true" ]; then
+    printf 'next: mise run homes:auth %s --home %s\n' "$AGENT" "$HOME_PATH"
+  else
+    printf 'dry-run: rerun with --yes to mutate local GPG and git config\n'
+  fi
+fi
+
+unset private_key github_pat
