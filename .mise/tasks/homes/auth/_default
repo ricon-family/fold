@@ -24,9 +24,9 @@ if [ -z "$HOME_PATH" ]; then
   HOME_PATH="$AGENTS_ROOT/$AGENT/home"
 fi
 EMAIL=$(homes_agent_email "$AGENT")
-AGENT_DIR=$(homes_agent_dir "$AGENT" "$AGENTS_ROOT")
-GITCONFIG=$(homes_agent_gitconfig_path "$AGENT" "$AGENTS_ROOT")
-INCLUDE_KEY=$(homes_agent_include_key "$AGENT" "$AGENTS_ROOT")
+AGENT_DIR=$(homes_agent_dir_for_home "$HOME_PATH")
+GITCONFIG=$(homes_agent_gitconfig_path_for_dir "$AGENT_DIR")
+INCLUDE_KEY=$(homes_agent_include_key_for_dir "$AGENT" "$AGENT_DIR")
 
 TEXT_MODE=true
 [ "$JSON" = "true" ] && TEXT_MODE=false
@@ -241,7 +241,7 @@ auth_next() {
   if is_ready; then
     printf 'auth ready\n'
   else
-    printf 'auth setup needed; homes:auth:setup is pending follow-up\n'
+    printf 'mise run homes:auth:setup %s --home %s --yes\n' "$AGENT" "$HOME_PATH"
   fi
 }
 

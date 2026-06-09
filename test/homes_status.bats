@@ -185,7 +185,7 @@ SH
 }
 
 @test "homes:status reports a ready configured home" {
-  home="$BATS_TEST_TMPDIR/home"
+  home="$AGENTS_ROOT/test-agent/home"
   create_ready_home "$home"
   configure_ready_auth
 
@@ -206,7 +206,7 @@ SH
 }
 
 @test "homes:status --json --check emits clean ready JSON" {
-  home="$BATS_TEST_TMPDIR/home"
+  home="$AGENTS_ROOT/test-agent/home"
   create_ready_home "$home"
   configure_ready_auth
 
@@ -225,7 +225,7 @@ SH
 }
 
 @test "homes:status --json --check exits nonzero when auth is not ready" {
-  home="$BATS_TEST_TMPDIR/home"
+  home="$AGENTS_ROOT/test-agent/home"
   create_ready_home "$home"
 
   run fold_task_stdout_only homes:status test-agent --agents-root "$AGENTS_ROOT" --home "$home" --json --check
@@ -233,7 +233,7 @@ SH
   [ "$status" -eq 1 ]
   assert_json_output
   [[ "$output" == *'"ready":false'* ]]
-  [[ "$output" == *"auth setup needed"* ]]
+  [[ "$output" == *"homes:auth:setup test-agent"* ]]
   [[ "$output" == *'"name":"Auth: Signing"'* ]]
   [[ "$output" == *'"name":"GPG secret key","status":"fail"'* ]]
   [[ "$output" != *"Homes status:"* ]]
@@ -247,7 +247,7 @@ SH
 
   run fold_task_stdout_only homes:status test-agent \
     --agents-root "$AGENTS_ROOT" \
-    --home "$BATS_TEST_TMPDIR/missing-home" \
+    --home "$AGENTS_ROOT/test-agent/home" \
     --json \
     --check
 
@@ -261,7 +261,7 @@ SH
 
 @test "homes:status reports auth timeout instead of hanging" {
   command -v timeout >/dev/null 2>&1 || command -v gtimeout >/dev/null 2>&1 || skip "timeout/gtimeout command unavailable"
-  home="$BATS_TEST_TMPDIR/home"
+  home="$AGENTS_ROOT/test-agent/home"
   create_ready_home "$home"
   configure_ready_auth
   export FAKE_GH_SLEEP=5

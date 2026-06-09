@@ -33,7 +33,13 @@ if [ "${1:-}" != "get" ]; then
 fi
 case "${2:-}" in
   test-agent/gpg-fingerprint) echo "ABCDEF1234567890ABCDEF1234567890ABCDEF12" ;;
-  test-agent/gpg-private-key) echo "fixture-secret-material" ;;
+  test-agent/gpg-private-key)
+    cat <<'KEY'
+-----BEGIN PGP FIXTURE KEY BLOCK-----
+fixture-secret-material
+-----END PGP FIXTURE KEY BLOCK-----
+KEY
+    ;;
   test-agent/github-username) echo "test-agent-ricon" ;;
   test-agent/github-pat) echo "fixture-github-token" ;;
   *) echo "missing secret: ${2:-}" >&2; exit 1 ;;
@@ -53,12 +59,38 @@ has_arg() {
   done
   return 1
 }
+last_arg=""
+for arg in "$@"; do last_arg="$arg"; done
+
 if has_arg "--list-secret-keys" "$@"; then
   if [ -f "${FAKE_GPG_STATE:?}" ]; then
     echo "sec   rsa4096/ABCDEF1234567890"
     exit 0
   fi
   exit 1
+fi
+
+if has_arg "--import" "$@" && has_arg "--dry-run" "$@"; then
+  grep -q "BEGIN PGP" "$last_arg"
+  if [ "${FAKE_GPG_DRY_RUN_FAIL:-false}" = "true" ]; then
+    echo "parse failed intentionally: fixture-secret-material" >&2
+    exit 43
+  fi
+  exit 0
+fi
+
+if has_arg "--import" "$@"; then
+  grep -q "BEGIN PGP" "$last_arg"
+  if [ "${FAKE_GPG_IMPORT_FAIL:-false}" = "true" ]; then
+    echo "import failed intentionally: fixture-secret-material" >&2
+    exit 42
+  fi
+  touch "${FAKE_GPG_STATE:?}"
+  exit 0
+fi
+
+if has_arg "--edit-key" "$@"; then
+  exit 0
 fi
 
 echo "unexpected gpg command: $*" >&2
@@ -79,7 +111,7 @@ if [ "${1:-}" = "api" ] && { [ "${2:-}" = "user" ] || [ "${2:-}" = "/user" ]; };
       printf '\n'
       printf '{"login":"test-agent-ricon"}\n'
     else
-      echo "test-agent-ricon"
+      echo "${FAKE_GH_LOGIN:-test-agent-ricon}"
     fi
     exit 0
   fi
@@ -147,7 +179,7 @@ GITCONFIG
   assert_json_output
   [[ "$output" == *'"name":"Git config","status":"fail"'* ]]
   [[ "$output" == *"valid as test-agent-ricon; expires in"* ]]
-  [[ "$output" == *"auth setup needed"* ]]
+  [[ "$output" == *"homes:auth:setup test-agent"* ]]
   [[ "$output" != *"Homes auth:"* ]]
   [[ "$output" != *"# Secrets"* ]]
   [[ "$output" != *"Checking:"* ]]
@@ -160,7 +192,7 @@ GITCONFIG
   [ "$status" -eq 1 ]
   assert_json_output
   [[ "$output" == *'"ready":false'* ]]
-  [[ "$output" == *"auth setup needed"* ]]
+  [[ "$output" == *"homes:auth:setup test-agent"* ]]
   [[ "$output" != *"Homes auth:"* ]]
   [[ "$output" != *"# Secrets"* ]]
   [[ "$output" != *"Checking:"* ]]
@@ -172,6 +204,113 @@ GITCONFIG
 
   [ "$status" -eq 1 ]
   [[ "$output" == *"# Next"* ]]
-  [[ "$output" == *"auth setup needed"* ]]
+  [[ "$output" == *"homes:auth:setup test-agent"* ]]
   [[ "$output" != *"fixture-github-token"* ]]
+}
+
+
+@test "homes:auth:setup dry-run does not import or write local config" {
+  run fold_task homes:auth:setup test-agent --agents-root "$AGENTS_ROOT"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"mode: dry-run"* ]]
+  [[ "$output" == *"would import existing private key"* ]]
+  [[ "$output" == *"dry-run: rerun with --yes"* ]]
+  [ ! -f "$FAKE_GPG_STATE" ]
+  [ ! -f "$AGENTS_ROOT/test-agent/.gitconfig" ]
+  [ ! -s "$GIT_CONFIG_GLOBAL" ]
+  [[ "$output" != *"fixture-github-token"* ]]
+  [[ "$output" != *"PGP FIXTURE KEY"* ]]
+}
+
+@test "homes:auth:setup dry-run does not leak private key data when parse fails" {
+  parse_tmp="$BATS_TEST_TMPDIR/parse-tmp"
+  mkdir -p "$parse_tmp"
+  export TMPDIR="$parse_tmp"
+  export FAKE_GPG_DRY_RUN_FAIL=true
+
+  run fold_task homes:auth:setup test-agent --agents-root "$AGENTS_ROOT"
+
+  [ "$status" -eq 1 ]
+  [ -z "$(find "$parse_tmp" -type f -print -quit)" ]
+  [[ "$output" == *"GPG cannot parse key"* ]]
+  [[ "$output" != *"fixture-secret-material"* ]]
+  [[ "$output" != *"PGP FIXTURE KEY"* ]]
+}
+
+@test "homes:auth:setup --yes validates GitHub before mutating local auth" {
+  export FAKE_GH_LOGIN="wrong-agent"
+
+  run fold_task homes:auth:setup test-agent --agents-root "$AGENTS_ROOT" --yes
+
+  [ "$status" -eq 1 ]
+  [ ! -f "$FAKE_GPG_STATE" ]
+  [ ! -f "$AGENTS_ROOT/test-agent/.gitconfig" ]
+  [ ! -s "$GIT_CONFIG_GLOBAL" ]
+  [[ "$output" == *"GitHub token login mismatch"* ]]
+  [[ "$output" != *"fixture-github-token"* ]]
+  [[ "$output" != *"PGP FIXTURE KEY"* ]]
+}
+
+@test "homes:auth:setup --yes removes temporary private key file when import fails" {
+  import_tmp="$BATS_TEST_TMPDIR/import-tmp"
+  mkdir -p "$import_tmp"
+  export TMPDIR="$import_tmp"
+  export FAKE_GPG_IMPORT_FAIL=true
+
+  run fold_task homes:auth:setup test-agent --agents-root "$AGENTS_ROOT" --yes
+
+  [ "$status" -eq 1 ]
+  [ ! -f "$FAKE_GPG_STATE" ]
+  [ -z "$(find "$import_tmp" -type f -print -quit)" ]
+  [[ "$output" == *"GPG import failed"* ]]
+  [[ "$output" != *"fixture-secret-material"* ]]
+  [[ "$output" != *"PGP FIXTURE KEY"* ]]
+}
+
+@test "homes:auth:setup --yes imports key, writes gitconfig, and configures includeIf" {
+  run fold_task homes:auth:setup test-agent --agents-root "$AGENTS_ROOT" --yes
+
+  [ "$status" -eq 0 ]
+  [ -f "$FAKE_GPG_STATE" ]
+  [ -f "$AGENTS_ROOT/test-agent/.gitconfig" ]
+  [ "$(git config --file "$AGENTS_ROOT/test-agent/.gitconfig" user.name)" = "test-agent" ]
+  [ "$(git config --file "$AGENTS_ROOT/test-agent/.gitconfig" user.email)" = "test-agent@ricon.family" ]
+  [ "$(git config --file "$AGENTS_ROOT/test-agent/.gitconfig" user.signingkey)" = "ABCDEF1234567890ABCDEF1234567890ABCDEF12" ]
+  [ "$(git config --file "$AGENTS_ROOT/test-agent/.gitconfig" commit.gpgsign)" = "true" ]
+  git config --global --get-all "includeIf.gitdir:$AGENTS_ROOT/test-agent/.path" | grep -Fx "$AGENTS_ROOT/test-agent/.gitconfig"
+  [[ "$output" == *"github token"*"valid as test-agent-ricon"* ]]
+  [[ "$output" != *"fixture-github-token"* ]]
+  [[ "$output" != *"PGP FIXTURE KEY"* ]]
+
+  run fold_task homes:auth test-agent --agents-root "$AGENTS_ROOT" --json
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"ready":true'* ]]
+  [[ "$output" == *"valid as test-agent-ricon; expires in"* ]]
+}
+
+@test "homes:auth:setup --home targets the supplied home parent" {
+  custom_agent_dir="$BATS_TEST_TMPDIR/custom-workspace/test-agent"
+  custom_home="$custom_agent_dir/home"
+
+  run fold_task homes:auth:setup test-agent \
+    --agents-root "$AGENTS_ROOT" \
+    --home "$custom_home" \
+    --yes
+
+  [ "$status" -eq 0 ]
+  [ -f "$FAKE_GPG_STATE" ]
+  [ -f "$custom_agent_dir/.gitconfig" ]
+  [ ! -f "$AGENTS_ROOT/test-agent/.gitconfig" ]
+  [ "$(git config --file "$custom_agent_dir/.gitconfig" user.name)" = "test-agent" ]
+  git config --global --get-all "includeIf.gitdir:$custom_agent_dir/.path" | grep -Fx "$custom_agent_dir/.gitconfig"
+
+  run fold_task homes:auth test-agent \
+    --agents-root "$AGENTS_ROOT" \
+    --home "$custom_home" \
+    --json
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"ready":true'* ]]
+  [[ "$output" == *"$custom_agent_dir/.gitconfig"* ]]
+  [[ "$output" != *"$AGENTS_ROOT/test-agent/.gitconfig"* ]]
 }
