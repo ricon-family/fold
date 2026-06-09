@@ -9,6 +9,7 @@ shiv = "https://github.com/KnickKnackLabs/vfox-shiv"
 [tools]
 usage = "3.2.1"                   # CLI arg parsing for tasks
 yq = "4.50.1"                     # YAML processing
+jq = "1.8.1"                     # JSON processing for task composition
 gh = "2.92.0"                    # GitHub API for token status tasks
 bats = "1.13.0"                  # Task test suite
 gum = "0.17.0"                   # Human-readable task tables and welcome output
