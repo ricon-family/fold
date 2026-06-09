@@ -88,6 +88,8 @@ Guidance only works when it appears at the moment you need it. Before starting a
 | Edit, stage, or commit readable notes in a notes-managed repo | Read `notes/notes-managed-repo-workflow.md`; use `notes changes` and `notes stage`, not raw `git add notes/...` |
 | Repeat long paths in shell/tool calls | Create token-short symlink handles and read the pattern note through the handle: `agent=${GIT_AUTHOR_NAME:-<agent>}; mkdir -p "/tmp/$agent.d"; ln -sfn "$HOME/agents/$agent/home/modules/fold" "/tmp/$agent.d/fold"; ln -sfn "/tmp/$agent.d/fold/notes" "/tmp/$agent.d/fn"; cat "/tmp/$agent.d/fn/token-short-symlink-handles.md"` |
 
+Before Bash: large inline scripts belong in files, and repeated/debuggable shell flows belong in a scratch mise workbench. If the terminal transcript would make Or decode a blob, stop and use [[file-first-scripts]], [[scratch-mise-workbench]], and [[legible-terminal-workstream]] instead.
+
 This is not a startup reading list. It is a set of just-in-time triggers. Read the note when the trigger fires, then proceed.
 
 ## House Rules
