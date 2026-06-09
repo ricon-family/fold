@@ -93,6 +93,24 @@ if ! homes_git_is_repo "$HOME_PATH"; then
 fi
 add_action "home repo" ok "$HOME_PATH"
 
+if [ ! -f "$HOME_PATH/AGENTS.md" ]; then
+  fail_action "home markers" "missing AGENTS.md; not an agent home"
+fi
+add_action "home markers" ok "AGENTS.md present"
+
+if [ "$YES" = "true" ]; then
+  require_tool "$SECRETS_BIN"
+  github_username=$(get_agent_github_login "$AGENT")
+  expected_home_repo="$github_username/home"
+  if ! origin_url=$("$GIT_BIN" -C "$HOME_PATH" remote get-url origin 2>/dev/null); then
+    fail_action "home origin" "missing origin remote; expected $expected_home_repo"
+  fi
+  if ! homes_github_remote_matches_repo "$origin_url" "$github_username" home; then
+    fail_action "home origin" "expected $expected_home_repo; found $(homes_redact_url "$origin_url")"
+  fi
+  add_action "home origin" ok "$expected_home_repo"
+fi
+
 if [ "$YES" != "true" ]; then
   add_action "auth setup" plan "would run homes:auth:setup $AGENT --yes"
   add_action "mise trust" plan "would trust $HOME_PATH"

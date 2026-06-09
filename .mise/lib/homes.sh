@@ -181,6 +181,47 @@ homes_git_origin_redacted() {
   homes_redact_url "$origin"
 }
 
+homes_github_remote_repo() {
+  local remote_url="$1" path owner repo
+
+  remote_url=$(homes_strip_wrapping_quotes "$remote_url")
+  remote_url=${remote_url%/}
+
+  case "$remote_url" in
+    https://github.com/*)
+      path=${remote_url#https://github.com/}
+      ;;
+    git@github.com:*)
+      path=${remote_url#git@github.com:}
+      ;;
+    ssh://git@github.com/*)
+      path=${remote_url#ssh://git@github.com/}
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+
+  path=${path%.git}
+  path=${path%/}
+  owner=${path%%/*}
+  repo=${path#*/}
+
+  if [ -z "$owner" ] || [ -z "$repo" ] || [ "$owner" = "$path" ] || [[ "$repo" == */* ]]; then
+    return 1
+  fi
+
+  printf '%s/%s\n' "$(lower "$owner")" "$(lower "$repo")"
+}
+
+homes_github_remote_matches_repo() {
+  local remote_url="$1" expected_owner="$2" expected_repo="$3" actual expected
+
+  actual=$(homes_github_remote_repo "$remote_url") || return 1
+  expected="$(lower "$expected_owner")/$(lower "$expected_repo")"
+  [ "$actual" = "$expected" ]
+}
+
 homes_manifest_state() {
   local manifest="$1"
   if [ ! -f "$manifest" ]; then
