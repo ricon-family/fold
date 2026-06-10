@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+#MISE description="Set up an already-provisioned agent home on this machine"
+#USAGE flag "-y --yes" default=#false help="Run local setup steps that mutate GPG/Git/home state"
+#USAGE flag "--agents-root <path>" default="" help="Agents workspace root (default: ~/agents)"
+#USAGE flag "--home <path>" default="" help="Home repo path (default: <agents-root>/<agent>/home)"
+#USAGE arg "<agent>" help="Agent name"
+#USAGE example "mise run homes:setup iris" header="Show the local setup plan for Iris"
+#USAGE example "mise run homes:setup iris --yes" header="Set up Iris locally after cloning/adopting her home"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck source=.mise/lib/homes.sh
+source "$ROOT/.mise/lib/homes.sh"
+
+AGENT="${usage_agent:?agent required}"
+YES="${usage_yes:-false}"
+HOME_PATH="${usage_home:-}"
+AGENTS_ROOT=$(homes_resolve_agents_root "${usage_agents_root:-}")
+MODE="dry-run"
+[ "$YES" = "true" ] && MODE="mutate"
+
+validate_agent "$AGENT"
+require_tool "$GIT_BIN" "$MISE_BIN" gum
+
+if [ -z "$HOME_PATH" ]; then
+  HOME_PATH="$AGENTS_ROOT/$AGENT/home"
+fi
+
+ACTION_NAMES=()
+ACTION_STATUSES=()
+ACTION_DETAILS=()
+
+add_action() {
+  ACTION_NAMES+=("$1")
+  ACTION_STATUSES+=("$2")
+  ACTION_DETAILS+=("$3")
+}
+
+print_actions() {
+  printf 'Homes setup: %s\n\n' "$AGENT"
+  printf 'home: %s\n' "$HOME_PATH"
+  printf 'mode: %s\n\n' "$MODE"
+  {
+    printf 'Action\tStatus\tDetail\n'
+    local i signal
+    for ((i = 0; i < ${#ACTION_NAMES[@]}; i++)); do
+      case "${ACTION_STATUSES[$i]}" in
+        ok) signal="✓" ;;
+        warn) signal="⚠" ;;
+        plan) signal="→" ;;
+        fail) signal="✗" ;;
+        *) signal="?" ;;
+      esac
+      printf '%s\t%s %s\t%s\n' "${ACTION_NAMES[$i]}" "$signal" "${ACTION_STATUSES[$i]}" "${ACTION_DETAILS[$i]}"
+    done
+  } | gum table --print --separator $'\t' --border rounded
+}
+
+fail_action() {
+  add_action "$1" fail "$2"
+  print_actions
+  exit 1
+}
+
+run_step() {
+  local name="$1" detail="$2"
+  shift 2
+  if "$@" >/dev/null 2>&1; then
+    add_action "$name" ok "$detail"
+  else
+    fail_action "$name" "failed; rerun directly for details"
+  fi
+}
+
+run_home_mise_step() {
+  local name="$1" detail="$2"
+  shift 2
+  if (cd "$HOME_PATH" && "$MISE_BIN" "$@" >/dev/null 2>&1); then
+    add_action "$name" ok "$detail"
+  else
+    fail_action "$name" "failed; rerun in $HOME_PATH for details"
+  fi
+}
+
+if [ ! -e "$HOME_PATH" ]; then
+  fail_action "home repo" "missing $HOME_PATH; clone or adopt the home first"
+fi
+if [ ! -d "$HOME_PATH" ]; then
+  fail_action "home repo" "not a directory: $HOME_PATH"
+fi
+if ! homes_git_is_repo "$HOME_PATH"; then
+  fail_action "home repo" "not a git repository: $HOME_PATH"
+fi
+add_action "home repo" ok "$HOME_PATH"
+
+if [ ! -f "$HOME_PATH/AGENTS.md" ]; then
+  fail_action "home markers" "missing AGENTS.md; not an agent home"
+fi
+add_action "home markers" ok "AGENTS.md present"
+
+if [ "$YES" = "true" ]; then
+  require_tool "$SECRETS_BIN"
+  github_username=$(get_agent_github_login "$AGENT")
+  expected_home_repo="$github_username/home"
+  if ! origin_url=$("$GIT_BIN" -C "$HOME_PATH" remote get-url origin 2>/dev/null); then
+    fail_action "home origin" "missing origin remote; expected $expected_home_repo"
+  fi
+  if ! homes_github_remote_matches_repo "$origin_url" "$github_username" home; then
+    fail_action "home origin" "expected $expected_home_repo; found $(homes_redact_url "$origin_url")"
+  fi
+  add_action "home origin" ok "$expected_home_repo"
+fi
+
+if [ "$YES" != "true" ]; then
+  add_action "auth setup" plan "would run homes:auth:setup $AGENT --yes"
+  add_action "mise trust" plan "would trust $HOME_PATH"
+  add_action "mise install" plan "would install declared home tools"
+  if [ -x "$HOME_PATH/.mise/tasks/agent/prepare" ]; then
+    add_action "agent:prepare" plan "would run home prepare task"
+  else
+    add_action "agent:prepare" warn "missing; would skip"
+  fi
+  add_action "status check" plan "would run homes:status $AGENT --check"
+  print_actions
+  printf '\ndry-run: rerun with --yes to mutate local auth and home setup\n'
+  exit 0
+fi
+
+run_step "auth setup" "local auth/signing configured" \
+  "$MISE_BIN" run -q homes:auth:setup "$AGENT" \
+    --agents-root "$AGENTS_ROOT" \
+    --home "$HOME_PATH" \
+    --yes \
+    --json
+
+run_home_mise_step "mise trust" "trusted home mise config" trust
+run_home_mise_step "mise install" "installed declared home tools" install
+
+if [ -x "$HOME_PATH/.mise/tasks/agent/prepare" ]; then
+  run_home_mise_step "agent:prepare" "ran home prepare task" run -q agent:prepare
+else
+  add_action "agent:prepare" warn "missing; skipped"
+fi
+
+run_step "status check" "homes:status --check passed" \
+  "$MISE_BIN" run -q homes:status "$AGENT" \
+    --agents-root "$AGENTS_ROOT" \
+    --home "$HOME_PATH" \
+    --json \
+    --check
+
+print_actions
+printf '\nnext: cd %s && shimmer agent\n' "$HOME_PATH"
