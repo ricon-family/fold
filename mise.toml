@@ -24,7 +24,6 @@ gum = "0.17.0"                   # Human-readable task tables and welcome output
 "shiv:secrets" = "0.2"
 "shiv:emails" = "0.6"
 "shiv:codebase" = "0.3"
-"shiv:farts" = "0.1"                      # Frontmatter queries for agent:list
 
 [_.codebase]
 lint = ["mise-settings", "gum-table"]

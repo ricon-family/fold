@@ -1,60 +1,115 @@
 #!/usr/bin/env bash
 #MISE description="List agents in this home"
-#USAGE flag "--ci" help="Only list agents with CI workflows enabled"
-set -eo pipefail
+#USAGE flag "--ci" default=#false help="Only list agents with CI workflows enabled"
+#USAGE flag "--json" default=#false help="Output JSON records with agent metadata"
+set -euo pipefail
 
-NOTES_DIR="$MISE_CONFIG_ROOT/notes"
+cd "$MISE_CONFIG_ROOT"
+
 CI_ONLY="${usage_ci:-false}"
-QUERY_OUT=$(mktemp)
-QUERY_ERR=$(mktemp)
-trap 'rm -f "$QUERY_OUT" "$QUERY_ERR"' EXIT
+JSON_OUTPUT="${usage_json:-false}"
 
-# Find agent identity files using farts frontmatter queries.
-# Agent notes have `type: agent` in their frontmatter. This must fail loudly:
-# shimmer treats agent:list as the authoritative home contract.
-if ! farts query 'type = agent' "$NOTES_DIR"/* >"$QUERY_OUT" 2>"$QUERY_ERR"; then
-  echo "Error: failed to query agent identity files with farts." >&2
-  if [ -s "$QUERY_ERR" ]; then
-    echo "farts stderr:" >&2
-    sed 's/^/  /' "$QUERY_ERR" >&2
-  fi
-  exit 1
-fi
+python3 - "$CI_ONLY" "$JSON_OUTPUT" <<'PY'
+from __future__ import annotations
 
-matched_count=0
-emitted_count=0
-while IFS= read -r f; do
-  [ -z "$f" ] && continue
-  [ ! -f "$f" ] && continue
-  matched_count=$((matched_count + 1))
+import json
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
 
-  # Filter to CI-enabled agents if --ci flag is set.
-  if [[ "$CI_ONLY" == "true" ]]; then
-    if ci_val=$(farts get ci "$f" 2>/dev/null); then
-      ci_val=$(printf '%s' "$ci_val" | tr '[:upper:]' '[:lower:]')
-    else
-      ci_val=""
-    fi
-    [[ "$ci_val" != "true" ]] && continue
-  fi
+ci_only = sys.argv[1] == "true"
+json_output = sys.argv[2] == "true"
 
-  name=$(basename "$f" .md)
-  # If the filename is a hex ID (obfuscated), use the title from frontmatter.
-  if [[ "$name" =~ ^[0-9a-f]+$ ]]; then
-    if title=$(farts get title "$f" 2>/dev/null); then
-      [ -n "$title" ] && name="$title"
-    fi
-  fi
 
-  emitted_count=$((emitted_count + 1))
-  echo "$name"
-done < "$QUERY_OUT"
+def run_json(command: list[str]) -> Any:
+    result = subprocess.run(
+        command,
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    return json.loads(result.stdout)
 
-if [[ "$CI_ONLY" != "true" && "$emitted_count" -eq 0 ]]; then
-  echo "Error: agent:list found no agents in $NOTES_DIR." >&2
-  if [ "$matched_count" -eq 0 ]; then
-    echo "No files matched frontmatter query: type = agent" >&2
-  fi
-  echo "Are notes unlocked and readable?" >&2
-  exit 1
-fi
+
+def parse_note(path: str) -> dict[str, Any]:
+    parsed = run_json(["notes", "parse", path])
+    frontmatter = parsed.get("frontmatter")
+    if not isinstance(frontmatter, dict):
+        return {}
+    return frontmatter
+
+
+def as_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() == "true"
+
+
+try:
+    rows = run_json(["notes", "list", "--json", "--type", "agent"])
+except subprocess.CalledProcessError as error:
+    print("Error: failed to list agent identity files with notes.", file=sys.stderr)
+    if error.stderr:
+        print("notes stderr:", file=sys.stderr)
+        for line in error.stderr.splitlines():
+            print(f"  {line}", file=sys.stderr)
+    raise SystemExit(1)
+
+if not isinstance(rows, list):
+    print("Error: notes list returned non-array JSON.", file=sys.stderr)
+    raise SystemExit(1)
+
+records: list[dict[str, Any]] = []
+need_frontmatter = ci_only or json_output
+
+for row in rows:
+    if not isinstance(row, dict):
+        continue
+
+    path = str(row.get("path") or "")
+    name = str(row.get("slug") or Path(path).stem).strip()
+    if not name:
+        continue
+
+    frontmatter: dict[str, Any] = {}
+    if need_frontmatter:
+        try:
+            frontmatter = parse_note(path)
+        except subprocess.CalledProcessError as error:
+            print(f"Error: failed to parse agent note: {path}", file=sys.stderr)
+            if error.stderr:
+                for line in error.stderr.splitlines():
+                    print(f"  {line}", file=sys.stderr)
+            raise SystemExit(1)
+
+    ci = as_bool(frontmatter.get("ci", row.get("ci", ""))) if need_frontmatter else False
+    if ci_only and not ci:
+        continue
+
+    if json_output:
+        records.append(
+            {
+                "name": name,
+                "ci": ci,
+                "github_login": str(frontmatter.get("github_login") or "").strip(),
+                "path": path,
+            }
+        )
+    else:
+        records.append({"name": name})
+
+records.sort(key=lambda record: record["name"])
+
+if json_output:
+    print(json.dumps(records, indent=2, sort_keys=True))
+else:
+    for record in records:
+        print(record["name"])
+
+if not ci_only and not records:
+    print("Error: agent:list found no agents in notes/.", file=sys.stderr)
+    print("Are notes unlocked and readable?", file=sys.stderr)
+    raise SystemExit(1)
+PY
