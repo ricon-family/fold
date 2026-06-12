@@ -186,6 +186,60 @@ SH
   export GIT="$path"
 }
 
+write_mock_secrets_test_agent_github() {
+  local path="$BATS_TEST_TMPDIR/secrets-github"
+  cat > "$path" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+if [ "${1:-}" != "get" ]; then
+  echo "unexpected secrets command: $*" >&2
+  exit 2
+fi
+case "${2:-}" in
+  test-agent/github-pat) echo "fixture-github-token" ;;
+  *) echo "missing secret: ${2:-}" >&2; exit 1 ;;
+esac
+SH
+  chmod +x "$path"
+  export SECRETS="$path"
+}
+
+write_mock_git_requires_gh_token_for_adopt() {
+  local path="$BATS_TEST_TMPDIR/git-requires-gh-token"
+  local real_git
+  real_git=$(command -v git)
+
+  cat > "$path" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+record_token() {
+  local phase="$1" token_status=empty
+  shift
+  [ -n "${GH_TOKEN:-}" ] && token_status=set
+  printf '%s token=%s args=%s\n' "$phase" "$token_status" "$*" >> "${FAKE_GIT_AUTH_LOG:?}"
+  [ "${GH_TOKEN:-}" = "fixture-github-token" ] || exit 70
+}
+
+if [ "${1:-}" = "ls-remote" ]; then
+  record_token ls-remote "$@"
+  printf '0000000000000000000000000000000000000000\trefs/heads/main\n'
+  exit 0
+fi
+
+if [ "${1:-}" = "clone" ]; then
+  record_token clone "$@"
+  target=""
+  for value in "$@"; do target="$value"; done
+  exec "$REAL_GIT" clone -q --branch main "${FAKE_REMOTE_SOURCE:?}" "$target"
+fi
+
+exec "$REAL_GIT" "$@"
+SH
+  chmod +x "$path"
+  export REAL_GIT="$real_git"
+  export GIT="$path"
+}
+
 write_mock_notes_no_changes() {
   local path="$BATS_TEST_TMPDIR/notes-clean"
   cat > "$path" <<'SH'
@@ -430,6 +484,31 @@ SH
   [ "$status" -eq 0 ]
   [[ "$output" == *"[REDACTED_GITHUB_TOKEN]"* ]]
   [[ "$output" != *"ghp_secretfixturetoken"* ]]
+}
+
+@test "homes:adopt-remote --repo sets agent GitHub token for private remote checks and clone" {
+  source_home="$BATS_TEST_TMPDIR/source-home"
+  remote="$BATS_TEST_TMPDIR/home.git"
+  home="$BATS_TEST_TMPDIR/workspace/home"
+  create_publishable_home "$source_home"
+  git clone -q --bare "$source_home" "$remote"
+  export FAKE_REMOTE_SOURCE="$remote"
+  export FAKE_GIT_AUTH_LOG="$BATS_TEST_TMPDIR/git-auth.log"
+  : > "$FAKE_GIT_AUTH_LOG"
+  write_mock_secrets_test_agent_github
+  write_mock_git_requires_gh_token_for_adopt
+
+  run fold_task homes:adopt-remote test-agent \
+    --home "$home" \
+    --repo test-agent/home \
+    --no-prepare \
+    --yes
+
+  [ "$status" -eq 0 ]
+  [ -f "$home/notes/abcdef12" ]
+  grep -F "ls-remote token=set args=ls-remote --exit-code https://github.com/test-agent/home.git refs/heads/main" "$FAKE_GIT_AUTH_LOG" >/dev/null
+  grep -F "clone token=set args=clone --branch main https://github.com/test-agent/home.git $home" "$FAKE_GIT_AUTH_LOG" >/dev/null
+  [[ "$output" != *"fixture-github-token"* ]]
 }
 
 @test "homes:adopt-remote --yes backs up clean local history and clones remote" {

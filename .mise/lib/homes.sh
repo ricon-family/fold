@@ -373,6 +373,24 @@ homes_git_redacted() {
   "$GIT_BIN" "$@" 2> >(redact_github_tokens >&2)
 }
 
+homes_agent_github_git() {
+  local agent="$1" token status
+  shift
+  token=$(get_agent_github_token "$agent") || return 1
+  if env GH_TOKEN="$token" "$GIT_BIN" "$@" 2> >(redact_github_tokens >&2); then
+    status=0
+  else
+    status=$?
+  fi
+  unset token
+  return "$status"
+}
+
+homes_agent_github_remote_branch_exists() {
+  local agent="$1" remote_url="$2" branch="$3"
+  homes_agent_github_git "$agent" ls-remote --exit-code "$remote_url" "refs/heads/$branch" >/dev/null 2>&1
+}
+
 homes_require_remote_reachable() {
   local remote_url="$1"
   if ! homes_git_redacted ls-remote "$remote_url" >/dev/null; then
