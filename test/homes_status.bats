@@ -184,6 +184,32 @@ SH
     commit -q -m "initial"
 }
 
+advance_module_to_tracked_main() {
+  local module_dir="$1" remote="$2"
+  git clone -q --bare "$module_dir" "$remote"
+  git -C "$module_dir" remote add origin "$remote"
+  printf '\ntracked update\n' >> "$module_dir/README.md"
+  git -C "$module_dir" add README.md
+  git -C "$module_dir" commit -q -m "advance tracked module"
+  git -C "$module_dir" push -q origin main
+}
+
+add_prepare_modules_and_optional_or_home() {
+  local home="$1"
+  cat >> "$home/mise.toml" <<'TOML'
+
+[env]
+AGENT_PREPARE_MODULES = "den fold"
+TOML
+  printf 'or-home\thttps://github.com/rikonor/home.git\t1111111111111111111111111111111111111111\tmain\n' >> "$home/.modules/manifest"
+  git -C "$home" add mise.toml .modules/manifest
+  git -C "$home" \
+    -c user.name="fixture" \
+    -c user.email="fixture@example.test" \
+    -c commit.gpgsign=false \
+    commit -q -m "configure prepare modules"
+}
+
 @test "homes:status reports a ready configured home" {
   home="$AGENTS_ROOT/test-agent/home"
   create_ready_home "$home"
@@ -197,12 +223,30 @@ SH
   [[ "$output" == *"Auth"*"ready"* ]]
   [[ "$output" == *"Home"*"clean main @"* ]]
   [[ "$output" == *"Notes"*"clean"* ]]
-  [[ "$output" == *"Modules"*"2 module(s) at pin"* ]]
+  [[ "$output" == *"Modules"*"2 required module(s) ready"* ]]
   [[ "$output" != *"# Auth: Secrets"* ]]
   [[ "$output" != *"module:fold"* ]]
   [[ "$output" == *"home ready"* ]]
   [[ "$output" != *"fixture-github-token"* ]]
   [[ "$output" != *"fixture-secret-material"* ]]
+}
+
+@test "homes:status accepts tracked modules and skips modules outside AGENT_PREPARE_MODULES" {
+  home="$AGENTS_ROOT/test-agent/home"
+  create_ready_home "$home"
+  configure_ready_auth
+  advance_module_to_tracked_main "$home/modules/fold" "$BATS_TEST_TMPDIR/fold.git"
+  add_prepare_modules_and_optional_or_home "$home"
+
+  run fold_task_stdout_only homes:status test-agent --agents-root "$AGENTS_ROOT" --home "$home" --json --check
+
+  [ "$status" -eq 0 ]
+  assert_json_output
+  [[ "$output" == *'"ready":true'* ]]
+  [[ "$output" == *'"name":"Prepare modules","status":"ok","detail":"AGENT_PREPARE_MODULES=den fold"'* ]]
+  [[ "$output" == *'"name":"module:fold","status":"ok","detail":"tracking main at '* ]]
+  [[ "$output" == *'"name":"optional:or-home","status":"ok","detail":"not required by AGENT_PREPARE_MODULES"'* ]]
+  [[ "$output" != *'"status":"fail"'* ]]
 }
 
 @test "homes:status --json --check emits clean ready JSON" {
