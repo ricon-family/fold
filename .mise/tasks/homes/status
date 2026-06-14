@@ -265,7 +265,7 @@ check_home() {
 }
 
 check_notes() {
-  local manifest manifest_state notes_changes tracked_readable
+  local manifest manifest_state notes_changes tracked_readable notes_managed=false
   manifest="$HOME_PATH/notes/.manifest"
 
   if [ "$HOME_EXISTS" != "true" ] || [ ! -d "$HOME_PATH" ]; then
@@ -285,9 +285,11 @@ check_notes() {
       record_row "Notes manifest" warn "missing notes/.manifest"
       ;;
     locked)
+      notes_managed=true
       record_fail "Notes manifest" "locked git-crypt blob" "cd $HOME_PATH && notes unlock"
       ;;
     *)
+      notes_managed=true
       record_row "Notes manifest" ok "readable"
 
       if ! command -v "$NOTES_BIN" >/dev/null 2>&1; then
@@ -304,7 +306,7 @@ check_notes() {
       ;;
   esac
 
-  if [ "$HOME_IS_GIT" = "true" ]; then
+  if [ "$HOME_IS_GIT" = "true" ] && [ "$notes_managed" = "true" ]; then
     tracked_readable=$(homes_tracked_readable_notes "$HOME_PATH")
     if [ -n "$tracked_readable" ]; then
       record_fail "Tracked readable notes" "readable notes/*.md are tracked" "cd $HOME_PATH && notes stage"

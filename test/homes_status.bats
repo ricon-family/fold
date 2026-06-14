@@ -210,6 +210,33 @@ TOML
     commit -q -m "configure prepare modules"
 }
 
+create_public_notes_home() {
+  local home="$1"
+  mkdir -p "$home/.mise/tasks/agent" "$home/notes"
+  git init -q -b main "$home"
+  cat > "$home/AGENTS.md" <<'MD'
+# test-agent home
+MD
+  cat > "$home/mise.toml" <<'TOML'
+[settings]
+quiet = true
+TOML
+  cat > "$home/.mise/tasks/agent/prepare" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+echo prepare
+SH
+  chmod +x "$home/.mise/tasks/agent/prepare"
+  printf '# public status\n' > "$home/notes/Status.md"
+  git -C "$home" remote add origin "https://github.com/test-agent/home.git"
+  git -C "$home" add AGENTS.md mise.toml .mise notes/Status.md
+  git -C "$home" \
+    -c user.name="fixture" \
+    -c user.email="fixture@example.test" \
+    -c commit.gpgsign=false \
+    commit -q -m "initial public notes home"
+}
+
 @test "homes:status reports a ready configured home" {
   home="$AGENTS_ROOT/test-agent/home"
   create_ready_home "$home"
@@ -247,6 +274,21 @@ TOML
   [[ "$output" == *'"name":"module:fold","status":"ok","detail":"tracking main at '* ]]
   [[ "$output" == *'"name":"optional:or-home","status":"ok","detail":"not required by AGENT_PREPARE_MODULES"'* ]]
   [[ "$output" != *'"status":"fail"'* ]]
+}
+
+@test "homes:status allows public tracked notes when notes manifest is absent" {
+  home="$AGENTS_ROOT/test-agent/home"
+  create_public_notes_home "$home"
+  configure_ready_auth
+
+  run fold_task_stdout_only homes:status test-agent --agents-root "$AGENTS_ROOT" --home "$home" --json --check
+
+  [ "$status" -eq 0 ]
+  assert_json_output
+  [[ "$output" == *'"ready":true'* ]]
+  [[ "$output" == *'"name":"Notes manifest","status":"warn","detail":"missing notes/.manifest"'* ]]
+  [[ "$output" != *'"name":"Tracked readable notes","status":"fail"'* ]]
+  [[ "$output" != *"notes stage"* ]]
 }
 
 @test "homes:status --json --check emits clean ready JSON" {
