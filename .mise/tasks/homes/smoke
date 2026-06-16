@@ -26,17 +26,18 @@ printf '== repo ==\n'
 "$GIT_BIN" -C "$HOME_PATH" status --short --branch
 homes_require_clean_worktree "$HOME_PATH"
 
-if [ "$SKIP_MISE" != "true" ] && [ -f "$HOME_PATH/mise.toml" ]; then
+if [ "$SKIP_MISE" != "true" ] && homes_has_mise_config "$HOME_PATH"; then
   printf '\n== mise ==\n'
-  require_tool mise
-  (cd "$HOME_PATH" && mise trust && mise install)
+  require_tool "$MISE_BIN"
+  (cd "$HOME_PATH" && "$MISE_BIN" trust && "$MISE_BIN" install)
   if [ -x "$HOME_PATH/.mise/tasks/agent/prepare" ]; then
-    (cd "$HOME_PATH" && mise run agent:prepare)
+    (cd "$HOME_PATH" && "$MISE_BIN" run agent:prepare)
   else
     echo "agent:prepare: not present"
   fi
+  homes_trust_mise_surface "$HOME_PATH"
   if [ -x "$HOME_PATH/.mise/tasks/welcome" ] || [ -f "$HOME_PATH/.mise/tasks/welcome" ]; then
-    (cd "$HOME_PATH" && mise welcome)
+    (cd "$HOME_PATH" && "$MISE_BIN" welcome)
   else
     echo "welcome: not present"
   fi

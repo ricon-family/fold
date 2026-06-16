@@ -14,7 +14,8 @@ GIT_BIN="${GIT:-git}"
 GPG_BIN="${GPG:-gpg}"
 NOTES_BIN="${NOTES:-notes}"
 MODULES_BIN="${MODULES:-modules}"
-export GIT_BIN GPG_BIN NOTES_BIN MODULES_BIN
+MISE_BIN="${MISE:-mise}"
+export GIT_BIN GPG_BIN NOTES_BIN MODULES_BIN MISE_BIN
 
 homes_agent_email() {
   printf '%s@ricon.family\n' "$1"
@@ -194,6 +195,59 @@ homes_manifest_state() {
 homes_notes_changes_summary() {
   local home_path="$1"
   (cd "$home_path" && "$NOTES_BIN" changes --summary)
+}
+
+homes_has_mise_config() {
+  local dir="$1"
+  [ -f "$dir/mise.toml" ] || [ -f "$dir/.mise.toml" ]
+}
+
+homes_trust_mise_dir() {
+  local dir="$1"
+  homes_has_mise_config "$dir" || return 0
+  require_tool "$MISE_BIN"
+  printf 'mise trust: %s\n' "$dir"
+  (cd "$dir" && env -u GIT_CONFIG_COUNT "$MISE_BIN" trust)
+}
+
+homes_trust_mise_surface() {
+  local home_path="$1" module_dir
+
+  homes_trust_mise_dir "$home_path"
+
+  if [ -d "$home_path/modules" ]; then
+    for module_dir in "$home_path"/modules/*; do
+      [ -d "$module_dir" ] || continue
+      homes_trust_mise_dir "$module_dir"
+    done
+  fi
+}
+
+homes_mise_trust_state() {
+  local dir="$1" output last_line
+
+  if ! homes_has_mise_config "$dir"; then
+    printf 'none\n'
+    return 0
+  fi
+
+  if ! command -v "$MISE_BIN" >/dev/null 2>&1; then
+    printf 'missing-tool\n'
+    return 0
+  fi
+
+  if ! output=$(cd "$dir" && "$MISE_BIN" trust --show 2>&1); then
+    printf 'error\n'
+    return 0
+  fi
+
+  last_line=$(printf '%s\n' "$output" | awk 'NF { line = $0 } END { print line }')
+  case "$last_line" in
+    *': trusted') printf 'trusted\n' ;;
+    *': untrusted') printf 'untrusted\n' ;;
+    *': ignored') printf 'ignored\n' ;;
+    *) printf 'unknown\n' ;;
+  esac
 }
 
 homes_require_git_repo() {
