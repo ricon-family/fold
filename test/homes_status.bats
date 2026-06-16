@@ -114,6 +114,26 @@ exit 0
 SH
   chmod +x "$TMPBIN/modules"
   export MODULES="$TMPBIN/modules"
+
+  cat > "$TMPBIN/mise-trust" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  trust)
+    if [ "${2:-}" = "--show" ]; then
+      state="trusted"
+      [ ! -f .mise-untrusted ] || state="untrusted"
+      printf '%s: %s\n' "$(pwd -P)" "$state"
+      exit 0
+    fi
+    exit 0
+    ;;
+esac
+echo "unexpected mise command: $*" >&2
+exit 2
+SH
+  chmod +x "$TMPBIN/mise-trust"
+  export MISE="$TMPBIN/mise-trust"
 }
 
 configure_ready_auth() {
@@ -274,6 +294,22 @@ SH
   [[ "$output" == *'"name":"module:fold","status":"ok","detail":"tracking main at '* ]]
   [[ "$output" == *'"name":"optional:or-home","status":"ok","detail":"not required by AGENT_PREPARE_MODULES"'* ]]
   [[ "$output" != *'"status":"fail"'* ]]
+}
+
+@test "homes:status fails when a prepared module has an untrusted mise config" {
+  home="$AGENTS_ROOT/test-agent/home"
+  create_ready_home "$home"
+  configure_ready_auth
+  printf '[tools]\nnode = "20"\n' > "$home/modules/fold/mise.toml"
+  touch "$home/modules/fold/.mise-untrusted"
+
+  run fold_task_stdout_only homes:status test-agent --agents-root "$AGENTS_ROOT" --home "$home" --json --check
+
+  [ "$status" -eq 1 ]
+  assert_json_output
+  [[ "$output" == *'"ready":false'* ]]
+  [[ "$output" == *'"name":"module-mise:fold","status":"fail","detail":"untrusted mise config"'* ]]
+  [[ "$output" == *"cd $home/modules/fold && mise trust"* ]]
 }
 
 @test "homes:status allows public tracked notes when notes manifest is absent" {

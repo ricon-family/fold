@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+#MISE description="Trust mise configs for an agent home and present modules"
+#USAGE flag "--home <path>" default="" help="Home repo path (default: ~/agents/<agent>/home)"
+#USAGE arg "<agent>" help="Agent name"
+#USAGE example "mise run homes:trust-mise c0da --home /path/to/desk/home" header="Trust a desk-scoped home wake surface"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck source=.mise/lib/homes.sh
+source "$ROOT/.mise/lib/homes.sh"
+
+AGENT="${usage_agent:?agent required}"
+HOME_PATH=$(homes_resolve_home "$AGENT" "${usage_home:-}")
+
+validate_agent "$AGENT"
+homes_require_git_repo "$HOME_PATH"
+
+printf 'Homes trust-mise\n\n'
+printf 'agent: %s\n' "$AGENT"
+printf 'home:  %s\n\n' "$HOME_PATH"
+
+homes_trust_mise_surface "$HOME_PATH"

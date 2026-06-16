@@ -279,6 +279,57 @@ SH
   export NOTES="$path"
 }
 
+write_mock_mise_trust_logger() {
+  local path="$BATS_TEST_TMPDIR/mise-trust-logger"
+  export MISE_TRUST_LOG="$BATS_TEST_TMPDIR/mise-trust.log"
+  : > "$MISE_TRUST_LOG"
+  cat > "$path" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s %s\n' "${1:-}" "$(pwd -P)" >> "${MISE_TRUST_LOG:?}"
+case "${1:-}" in
+  trust|install|welcome)
+    exit 0
+    ;;
+  run)
+    if [ "${2:-}" = "agent:prepare" ]; then
+      exit 0
+    fi
+    ;;
+esac
+echo "unexpected mise command: $*" >&2
+exit 2
+SH
+  chmod +x "$path"
+  export MISE="$path"
+}
+
+create_mise_home_with_module_configs() {
+  local home="$1"
+  create_simple_home "$home"
+  cat > "$home/mise.toml" <<'TOML'
+[tools]
+node = "20"
+TOML
+  printf 'modules/\n' > "$home/.gitignore"
+  git -C "$home" add mise.toml .gitignore
+  git -C "$home" \
+    -c user.name="fixture" \
+    -c user.email="fixture@example.test" \
+    -c commit.gpgsign=false \
+    commit -q -m "add mise config"
+
+  mkdir -p "$home/modules/fold" "$home/modules/den"
+  cat > "$home/modules/fold/mise.toml" <<'TOML'
+[tools]
+node = "20"
+TOML
+  cat > "$home/modules/den/mise.toml" <<'TOML'
+[tools]
+node = "20"
+TOML
+}
+
 @test "homes:publish-fresh dry-run verifies encrypted blobs without pushing" {
   home="$BATS_TEST_TMPDIR/home"
   remote="$BATS_TEST_TMPDIR/home.git"
@@ -561,6 +612,33 @@ SH
   [[ "$output" == *"Homes smoke"* ]]
   [[ "$output" == *"== repo =="* ]]
   [[ "$output" == *"== mise =="*"skipped"* ]]
+}
+
+@test "homes:smoke trusts mise configs in the home and present modules" {
+  home="$BATS_TEST_TMPDIR/home"
+  create_mise_home_with_module_configs "$home"
+  write_mock_mise_trust_logger
+
+  run fold_task homes:smoke test-agent --home "$home"
+
+  [ "$status" -eq 0 ]
+  grep -F "trust $(cd "$home" && pwd -P)" "$MISE_TRUST_LOG" >/dev/null
+  grep -F "trust $(cd "$home/modules/fold" && pwd -P)" "$MISE_TRUST_LOG" >/dev/null
+  grep -F "trust $(cd "$home/modules/den" && pwd -P)" "$MISE_TRUST_LOG" >/dev/null
+}
+
+@test "homes:trust-mise trusts the home and present modules" {
+  home="$BATS_TEST_TMPDIR/home"
+  create_mise_home_with_module_configs "$home"
+  write_mock_mise_trust_logger
+
+  run fold_task homes:trust-mise test-agent --home "$home"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Homes trust-mise"* ]]
+  grep -F "trust $(cd "$home" && pwd -P)" "$MISE_TRUST_LOG" >/dev/null
+  grep -F "trust $(cd "$home/modules/fold" && pwd -P)" "$MISE_TRUST_LOG" >/dev/null
+  grep -F "trust $(cd "$home/modules/den" && pwd -P)" "$MISE_TRUST_LOG" >/dev/null
 }
 
 @test "homes:smoke fails closed when notes is unavailable for a notes-managed home" {

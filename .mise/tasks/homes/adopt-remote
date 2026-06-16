@@ -41,13 +41,14 @@ run_prepare() {
     return 0
   fi
 
-  require_tool mise
-  (cd "$HOME_PATH" && mise trust && mise install)
+  require_tool "$MISE_BIN"
+  (cd "$HOME_PATH" && "$MISE_BIN" trust && "$MISE_BIN" install)
   if [ -x "$HOME_PATH/.mise/tasks/agent/prepare" ]; then
-    (cd "$HOME_PATH" && mise run agent:prepare)
+    (cd "$HOME_PATH" && "$MISE_BIN" run agent:prepare)
   else
     echo "prepare: no agent:prepare task"
   fi
+  homes_trust_mise_surface "$HOME_PATH"
 }
 
 validate_agent "$AGENT"

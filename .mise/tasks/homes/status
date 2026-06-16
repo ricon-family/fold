@@ -257,6 +257,8 @@ check_home() {
     record_row "mise.toml" warn "missing"
   fi
 
+  check_mise_trust "mise trust" "$HOME_PATH"
+
   if [ -x "$HOME_PATH/.mise/tasks/agent/prepare" ]; then
     record_row "agent:prepare" ok "present"
   else
@@ -344,8 +346,34 @@ module_in_prepare_set() {
   return 1
 }
 
+# shellcheck disable=SC2329 # Invoked by check_home/check_modules; shellcheck cannot see through run_section.
+check_mise_trust() {
+  local label="$1" dir="$2" state
+  state=$(homes_mise_trust_state "$dir")
+  case "$state" in
+    none)
+      return 0
+      ;;
+    trusted)
+      record_row "$label" ok "trusted"
+      ;;
+    untrusted)
+      record_fail "$label" "untrusted mise config" "cd $dir && mise trust"
+      ;;
+    ignored)
+      record_fail "$label" "mise config is ignored" "cd $dir && mise trust"
+      ;;
+    missing-tool)
+      record_fail "$label" "mise not available; cannot verify trust" "install mise"
+      ;;
+    *)
+      record_fail "$label" "could not verify mise trust" "cd $dir && mise trust --show"
+      ;;
+  esac
+}
+
 check_modules() {
-  local manifest manifest_state name url pin track module_dir head branch remote_head prepare_modules any_modules=false any_required=false
+  local manifest manifest_state name _url pin track module_dir head branch remote_head prepare_modules any_modules=false any_required=false
   manifest="$HOME_PATH/.modules/manifest"
   prepare_modules="$(home_prepare_modules || true)"
 
@@ -379,20 +407,26 @@ check_modules() {
     record_row "Prepare modules" ok "AGENT_PREPARE_MODULES=$prepare_modules"
   fi
 
-  while IFS=$'\t' read -r name url pin track; do
+  while IFS=$'\t' read -r name _url pin track; do
     [ -n "$name" ] || continue
     any_modules=true
+    head=""
+    module_dir="$HOME_PATH/modules/$name"
     if [ -n "$prepare_modules" ] && ! module_in_prepare_set "$name" "$prepare_modules"; then
-      record_row "optional:$name" ok "not required by AGENT_PREPARE_MODULES"
+      if [ -d "$module_dir" ]; then
+        check_mise_trust "module-mise:$name" "$module_dir"
+        record_row "optional:$name" ok "present; not required by AGENT_PREPARE_MODULES"
+      else
+        record_row "optional:$name" ok "not required by AGENT_PREPARE_MODULES"
+      fi
       continue
     fi
     any_required=true
-    head=""
-    module_dir="$HOME_PATH/modules/$name"
     if [ ! -d "$module_dir" ]; then
       record_fail "module:$name" "missing clone" "cd $HOME_PATH && modules init ${prepare_modules:-}"
       continue
     fi
+    check_mise_trust "module-mise:$name" "$module_dir"
     if ! "$GIT_BIN" -C "$module_dir" rev-parse --git-dir >/dev/null 2>&1; then
       record_fail "module:$name" "not a git repository" "cd $HOME_PATH && modules init ${prepare_modules:-}"
       continue
