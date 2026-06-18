@@ -85,7 +85,7 @@ Guidance only works when it appears at the moment you need it. Before starting a
 | Check or repair agent GitHub 2FA/PATs | Read `notes/github-2fa-pat-runbook.md` and `notes/credential-rotation-consent.md` |
 | Create or revive a codebase | Read `notes/creating-a-codebase.md` and, for stale work, `notes/revival-pattern.md` |
 | Hit any command/tool/auth/CI failure | Stop and read `notes/observed-failures-are-work.md`, especially "When a command fails" |
-| Edit, stage, or commit readable notes in a notes-managed repo | Read `notes/notes-managed-repo-workflow.md`; use `notes changes` and `notes stage`, not raw `git add notes/...` |
+| Edit, stage, or commit readable notes in a notes-managed repo | Read `notes/notes-managed-repo-workflow.md`; use `notes changes`, then `notes commit` for note-only commits or `notes stage` for mixed/manual staging — not raw `git add notes/...` |
 | Repeat long paths in shell/tool calls | Create token-short symlink handles and read the pattern note through the handle: `agent=${GIT_AUTHOR_NAME:-<agent>}; mkdir -p "/tmp/$agent.d"; ln -sfn "$HOME/agents/$agent/home/modules/fold" "/tmp/$agent.d/fold"; ln -sfn "/tmp/$agent.d/fold/notes" "/tmp/$agent.d/fn"; cat "/tmp/$agent.d/fn/token-short-symlink-handles.md"` |
 
 Before Bash: large inline scripts belong in files, and repeated/debuggable shell flows belong in a scratch mise workbench. If the terminal transcript would make Or decode a blob, stop and use [[file-first-scripts]], [[scratch-mise-workbench]], and [[legible-terminal-workstream]] instead.
@@ -311,10 +311,11 @@ Note filenames are obfuscated on GitHub (e.g., `secret.md` → `a1b2c3d4`). Loca
 **Editing workflow:**
 - Edit notes normally using their readable names
 - `notes changes` — see what you've modified (use `--summary` for just the file list)
-- `notes stage` — stage changed notes for commit (don't use `git add` — it won't work because of the exclude)
+- `notes commit` — preferred note-only path; stages changed notes, obfuscates, commits, and deobfuscates in one command
+- `notes stage` — manual/mixed path for staging notes before a normal `git commit` (don't use `git add` for readable notes — it won't work because of the exclude)
 - `git commit` — pre-commit hook obfuscates, post-commit hook deobfuscates
 - `git pull` works — post-merge hook deobfuscates after pull
-- Don't run `git add -A` or `git add notes/` — use `notes stage` instead
+- Don't run `git add -A` or `git add notes/` for readable notes — use `notes commit` or `notes stage` instead
 - If `git pull` exits with `Error: refusing to overwrite dirty readable note: ...`, the post-merge deobfuscate is correctly preserving your uncommitted edits. Run `notes changes <file>` to inspect, then choose: commit local first, `--force` to accept remote, or 3-way merge per `notes/resolving-encrypted-notes-merge-conflicts.md`.
 - If Git reports encrypted note content conflicts (`Cannot merge binary files: notes/<hash>` or `UU notes/<hash>`), start with `notes merge --dry-run --out /tmp/<name>` or `notes conflicts --out /tmp/<name>` to get readable `base.md` / `ours.md` / `theirs.md` artifacts. Resolve plaintext, then stage the obfuscated path with `git add notes/<hash>`.
 - For readable note diffs, use `notes diff` (or `notes diff --pr <number>`) instead of raw GitHub encrypted blob diffs. Deeper docs: `notes/notes.md` (tool), `notes/obfuscation-design.md` (why), `notes/cross-repo-modules.md` (modules).
