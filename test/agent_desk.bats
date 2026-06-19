@@ -78,7 +78,7 @@ make_repo() {
   cat > "$pi_dir/auth.json" <<'JSON'
 {
   "openai-codex": {
-    "type": "oauth",
+    "type": "SECRET_TYPE_VALUE",
     "access_token": "SECRET_ACCESS",
     "refresh": "SECRET_REFRESH",
     "accountId": "acct_123",
@@ -103,6 +103,8 @@ JSON
   [[ "$output" != *"SECRET_ACCESS"* ]]
   [[ "$output" != *"SECRET_REFRESH"* ]]
   [[ "$output" != *"SECRET_KEY"* ]]
+  [[ "$output" != *"SECRET_TYPE_VALUE"* ]]
+  [[ "$output" == *"type_key=present"* ]]
 }
 
 @test "agent:desk:smoke can fail closed when --check is set" {

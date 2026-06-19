@@ -50,7 +50,8 @@ print_auth_entries() {
         (.value | keys) as $keys
         | ($keys | map(select(test($sensitive; "i") | not)) | sort | @json) as $safe
         | ($keys | map(select(test($sensitive; "i"))) | sort | @json) as $redacted
-        | "    \(.key): type=\(.value.type // "?") safe_keys=\($safe) redacted_keys=\($redacted)"
+        | (if ($keys | index("type")) then "present" else "missing" end) as $type_key
+        | "    \(.key): type_key=\($type_key) safe_keys=\($safe) redacted_keys=\($redacted)"
       else
         "    \(.key): value_type=\(.value | type)"
       end
