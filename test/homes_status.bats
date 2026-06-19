@@ -114,6 +114,26 @@ exit 0
 SH
   chmod +x "$TMPBIN/modules"
   export MODULES="$TMPBIN/modules"
+
+  cat > "$TMPBIN/mise-trust" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  trust)
+    if [ "${2:-}" = "--show" ]; then
+      state="trusted"
+      [ ! -f .mise-untrusted ] || state="untrusted"
+      printf '%s: %s\n' "$(pwd -P)" "$state"
+      exit 0
+    fi
+    exit 0
+    ;;
+esac
+echo "unexpected mise command: $*" >&2
+exit 2
+SH
+  chmod +x "$TMPBIN/mise-trust"
+  export MISE="$TMPBIN/mise-trust"
 }
 
 configure_ready_auth() {
@@ -184,6 +204,59 @@ SH
     commit -q -m "initial"
 }
 
+advance_module_to_tracked_main() {
+  local module_dir="$1" remote="$2"
+  git clone -q --bare "$module_dir" "$remote"
+  git -C "$module_dir" remote add origin "$remote"
+  printf '\ntracked update\n' >> "$module_dir/README.md"
+  git -C "$module_dir" add README.md
+  git -C "$module_dir" commit -q -m "advance tracked module"
+  git -C "$module_dir" push -q origin main
+}
+
+add_prepare_modules_and_optional_or_home() {
+  local home="$1"
+  cat >> "$home/mise.toml" <<'TOML'
+
+[env]
+AGENT_PREPARE_MODULES = "den fold"
+TOML
+  printf 'or-home\thttps://github.com/rikonor/home.git\t1111111111111111111111111111111111111111\tmain\n' >> "$home/.modules/manifest"
+  git -C "$home" add mise.toml .modules/manifest
+  git -C "$home" \
+    -c user.name="fixture" \
+    -c user.email="fixture@example.test" \
+    -c commit.gpgsign=false \
+    commit -q -m "configure prepare modules"
+}
+
+create_public_notes_home() {
+  local home="$1"
+  mkdir -p "$home/.mise/tasks/agent" "$home/notes"
+  git init -q -b main "$home"
+  cat > "$home/AGENTS.md" <<'MD'
+# test-agent home
+MD
+  cat > "$home/mise.toml" <<'TOML'
+[settings]
+quiet = true
+TOML
+  cat > "$home/.mise/tasks/agent/prepare" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+echo prepare
+SH
+  chmod +x "$home/.mise/tasks/agent/prepare"
+  printf '# public status\n' > "$home/notes/Status.md"
+  git -C "$home" remote add origin "https://github.com/test-agent/home.git"
+  git -C "$home" add AGENTS.md mise.toml .mise notes/Status.md
+  git -C "$home" \
+    -c user.name="fixture" \
+    -c user.email="fixture@example.test" \
+    -c commit.gpgsign=false \
+    commit -q -m "initial public notes home"
+}
+
 @test "homes:status reports a ready configured home" {
   home="$AGENTS_ROOT/test-agent/home"
   create_ready_home "$home"
@@ -197,12 +270,61 @@ SH
   [[ "$output" == *"Auth"*"ready"* ]]
   [[ "$output" == *"Home"*"clean main @"* ]]
   [[ "$output" == *"Notes"*"clean"* ]]
-  [[ "$output" == *"Modules"*"2 module(s) at pin"* ]]
+  [[ "$output" == *"Modules"*"2 required module(s) ready"* ]]
   [[ "$output" != *"# Auth: Secrets"* ]]
   [[ "$output" != *"module:fold"* ]]
   [[ "$output" == *"home ready"* ]]
   [[ "$output" != *"fixture-github-token"* ]]
   [[ "$output" != *"fixture-secret-material"* ]]
+}
+
+@test "homes:status accepts tracked modules and skips modules outside AGENT_PREPARE_MODULES" {
+  home="$AGENTS_ROOT/test-agent/home"
+  create_ready_home "$home"
+  configure_ready_auth
+  advance_module_to_tracked_main "$home/modules/fold" "$BATS_TEST_TMPDIR/fold.git"
+  add_prepare_modules_and_optional_or_home "$home"
+
+  run fold_task_stdout_only homes:status test-agent --agents-root "$AGENTS_ROOT" --home "$home" --json --check
+
+  [ "$status" -eq 0 ]
+  assert_json_output
+  [[ "$output" == *'"ready":true'* ]]
+  [[ "$output" == *'"name":"Prepare modules","status":"ok","detail":"AGENT_PREPARE_MODULES=den fold"'* ]]
+  [[ "$output" == *'"name":"module:fold","status":"ok","detail":"tracking main at '* ]]
+  [[ "$output" == *'"name":"optional:or-home","status":"ok","detail":"not required by AGENT_PREPARE_MODULES"'* ]]
+  [[ "$output" != *'"status":"fail"'* ]]
+}
+
+@test "homes:status fails when a prepared module has an untrusted mise config" {
+  home="$AGENTS_ROOT/test-agent/home"
+  create_ready_home "$home"
+  configure_ready_auth
+  printf '[tools]\nnode = "20"\n' > "$home/modules/fold/mise.toml"
+  touch "$home/modules/fold/.mise-untrusted"
+
+  run fold_task_stdout_only homes:status test-agent --agents-root "$AGENTS_ROOT" --home "$home" --json --check
+
+  [ "$status" -eq 1 ]
+  assert_json_output
+  [[ "$output" == *'"ready":false'* ]]
+  [[ "$output" == *'"name":"module-mise:fold","status":"fail","detail":"untrusted mise config"'* ]]
+  [[ "$output" == *"cd $home/modules/fold && mise trust"* ]]
+}
+
+@test "homes:status allows public tracked notes when notes manifest is absent" {
+  home="$AGENTS_ROOT/test-agent/home"
+  create_public_notes_home "$home"
+  configure_ready_auth
+
+  run fold_task_stdout_only homes:status test-agent --agents-root "$AGENTS_ROOT" --home "$home" --json --check
+
+  [ "$status" -eq 0 ]
+  assert_json_output
+  [[ "$output" == *'"ready":true'* ]]
+  [[ "$output" == *'"name":"Notes manifest","status":"warn","detail":"missing notes/.manifest"'* ]]
+  [[ "$output" != *'"name":"Tracked readable notes","status":"fail"'* ]]
+  [[ "$output" != *"notes stage"* ]]
 }
 
 @test "homes:status --json --check emits clean ready JSON" {

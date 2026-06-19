@@ -101,7 +101,7 @@ group_ok_detail() {
       ;;
     Modules)
       modules=$(homes_render_check_rows_count_ok_prefixed "$ROWS_FILE" Modules "module:")
-      printf '%s module(s) at pin\n' "$modules"
+      printf '%s required module(s) ready\n' "$modules"
       ;;
     *)
       printf 'ready\n'
@@ -257,6 +257,8 @@ check_home() {
     record_row "mise.toml" warn "missing"
   fi
 
+  check_mise_trust "mise trust" "$HOME_PATH"
+
   if [ -x "$HOME_PATH/.mise/tasks/agent/prepare" ]; then
     record_row "agent:prepare" ok "present"
   else
@@ -265,7 +267,7 @@ check_home() {
 }
 
 check_notes() {
-  local manifest manifest_state notes_changes tracked_readable
+  local manifest manifest_state notes_changes tracked_readable notes_managed=false
   manifest="$HOME_PATH/notes/.manifest"
 
   if [ "$HOME_EXISTS" != "true" ] || [ ! -d "$HOME_PATH" ]; then
@@ -285,9 +287,11 @@ check_notes() {
       record_row "Notes manifest" warn "missing notes/.manifest"
       ;;
     locked)
+      notes_managed=true
       record_fail "Notes manifest" "locked git-crypt blob" "cd $HOME_PATH && notes unlock"
       ;;
     *)
+      notes_managed=true
       record_row "Notes manifest" ok "readable"
 
       if ! command -v "$NOTES_BIN" >/dev/null 2>&1; then
@@ -304,7 +308,7 @@ check_notes() {
       ;;
   esac
 
-  if [ "$HOME_IS_GIT" = "true" ]; then
+  if [ "$HOME_IS_GIT" = "true" ] && [ "$notes_managed" = "true" ]; then
     tracked_readable=$(homes_tracked_readable_notes "$HOME_PATH")
     if [ -n "$tracked_readable" ]; then
       record_fail "Tracked readable notes" "readable notes/*.md are tracked" "cd $HOME_PATH && notes stage"
@@ -314,9 +318,64 @@ check_notes() {
   fi
 }
 
+home_prepare_modules() {
+  local mise_file="$HOME_PATH/mise.toml"
+  [ -f "$mise_file" ] || return 0
+  awk '
+    /^[[:space:]]*\[/ {
+      in_env = ($0 ~ /^[[:space:]]*\[env\][[:space:]]*($|#)/)
+      next
+    }
+    in_env && /^[[:space:]]*"?AGENT_PREPARE_MODULES"?[[:space:]]*=/ {
+      sub(/^[^=]*=/, "")
+      sub(/[[:space:]]*#.*/, "")
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "")
+      gsub(/^"|"$/, "")
+      gsub(/^'"'"'|'"'"'$/, "")
+      print
+      exit
+    }
+  ' "$mise_file"
+}
+
+module_in_prepare_set() {
+  local wanted="$1" modules="$2" module
+  for module in $modules; do
+    [ "$module" = "$wanted" ] && return 0
+  done
+  return 1
+}
+
+# shellcheck disable=SC2329 # Invoked by check_home/check_modules; shellcheck cannot see through run_section.
+check_mise_trust() {
+  local label="$1" dir="$2" state
+  state=$(homes_mise_trust_state "$dir")
+  case "$state" in
+    none)
+      return 0
+      ;;
+    trusted)
+      record_row "$label" ok "trusted"
+      ;;
+    untrusted)
+      record_fail "$label" "untrusted mise config" "cd $dir && mise trust"
+      ;;
+    ignored)
+      record_fail "$label" "mise config is ignored" "cd $dir && mise trust"
+      ;;
+    missing-tool)
+      record_fail "$label" "mise not available; cannot verify trust" "install mise"
+      ;;
+    *)
+      record_fail "$label" "could not verify mise trust" "cd $dir && mise trust --show"
+      ;;
+  esac
+}
+
 check_modules() {
-  local manifest manifest_state name url pin track module_dir head any_modules=false
+  local manifest manifest_state name _url pin track module_dir head branch remote_head prepare_modules any_modules=false any_required=false
   manifest="$HOME_PATH/.modules/manifest"
+  prepare_modules="$(home_prepare_modules || true)"
 
   if [ "$HOME_EXISTS" != "true" ] || [ ! -d "$HOME_PATH" ]; then
     record_row "Modules" warn "skipped; home path unavailable"
@@ -344,23 +403,58 @@ check_modules() {
     record_fail "Modules tool" "not available" "install modules or run mise install in the home"
   fi
 
-  while IFS=$'\t' read -r name url pin track; do
+  if [ -n "$prepare_modules" ]; then
+    record_row "Prepare modules" ok "AGENT_PREPARE_MODULES=$prepare_modules"
+  fi
+
+  while IFS=$'\t' read -r name _url pin track; do
     [ -n "$name" ] || continue
     any_modules=true
     head=""
     module_dir="$HOME_PATH/modules/$name"
+    if [ -n "$prepare_modules" ] && ! module_in_prepare_set "$name" "$prepare_modules"; then
+      if [ -d "$module_dir" ]; then
+        check_mise_trust "module-mise:$name" "$module_dir"
+        record_row "optional:$name" ok "present; not required by AGENT_PREPARE_MODULES"
+      else
+        record_row "optional:$name" ok "not required by AGENT_PREPARE_MODULES"
+      fi
+      continue
+    fi
+    any_required=true
     if [ ! -d "$module_dir" ]; then
-      record_fail "module:$name" "missing clone" "cd $HOME_PATH && modules init"
+      record_fail "module:$name" "missing clone" "cd $HOME_PATH && modules init ${prepare_modules:-}"
       continue
     fi
+    check_mise_trust "module-mise:$name" "$module_dir"
     if ! "$GIT_BIN" -C "$module_dir" rev-parse --git-dir >/dev/null 2>&1; then
-      record_fail "module:$name" "not a git repository" "cd $HOME_PATH && modules init"
+      record_fail "module:$name" "not a git repository" "cd $HOME_PATH && modules init ${prepare_modules:-}"
       continue
     fi
-    if head=$("$GIT_BIN" -C "$module_dir" rev-parse HEAD 2>/dev/null) && [ -n "$pin" ] && [ "$head" = "$pin" ]; then
+    if ! head=$("$GIT_BIN" -C "$module_dir" rev-parse HEAD 2>/dev/null); then
+      record_fail "module:$name" "could not inspect HEAD" "cd $HOME_PATH && modules status"
+      continue
+    fi
+    if [ -n "$pin" ] && [ "$head" = "$pin" ]; then
       record_row "module:$name" ok "at pin ${pin:0:12}"
-    elif [ -n "${head:-}" ] && [ -n "$pin" ]; then
-      record_fail "module:$name" "at ${head:0:12}; expected ${pin:0:12}" "cd $HOME_PATH && modules init"
+      continue
+    fi
+    if [ -n "$track" ]; then
+      branch=$("$GIT_BIN" -C "$module_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+      if [ "$branch" != "$track" ]; then
+        record_fail "module:$name" "on ${branch:-unknown}; expected tracking $track" "cd $HOME_PATH && modules init ${prepare_modules:-}"
+        continue
+      fi
+      remote_head=$("$GIT_BIN" -C "$module_dir" rev-parse "refs/remotes/origin/$track" 2>/dev/null || true)
+      if [ -n "$remote_head" ] && [ "$head" != "$remote_head" ]; then
+        record_fail "module:$name" "at ${head:0:12}; origin/$track is ${remote_head:0:12}" "cd $HOME_PATH && modules init ${prepare_modules:-}"
+        continue
+      fi
+      record_row "module:$name" ok "tracking $track at ${head:0:12}"
+      continue
+    fi
+    if [ -n "$pin" ]; then
+      record_fail "module:$name" "at ${head:0:12}; expected ${pin:0:12}" "cd $HOME_PATH && modules init ${prepare_modules:-}"
     else
       record_fail "module:$name" "could not inspect pin" "cd $HOME_PATH && modules status"
     fi
@@ -368,6 +462,8 @@ check_modules() {
 
   if [ "$any_modules" != "true" ]; then
     record_row "Modules" warn "manifest has no modules"
+  elif [ "$any_required" != "true" ]; then
+    record_row "Modules" warn "AGENT_PREPARE_MODULES matched no manifest modules"
   fi
 }
 
