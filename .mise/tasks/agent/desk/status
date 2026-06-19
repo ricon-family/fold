@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+#MISE description="Show read-only status for one agent desk instance"
+#USAGE flag "--desk <path>" default="" help="Desk root path (default: DESK_ROOT or nearest parent with .desk/registry.json)"
+#USAGE flag "--home <path>" default="" help="Desk home path (default: <desk>/home or current git root)"
+#USAGE flag "--shell <name>" default="" help="Attachable shell name to inspect"
+#USAGE flag "--repo <label=path>" var=#true default="" help="Repo to inspect (repeatable; default: git repos directly under the desk)"
+#USAGE flag "--recent <n>" default="3" help="Recent commits to show per repo"
+#USAGE arg "[agent]" default="" help="Optional agent name for display only"
+#USAGE example "mise run agent:desk:status quick --desk ~/desks/quick-task --shell quick-task" header="Inspect one Quick desk"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck source=.mise/lib/agent_desk.sh
+source "$ROOT/.mise/lib/agent_desk.sh"
+
+AGENT="${usage_agent:-}"
+DESK_PATH=$(agent_desk_resolve_desk "${usage_desk:-}")
+HOME_PATH=$(agent_desk_resolve_home "${usage_home:-}" "$DESK_PATH" || true)
+SHELL_NAME="${usage_shell:-}"
+RECENT="${usage_recent:-3}"
+REPO_SPECS="${usage_repo:-}"
+
+[ -z "$AGENT" ] || validate_agent "$AGENT"
+[ -z "$SHELL_NAME" ] || agent_desk_validate_name shell "$SHELL_NAME"
+if ! [[ "$RECENT" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: --recent must be a non-negative integer" >&2
+  exit 1
+fi
+
+printf 'Agent desk status\n\n'
+if [ -n "$AGENT" ]; then
+  printf 'agent: %s\n' "$AGENT"
+else
+  printf 'agent: (not specified)\n'
+fi
+if [ -n "$DESK_PATH" ]; then
+  printf 'desk:  %s\n' "$DESK_PATH"
+else
+  printf 'desk:  (not resolved; pass --desk or run inside a desk)\n'
+fi
+if [ -n "$HOME_PATH" ]; then
+  printf 'home:  %s\n' "$HOME_PATH"
+else
+  printf 'home:  (not resolved)\n'
+fi
+
+if [ -n "$SHELL_NAME" ]; then
+  printf '\n== shell ==\n'
+  printf 'name: %s\n' "$SHELL_NAME"
+  agent_desk_shell_status "$SHELL_NAME" || true
+fi
+
+TMP_REPOS=$(mktemp)
+trap 'rm -f "$TMP_REPOS"' EXIT
+
+while IFS= read -r spec; do
+  [ -n "$spec" ] || continue
+  agent_desk_parse_repo_spec "$spec" >> "$TMP_REPOS"
+done < <(parse_values "$REPO_SPECS")
+
+if [ ! -s "$TMP_REPOS" ]; then
+  while IFS= read -r spec; do
+    [ -n "$spec" ] || continue
+    agent_desk_parse_repo_spec "$spec" >> "$TMP_REPOS"
+  done < <(agent_desk_list_default_repos "$DESK_PATH")
+fi
+
+if [ -s "$TMP_REPOS" ]; then
+  printf '\n== repos ==\n'
+  while IFS=$'\t' read -r label repo; do
+    [ -n "$label" ] || continue
+    agent_desk_git_status "$label" "$repo" "$RECENT"
+  done < "$TMP_REPOS"
+else
+  printf '\n== repos ==\n'
+  printf 'none specified or discovered\n'
+fi

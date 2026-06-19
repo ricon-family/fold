@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+#MISE description="Smoke-check one attachable agent shell"
+#USAGE flag "--shell <name>" default="" help="Attachable shell name"
+#USAGE flag "--history-lines <n>" default="120" help="History lines to show"
+#USAGE flag "--check" default=#false help="Exit nonzero if shell status fails"
+#USAGE example "mise run agent:desk:smoke --shell quick-nvr-kb-pack-20260618" header="Inspect shell status and history tail"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck source=.mise/lib/agent_desk.sh
+source "$ROOT/.mise/lib/agent_desk.sh"
+
+SHELL_NAME="${usage_shell:-}"
+HISTORY_LINES="${usage_history_lines:-120}"
+CHECK="${usage_check:-false}"
+
+if [ -z "$SHELL_NAME" ]; then
+  echo "ERROR: --shell is required" >&2
+  exit 64
+fi
+agent_desk_validate_name shell "$SHELL_NAME"
+if ! [[ "$HISTORY_LINES" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: --history-lines must be a non-negative integer" >&2
+  exit 1
+fi
+
+printf 'Agent shell smoke\n\n'
+printf 'shell: %s\n\n' "$SHELL_NAME"
+printf '== status ==\n'
+status=0
+agent_desk_shell_status "$SHELL_NAME" || status=$?
+
+printf '\n== history tail ==\n'
+agent_desk_shell_history_tail "$SHELL_NAME" "$HISTORY_LINES" || true
+
+if [ "$CHECK" = "true" ] && [ "$status" -ne 0 ]; then
+  exit "$status"
+fi

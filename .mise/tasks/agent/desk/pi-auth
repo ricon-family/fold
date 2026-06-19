@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+#MISE description="Inspect Pi auth/model files without printing secret values"
+#USAGE flag "--pi-dir <path>" default="" help="Pi agent directory (default: ~/.pi/agent)"
+#USAGE example "mise run agent:desk:pi-auth" header="Inspect live Pi auth metadata safely"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck source=.mise/lib/common.sh
+source "$ROOT/.mise/lib/common.sh"
+
+JQ_BIN="${JQ:-jq}"
+SENSITIVE_KEY_RE='(token|secret|password|api.?key|access|refresh|id_token|key)$'
+PI_DIR="${usage_pi_dir:-}"
+if [ -z "$PI_DIR" ]; then
+  PI_DIR="$HOME/.pi/agent"
+fi
+case "$PI_DIR" in
+  "~") PI_DIR="$HOME" ;;
+  "~/"*) PI_DIR="$HOME/${PI_DIR#~/}" ;;
+esac
+
+require_tool "$JQ_BIN"
+
+mtime_iso() {
+  local file="$1" epoch
+  if epoch=$(stat -f '%m' "$file" 2>/dev/null); then
+    :
+  elif epoch=$(stat -c '%Y' "$file" 2>/dev/null); then
+    :
+  else
+    printf 'unknown\n'
+    return 0
+  fi
+
+  date -u -r "$epoch" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
+    || date -u -d "@$epoch" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
+    || printf '%s\n' "$epoch"
+}
+
+json_type() {
+  "$JQ_BIN" -r 'type' "$1"
+}
+
+print_auth_entries() {
+  local file="$1"
+  "$JQ_BIN" -r --arg sensitive "$SENSITIVE_KEY_RE" '
+    to_entries
+    | sort_by(.key)[]
+    | if (.value | type) == "object" then
+        (.value | keys) as $keys
+        | ($keys | map(select(test($sensitive; "i") | not)) | sort | @json) as $safe
+        | ($keys | map(select(test($sensitive; "i"))) | sort | @json) as $redacted
+        | (if ($keys | index("type")) then "present" else "missing" end) as $type_key
+        | "    \(.key): type_key=\($type_key) safe_keys=\($safe) redacted_keys=\($redacted)"
+      else
+        "    \(.key): value_type=\(.value | type)"
+      end
+  ' "$file"
+}
+
+print_models_entries() {
+  local file="$1"
+  "$JQ_BIN" -r '
+    (.providers // {})
+    | if type == "object" then
+        "    provider_keys: \((keys | sort) | @json)"
+      else
+        empty
+      end
+  ' "$file"
+}
+
+print_json_file() {
+  local file="$1" kind="$2" type
+
+  printf '\n%s\n' "$file"
+  if [ ! -e "$file" ]; then
+    printf '  missing\n'
+    return 0
+  fi
+  if [ ! -f "$file" ]; then
+    printf '  not a regular file\n'
+    return 0
+  fi
+
+  printf '  size: %s bytes\n' "$(wc -c < "$file" | tr -d ' ')"
+  printf '  mtime: %s\n' "$(mtime_iso "$file")"
+
+  if ! "$JQ_BIN" empty "$file" >/dev/null 2>&1; then
+    printf '  parse_error: invalid JSON\n'
+    return 0
+  fi
+
+  type=$(json_type "$file")
+  if [ "$type" != object ]; then
+    printf '  json_type: %s\n' "$type"
+    return 0
+  fi
+
+  printf '  keys: %s\n' "$("$JQ_BIN" -c 'keys | sort' "$file")"
+  case "$kind" in
+    auth) print_auth_entries "$file" ;;
+    models) print_models_entries "$file" ;;
+  esac
+}
+
+printf 'Pi auth metadata\n'
+printf 'pi_dir: %s\n' "$PI_DIR"
+print_json_file "$PI_DIR/auth.json" auth
+print_json_file "$PI_DIR/auth.json.bak" auth
+print_json_file "$PI_DIR/models.json" models
