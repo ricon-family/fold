@@ -136,6 +136,18 @@ JSON
   grep -q 'shimmer as "$AGENT"' "$work_dir/start-quick-a.sh"
 }
 
+@test "agent:desk:wake renders relative packet paths as absolute for the launcher" {
+  home="$BATS_TEST_TMPDIR/home"
+  work_dir="$BATS_TEST_TMPDIR/wake"
+  make_repo "$home" home
+  repo_real=$(cd "$REPO_DIR" && pwd -P)
+
+  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet AGENTS.md --work-dir "$work_dir"
+
+  [ "$status" -eq 0 ]
+  grep -q "PACKET_PATH='$repo_real/AGENTS.md'" "$work_dir/start-quick-a.sh"
+}
+
 @test "agent:desk:wake --yes launches shell and smokes it" {
   home="$BATS_TEST_TMPDIR/home"
   work_dir="$BATS_TEST_TMPDIR/wake"

@@ -30,6 +30,20 @@ agent_desk_abs_path() {
   (cd "$path" && pwd -P)
 }
 
+agent_desk_abs_file() {
+  local path="$1" dir base
+  if [ -z "$path" ]; then
+    return 1
+  fi
+  if [ ! -f "$path" ]; then
+    echo "ERROR: file does not exist: $path" >&2
+    exit 1
+  fi
+  dir=$(dirname "$path")
+  base=$(basename "$path")
+  printf '%s/%s\n' "$(cd "$dir" && pwd -P)" "$base"
+}
+
 agent_desk_find_from_cwd() {
   local dir="$PWD"
   while [ "$dir" != "/" ]; do
