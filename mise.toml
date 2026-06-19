@@ -3,6 +3,9 @@ experimental = true
 quiet = true
 task_output = "interleave"
 
+[shell_alias]
+header = '''printf '\n== %s ==\n''''
+
 [plugins]
 shiv = "https://github.com/KnickKnackLabs/vfox-shiv"
 
