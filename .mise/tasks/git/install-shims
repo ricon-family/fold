@@ -51,7 +51,7 @@ FOLD_DIR="\$AGENT_HOME/modules/fold"
 
 if ! git -C "\$FOLD_DIR" rev-parse --show-toplevel >/dev/null 2>&1; then
   echo "Error: fold clone not found at \$FOLD_DIR" >&2
-  echo 'Expected a prepared fold module at $AGENT_HOME/modules/fold.' >&2
+  echo "Expected a prepared fold module at \$AGENT_HOME/modules/fold." >&2
   exit 1
 fi
 
