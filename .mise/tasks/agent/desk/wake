@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+#MISE description="Render and optionally launch an attachable agent desk wake"
+#USAGE flag "--desk <path>" default="" help="Desk root path (used to derive --home when omitted)"
+#USAGE flag "--home <path>" default="" help="Home repo path for the agent process (default: <desk>/home)"
+#USAGE flag "--shell <name>" default="" help="Attachable shell name to launch"
+#USAGE flag "--packet <path>" default="" help="Wake packet file to pass to the agent"
+#USAGE flag "--title <title>" default="agent desk wake — root handoff" help="Title line prepended to the packet"
+#USAGE flag "--identity-source <path>" default="" help="Directory where 'shimmer as <agent>' should run (default: this fold checkout)"
+#USAGE flag "--work-dir <path>" default="" help="Directory for generated launcher (default: temporary directory)"
+#USAGE flag "-y --yes" default=#false help="Actually call shell run; without this, render and print the plan only"
+#USAGE arg "<agent>" help="Agent identity to launch"
+#USAGE example "mise run agent:desk:wake quick --desk ~/desks/q --shell quick-q --packet /tmp/wake.md --yes" header="Launch Quick in a desk"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck source=.mise/lib/agent_desk.sh
+source "$ROOT/.mise/lib/agent_desk.sh"
+
+AGENT="${usage_agent:?agent required}"
+DESK_PATH=$(agent_desk_resolve_desk "${usage_desk:-}")
+HOME_PATH=$(agent_desk_resolve_home "${usage_home:-}" "$DESK_PATH" || true)
+SHELL_NAME="${usage_shell:-}"
+PACKET_PATH="${usage_packet:-}"
+TITLE="${usage_title:-agent desk wake — root handoff}"
+IDENTITY_SOURCE="${usage_identity_source:-$ROOT}"
+WORK_DIR="${usage_work_dir:-}"
+YES="${usage_yes:-false}"
+
+validate_agent "$AGENT"
+if [ -z "$HOME_PATH" ]; then
+  echo "ERROR: --home is required when --desk/home cannot be resolved" >&2
+  exit 64
+fi
+if [ -z "$SHELL_NAME" ]; then
+  echo "ERROR: --shell is required" >&2
+  exit 64
+fi
+agent_desk_validate_name shell "$SHELL_NAME"
+if [ -z "$PACKET_PATH" ]; then
+  echo "ERROR: --packet is required" >&2
+  exit 64
+fi
+if [ ! -f "$PACKET_PATH" ]; then
+  echo "ERROR: packet file not found: $PACKET_PATH" >&2
+  exit 1
+fi
+PACKET_PATH=$(agent_desk_abs_file "$PACKET_PATH")
+IDENTITY_SOURCE=$(agent_desk_abs_path "$IDENTITY_SOURCE")
+
+if [ -z "$WORK_DIR" ]; then
+  WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/fold-agent-desk-wake.XXXXXX")
+else
+  mkdir -p "$WORK_DIR"
+  WORK_DIR=$(agent_desk_abs_path "$WORK_DIR")
+fi
+LAUNCHER="$WORK_DIR/start-$SHELL_NAME.sh"
+
+cat > "$LAUNCHER" <<LAUNCHER
+#!/usr/bin/env bash
+set -euo pipefail
+AGENT=$(agent_desk_single_quote "$AGENT")
+HOME_PATH=$(agent_desk_single_quote "$HOME_PATH")
+IDENTITY_SOURCE=$(agent_desk_single_quote "$IDENTITY_SOURCE")
+PACKET_PATH=$(agent_desk_single_quote "$PACKET_PATH")
+TITLE=$(agent_desk_single_quote "$TITLE")
+
+cd "\$HOME_PATH"
+eval "\$(cd "\$IDENTITY_SOURCE" && shimmer as "\$AGENT")"
+export CHAT_IDENTITY="\$AGENT"
+message=\$(cat "\$PACKET_PATH")
+exec shimmer agent "[\$TITLE]
+\${message}"
+LAUNCHER
+chmod +x "$LAUNCHER"
+
+printf 'Agent desk wake plan\n\n'
+printf 'agent:           %s\n' "$AGENT"
+printf 'desk:            %s\n' "${DESK_PATH:-'(not resolved)'}"
+printf 'home:            %s\n' "$HOME_PATH"
+printf 'shell:           %s\n' "$SHELL_NAME"
+printf 'packet:          %s\n' "$PACKET_PATH"
+printf 'identity-source: %s\n' "$IDENTITY_SOURCE"
+printf 'launcher:        %s\n' "$LAUNCHER"
+
+if [ "$YES" != "true" ]; then
+  printf '\ndry-run: pass --yes to launch with shell run.\n'
+  exit 0
+fi
+
+printf '\nlaunching shell %s from %s\n' "$SHELL_NAME" "$HOME_PATH"
+"$AGENT_DESK_SHELL_BIN" run --cwd "$HOME_PATH" "$SHELL_NAME" "$LAUNCHER"
+printf '\nsmoke:\n'
+mise run -q agent:desk:smoke --shell "$SHELL_NAME" --check
