@@ -44,6 +44,7 @@ if [ ! -f "$PACKET_PATH" ]; then
   echo "ERROR: packet file not found: $PACKET_PATH" >&2
   exit 1
 fi
+PACKET_PATH=$(agent_desk_abs_file "$PACKET_PATH")
 IDENTITY_SOURCE=$(agent_desk_abs_path "$IDENTITY_SOURCE")
 
 if [ -z "$WORK_DIR" ]; then
