@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+#MISE description="Show mass-analysis workbench artifacts"
+#USAGE flag "--workbench <dir>" default="" help="Workbench path (default: current directory)"
+set -euo pipefail
+
+workbench="${usage_workbench:-$PWD}"
+printf 'workbench: %s\n' "$workbench"
+if [ ! -d "$workbench" ]; then
+  echo "missing"
+  exit 1
+fi
+printf '\nArtifacts:\n'
+find "$workbench/artifacts" -type f 2>/dev/null | sort | sed "s#^$workbench/#  #" || true
+printf '\nLogs:\n'
+find "$workbench/logs" -type f 2>/dev/null | sort | sed "s#^$workbench/#  #" || true

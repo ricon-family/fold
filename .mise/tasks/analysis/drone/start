@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+#MISE description="Start a background sphincters analysis drone"
+#USAGE flag "--workbench <dir>" default="" help="Workbench cwd/out-dir root (default: current directory)"
+#USAGE flag "--prompt-file <file>" default="" help="Prompt file for the drone"
+#USAGE flag "--name <name>" default="analysis-drone" help="Session/run name"
+#USAGE flag "--model <model>" default="openai-codex/gpt-5.4-mini" help="Provider-qualified model"
+#USAGE flag "--profile <profile>" default="plain" help="sphincters profile"
+#USAGE flag "--foreground" default=#false help="Wait for transcript instead of returning background handles"
+set -euo pipefail
+
+workbench="${usage_workbench:-$PWD}"
+prompt_file="${usage_prompt_file:-}"
+name="${usage_name:-analysis-drone}"
+model="${usage_model:-openai-codex/gpt-5.4-mini}"
+profile="${usage_profile:-plain}"
+
+if [ -z "$prompt_file" ]; then
+  echo "ERROR: --prompt-file is required" >&2
+  exit 1
+fi
+
+out_dir="$workbench/artifacts/drones/$name"
+mkdir -p "$out_dir"
+
+args=(
+  x shiv:sphincters@0.3.0 -- sphincters run
+  --profile "$profile"
+  --model "$model"
+  --cwd "$workbench"
+  --prompt-file "$prompt_file"
+  --out-dir "$out_dir"
+  --name "$name"
+  --json
+)
+
+if [ "${usage_foreground:-false}" != "true" ]; then
+  args+=(--background)
+fi
+
+mise "${args[@]}"

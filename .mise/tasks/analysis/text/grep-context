@@ -1,0 +1,12 @@
+#!/usr/bin/env python3
+#MISE description="Extract bounded text excerpts around a regex from a manifest"
+#USAGE flag "--workbench <dir>" default="" help="Workbench path for default input/output"
+#USAGE flag "--manifest <file>" default="" help="Manifest path"
+#USAGE flag "--pattern <regex>" default="" help="Regex to search"
+#USAGE flag "--context <n>" default="2" help="Context lines before/after each hit"
+#USAGE flag "--allow-excerpts" default=#false help="Required acknowledgement that excerpts will include source text"
+#USAGE flag "--output <file>" default="" help="Markdown output path"
+import os, sys
+sys.path.insert(0, os.environ["MISE_CONFIG_ROOT"] + "/.mise/lib")
+from analysis_files import grep_context
+raise SystemExit(grep_context())

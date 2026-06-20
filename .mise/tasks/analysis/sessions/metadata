@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+#MISE description="Capture bounded sessions list/usage metadata for analysis"
+#USAGE flag "--workbench <dir>" default="" help="Workbench path for artifacts"
+#USAGE flag "--limit <n>" default="80" help="Max sessions for list/usage"
+#USAGE flag "--project <filter>" default="" help="Project filter passed to sessions"
+#USAGE flag "--all" default=#false help="Include subagent sessions"
+import os, sys
+sys.path.insert(0, os.environ["MISE_CONFIG_ROOT"] + "/.mise/lib")
+from analysis_sessions import metadata
+raise SystemExit(metadata())
