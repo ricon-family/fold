@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+#MISE description="Build a text-file manifest for an analysis corpus"
+#USAGE flag "--workbench <dir>" default="" help="Workbench path for default output"
+#USAGE flag "--root <path>" var=#true default="" help="Root directory to scan (repeatable)"
+#USAGE flag "--roots-file <file>" default="" help="File of roots; lines are PATH or LABEL<TAB>PATH"
+#USAGE flag "--include <glob>" var=#true default="" help="Include glob relative to each root (repeatable, default: **/*)"
+#USAGE flag "--exclude <glob>" var=#true default="" help="Additional exclude glob (repeatable)"
+#USAGE flag "--output <file>" default="" help="Manifest output path"
+#USAGE example "mise run analysis:files:manifest --workbench /tmp/x.d/wb --root repo --include 'mise.toml' --include '.mise/tasks/**'" header="Manifest selected files"
+import os
+import sys
+
+sys.path.insert(0, os.environ["MISE_CONFIG_ROOT"] + "/.mise/lib")
+from analysis_files import parse_shell_words, write_manifest
+
+raise SystemExit(
+    write_manifest(
+        workbench_path=os.environ.get("usage_workbench", ""),
+        root_values=parse_shell_words(os.environ.get("usage_root", "")),
+        roots_file=os.environ.get("usage_roots_file", ""),
+        includes=parse_shell_words(os.environ.get("usage_include", "")),
+        excludes=parse_shell_words(os.environ.get("usage_exclude", "")),
+        output_path=os.environ.get("usage_output", ""),
+    )
+)
