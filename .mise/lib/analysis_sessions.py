@@ -4,12 +4,10 @@ from __future__ import annotations
 import csv
 import json
 import math
-import os
-import shlex
 import subprocess
 import sys
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -74,20 +72,20 @@ def run_json(args: list[str]) -> Any:
     return json.loads(completed.stdout)
 
 
-def sessions_bin() -> str:
-    return os.environ.get("SESSIONS") or "sessions"
-
-
-def metadata() -> int:
-    workbench = resolve_path(os.environ.get("usage_workbench") or ".")
+def metadata(
+    *,
+    workbench_path: str = "",
+    limit: str = "80",
+    project: str = "",
+    include_all: bool = False,
+    sessions_command: str = "sessions",
+) -> int:
+    workbench = resolve_path(workbench_path or ".")
     out_dir = workbench / "artifacts/sessions"
-    limit = os.environ.get("usage_limit") or "80"
-    include_all = os.environ.get("usage_all", "false") == "true"
-    project = os.environ.get("usage_project", "")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    list_args = [sessions_bin(), "list", "--json", "--limit", limit]
-    usage_args = [sessions_bin(), "usage", "--json", "--limit", limit]
+    list_args = [sessions_command, "list", "--json", "--limit", str(limit)]
+    usage_args = [sessions_command, "usage", "--json", "--limit", str(limit)]
     if include_all:
         list_args.append("--all")
         usage_args.append("--all")
@@ -205,10 +203,9 @@ def rank_rows(metadata_dir: Path) -> list[RankRow]:
     return list(by_id.values())
 
 
-def rank() -> int:
-    workbench = resolve_path(os.environ.get("usage_workbench") or ".")
-    metadata_dir = resolve_path(os.environ.get("usage_metadata_dir") or str(workbench / "artifacts/sessions"))
-    inspect_limit = int(os.environ.get("usage_inspect_limit") or "12")
+def rank(*, workbench_path: str = "", metadata_dir_path: str = "", inspect_limit: int = 12) -> int:
+    workbench = resolve_path(workbench_path or ".")
+    metadata_dir = resolve_path(metadata_dir_path or str(workbench / "artifacts/sessions"))
     rows = sorted(rank_rows(metadata_dir), key=lambda row: (row.score(), row.cost_total, row.calls), reverse=True)
     tsv = metadata_dir / "rank.tsv"
     md = workbench / "artifacts/sessions-rank.md"
@@ -235,16 +232,22 @@ def rank() -> int:
     return 0
 
 
-def inspect() -> int:
-    workbench = resolve_path(os.environ.get("usage_workbench") or ".")
-    metadata_dir = resolve_path(os.environ.get("usage_metadata_dir") or str(workbench / "artifacts/sessions"))
-    ids_file = resolve_path(os.environ.get("usage_ids_file") or str(metadata_dir / "inspect-candidates.txt"))
+def inspect(
+    *,
+    workbench_path: str = "",
+    metadata_dir_path: str = "",
+    ids_file_path: str = "",
+    sessions_command: str = "sessions",
+) -> int:
+    workbench = resolve_path(workbench_path or ".")
+    metadata_dir = resolve_path(metadata_dir_path or str(workbench / "artifacts/sessions"))
+    ids_file = resolve_path(ids_file_path or str(metadata_dir / "inspect-candidates.txt"))
     inspect_dir = metadata_dir / "inspect"
     inspect_dir.mkdir(parents=True, exist_ok=True)
     failed = 0
     for sid in [line.strip() for line in ids_file.read_text().splitlines() if line.strip()]:
         try:
-            data = run_json([sessions_bin(), "inspect", "--json", sid])
+            data = run_json([sessions_command, "inspect", "--json", sid])
         except subprocess.CalledProcessError as exc:
             failed += 1
             print(f"WARN: inspect failed for {sid}: {exc}", file=sys.stderr)
@@ -273,9 +276,9 @@ def command_category(command: str) -> str:
     return "other"
 
 
-def structure() -> int:
-    workbench = resolve_path(os.environ.get("usage_workbench") or ".")
-    metadata_dir = resolve_path(os.environ.get("usage_metadata_dir") or str(workbench / "artifacts/sessions"))
+def structure(*, workbench_path: str = "", metadata_dir_path: str = "") -> int:
+    workbench = resolve_path(workbench_path or ".")
+    metadata_dir = resolve_path(metadata_dir_path or str(workbench / "artifacts/sessions"))
     rows = rank_rows(metadata_dir)
     out_tsv = metadata_dir / "structure.tsv"
     out_md = workbench / "artifacts/sessions-structure.md"

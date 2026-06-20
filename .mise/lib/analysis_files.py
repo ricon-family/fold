@@ -157,13 +157,20 @@ def read_manifest(path: Path) -> list[ManifestRow]:
     return rows
 
 
-def write_manifest() -> int:
-    workbench = resolve_path(os.environ.get("usage_workbench") or ".")
-    roots_file = os.environ.get("usage_roots_file", "")
-    roots = load_roots(parse_shell_words(os.environ.get("usage_root", "")), roots_file)
-    includes = parse_shell_words(os.environ.get("usage_include", ""))
-    excludes = DEFAULT_EXCLUDES + parse_shell_words(os.environ.get("usage_exclude", ""))
-    output = resolve_path(os.environ.get("usage_output") or str(workbench / "artifacts/files/manifest.tsv"))
+def write_manifest(
+    *,
+    workbench_path: str = "",
+    root_values: list[str] | None = None,
+    roots_file: str = "",
+    includes: list[str] | None = None,
+    excludes: list[str] | None = None,
+    output_path: str = "",
+) -> int:
+    workbench = resolve_path(workbench_path or ".")
+    roots = load_roots(root_values or [], roots_file)
+    include_patterns = includes or []
+    exclude_patterns = DEFAULT_EXCLUDES + (excludes or [])
+    output = resolve_path(output_path or str(workbench / "artifacts/files/manifest.tsv"))
     skipped_output = output.with_name(output.stem + ".skipped.tsv")
 
     if not roots:
@@ -180,9 +187,9 @@ def write_manifest() -> int:
             continue
         for file_path in iter_candidate_files(root.path):
             rel = file_path.relative_to(root.path).as_posix()
-            if not rel_matches(rel, includes):
+            if not rel_matches(rel, include_patterns):
                 continue
-            if is_excluded(rel, excludes):
+            if is_excluded(rel, exclude_patterns):
                 skipped.append((root.label, rel, "excluded"))
                 continue
             data = file_path.read_bytes()
@@ -217,10 +224,10 @@ def write_manifest() -> int:
     return 0
 
 
-def write_estimate() -> int:
-    workbench = resolve_path(os.environ.get("usage_workbench") or ".")
-    manifest = resolve_path(os.environ.get("usage_manifest") or str(workbench / "artifacts/files/manifest.tsv"))
-    output = resolve_path(os.environ.get("usage_output") or str(workbench / "artifacts/files/estimate.md"))
+def write_estimate(*, workbench_path: str = "", manifest_path: str = "", output_path: str = "") -> int:
+    workbench = resolve_path(workbench_path or ".")
+    manifest = resolve_path(manifest_path or str(workbench / "artifacts/files/manifest.tsv"))
+    output = resolve_path(output_path or str(workbench / "artifacts/files/estimate.md"))
     rows = read_manifest(manifest)
     output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -243,10 +250,10 @@ def write_estimate() -> int:
     return 0
 
 
-def write_pack() -> int:
-    workbench = resolve_path(os.environ.get("usage_workbench") or ".")
-    manifest = resolve_path(os.environ.get("usage_manifest") or str(workbench / "artifacts/files/manifest.tsv"))
-    output = resolve_path(os.environ.get("usage_output") or str(workbench / "artifacts/files/corpus.txt"))
+def write_pack(*, workbench_path: str = "", manifest_path: str = "", output_path: str = "") -> int:
+    workbench = resolve_path(workbench_path or ".")
+    manifest = resolve_path(manifest_path or str(workbench / "artifacts/files/manifest.tsv"))
+    output = resolve_path(output_path or str(workbench / "artifacts/files/corpus.txt"))
     rows = read_manifest(manifest)
     output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -269,13 +276,18 @@ def write_pack() -> int:
     return 0
 
 
-def grep_context() -> int:
-    workbench = resolve_path(os.environ.get("usage_workbench") or ".")
-    manifest = resolve_path(os.environ.get("usage_manifest") or str(workbench / "artifacts/files/manifest.tsv"))
-    pattern = os.environ.get("usage_pattern", "")
-    allow_excerpts = os.environ.get("usage_allow_excerpts", "false") == "true"
-    context = int(os.environ.get("usage_context") or "2")
-    output = resolve_path(os.environ.get("usage_output") or str(workbench / "artifacts/text/grep-context.md"))
+def grep_context(
+    *,
+    workbench_path: str = "",
+    manifest_path: str = "",
+    pattern: str = "",
+    context: int = 2,
+    allow_excerpts: bool = False,
+    output_path: str = "",
+) -> int:
+    workbench = resolve_path(workbench_path or ".")
+    manifest = resolve_path(manifest_path or str(workbench / "artifacts/files/manifest.tsv"))
+    output = resolve_path(output_path or str(workbench / "artifacts/text/grep-context.md"))
 
     if not pattern:
         print("ERROR: --pattern is required", file=sys.stderr)

@@ -7,7 +7,19 @@
 #USAGE flag "--exclude <glob>" var=#true default="" help="Additional exclude glob (repeatable)"
 #USAGE flag "--output <file>" default="" help="Manifest output path"
 #USAGE example "mise run analysis:files:manifest --workbench /tmp/x.d/wb --root repo --include 'mise.toml' --include '.mise/tasks/**'" header="Manifest selected files"
-import os, sys
+import os
+import sys
+
 sys.path.insert(0, os.environ["MISE_CONFIG_ROOT"] + "/.mise/lib")
-from analysis_files import write_manifest
-raise SystemExit(write_manifest())
+from analysis_files import parse_shell_words, write_manifest
+
+raise SystemExit(
+    write_manifest(
+        workbench_path=os.environ.get("usage_workbench", ""),
+        root_values=parse_shell_words(os.environ.get("usage_root", "")),
+        roots_file=os.environ.get("usage_roots_file", ""),
+        includes=parse_shell_words(os.environ.get("usage_include", "")),
+        excludes=parse_shell_words(os.environ.get("usage_exclude", "")),
+        output_path=os.environ.get("usage_output", ""),
+    )
+)
