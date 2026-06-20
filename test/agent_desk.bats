@@ -41,6 +41,79 @@ SH
   export SHELL_BIN="$TMPBIN/shell"
 }
 
+write_fake_mise_for_prepare() {
+  cat > "$TMPBIN/nested-mise" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'mise %s\n' "$*" >> "${MISE_LOG:?}"
+case "${1:-} ${2:-}" in
+  "run homes:adopt-remote")
+    home=""
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = "--home" ]; then
+        home="${2:-}"
+        break
+      fi
+      shift
+    done
+    if [ -n "$home" ]; then
+      mkdir -p "$home"
+      git init -q -b main "$home"
+      git -C "$home" config user.name fixture
+      git -C "$home" config user.email fixture@example.test
+      git -C "$home" config commit.gpgsign false
+      printf 'prepared home\n' > "$home/AGENTS.md"
+      git -C "$home" add AGENTS.md
+      git -C "$home" commit -q -m 'prepared home'
+    fi
+    ;;
+  "run homes:status")
+    printf '{"ready":true}\n'
+    ;;
+  *)
+    echo "unexpected mise command: $*" >&2
+    exit 2
+    ;;
+esac
+SH
+  chmod +x "$TMPBIN/nested-mise"
+  export MISE="$TMPBIN/nested-mise"
+  export MISE_LOG="$BATS_TEST_TMPDIR/mise.log"
+  : > "$MISE_LOG"
+}
+
+write_fake_desks() {
+  cat > "$TMPBIN/desks" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'desks %s\n' "$*" >> "${DESKS_LOG:?}"
+root="${FAKE_DESKS_ROOT:?FAKE_DESKS_ROOT not set}"
+case "${1:-}" in
+  new)
+    [ "${2:-}" = "--id" ] || { echo "expected --id" >&2; exit 2; }
+    id="${3:?id required}"
+    mkdir -p "$root/$id/.desk"
+    printf '{"id":"%s"}\n' "$id" > "$root/$id/.desk/registry.json"
+    ;;
+  path)
+    id="${2:?id required}"
+    [ -d "$root/$id" ] || { echo "desk not found: $id" >&2; exit 1; }
+    printf '%s/%s\n' "$root" "$id"
+    ;;
+  *)
+    echo "unexpected desks command: $*" >&2
+    exit 2
+    ;;
+esac
+SH
+  chmod +x "$TMPBIN/desks"
+  export DESKS="$TMPBIN/desks"
+  export DESKS_LOG="$BATS_TEST_TMPDIR/desks.log"
+  export FAKE_DESKS_ROOT="$BATS_TEST_TMPDIR/desks-root"
+  mkdir -p "$FAKE_DESKS_ROOT"
+  : > "$DESKS_LOG"
+}
+
 make_repo() {
   local repo="$1" name="$2"
   mkdir -p "$repo"
@@ -51,6 +124,91 @@ make_repo() {
   printf '%s\n' "$name" > "$repo/README.md"
   git -C "$repo" add README.md
   git -C "$repo" commit -q -m "initial $name"
+}
+
+@test "agent:desk:prepare dry-run plans an existing desk without mutation" {
+  desk="$BATS_TEST_TMPDIR/desks/probe"
+  mkdir -p "$desk/.desk"
+  printf '{"id":"probe"}\n' > "$desk/.desk/registry.json"
+  desk_path="$desk"
+
+  run fold_task agent:desk:prepare quick \
+    --desk "$desk" \
+    --repo quick-ricon/home \
+    --shell quick-probe \
+    --packet /tmp/packet.md
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Agent desk prepare"* ]]
+  [[ "$output" == *"mode:    dry-run"* ]]
+  [[ "$output" == *"desk:    $desk_path"* ]]
+  [[ "$output" == *"home:    $desk_path/home"* ]]
+  [[ "$output" == *"repo:    quick-ricon/home"* ]]
+  [[ "$output" == *"dry-run: rerun with --yes"* ]]
+  [[ "$output" == *"mise run agent:desk:wake quick --desk $desk_path --shell quick-probe --packet /tmp/packet.md --yes"* ]]
+  [ ! -e "$desk/home" ]
+}
+
+@test "agent:desk:prepare --yes provisions an existing desk through homes primitives" {
+  desk="$BATS_TEST_TMPDIR/desks/probe"
+  mkdir -p "$desk/.desk"
+  printf '{"id":"probe"}\n' > "$desk/.desk/registry.json"
+  desk_path="$desk"
+  write_fake_mise_for_prepare
+
+  run fold_task agent:desk:prepare quick \
+    --desk "$desk" \
+    --repo quick-ricon/home \
+    --shell quick-probe \
+    --packet /tmp/packet.md \
+    --yes
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"== adopt home =="* ]]
+  [[ "$output" == *"== verify home readiness =="* ]]
+  [[ "$output" == *"Ready. Next wake command:"* ]]
+  grep -F "mise run homes:adopt-remote quick --home $desk_path/home --branch main --yes --repo quick-ricon/home" "$MISE_LOG" >/dev/null
+  grep -F "mise run homes:status quick --home $desk_path/home --json --check" "$MISE_LOG" >/dev/null
+  [ -d "$desk/home/.git" ]
+  if [ -f "$SHELL_LOG" ]; then
+    ! grep -q 'shell run' "$SHELL_LOG"
+  fi
+}
+
+@test "agent:desk:prepare --yes can create a desk through desks new" {
+  write_fake_mise_for_prepare
+  write_fake_desks
+  export FOLD_AGENT_DESK_PREPARE_TIMESTAMP=20260620133700
+
+  run fold_task agent:desk:prepare quick \
+    --purpose rewind-investigation \
+    --repo quick-ricon/home \
+    --packet /tmp/packet.md \
+    --yes
+
+  [ "$status" -eq 0 ]
+  desk_id="quick-rewind-investigation-20260620133700"
+  desk="$FAKE_DESKS_ROOT/$desk_id"
+  grep -F "desks new --id $desk_id" "$DESKS_LOG" >/dev/null
+  grep -F "desks path $desk_id" "$DESKS_LOG" >/dev/null
+  grep -F "mise run homes:adopt-remote quick --home $desk/home --branch main --yes --repo quick-ricon/home" "$MISE_LOG" >/dev/null
+  [[ "$output" == *"desk id: $desk_id"* ]]
+  [[ "$output" == *"mise run agent:desk:wake quick --desk $desk --shell $desk_id --packet /tmp/packet.md --yes"* ]]
+  [ -f "$desk/.desk/registry.json" ]
+  [ -d "$desk/home/.git" ]
+}
+
+@test "agent:desk:prepare refuses to mutate a missing explicit desk path" {
+  write_fake_mise_for_prepare
+
+  run fold_task agent:desk:prepare quick \
+    --desk "$BATS_TEST_TMPDIR/missing-desk" \
+    --repo quick-ricon/home \
+    --yes
+
+  [ "$status" -ne 0 ]
+  [[ "${output}${stderr:-}" == *"explicit --desk path must already exist"* ]]
+  [ ! -s "$MISE_LOG" ]
 }
 
 @test "agent:desk:status inspects one explicit desk without assuming singleton agent state" {
