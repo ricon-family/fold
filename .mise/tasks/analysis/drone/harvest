@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+#MISE description="Harvest a completed sphincters drone transcript into artifacts"
+#USAGE flag "--workbench <dir>" default="" help="Workbench path (default: current directory)"
+#USAGE flag "--name <name>" default="analysis-drone" help="Session/run name"
+set -euo pipefail
+
+workbench="${usage_workbench:-$PWD}"
+name="${usage_name:-analysis-drone}"
+out_dir="$workbench/artifacts/drones/$name"
+mkdir -p "$out_dir"
+
+shell status "$name" > "$out_dir/status.txt" 2>&1 || true
+sessions read "$name" > "$out_dir/transcript.txt"
+printf '%s\n' "$out_dir/status.txt"
+printf '%s\n' "$out_dir/transcript.txt"

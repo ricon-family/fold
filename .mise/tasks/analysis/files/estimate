@@ -1,0 +1,18 @@
+#!/usr/bin/env python3
+#MISE description="Summarize bytes and rough tokens for an analysis manifest"
+#USAGE flag "--workbench <dir>" default="" help="Workbench path for default input/output"
+#USAGE flag "--manifest <file>" default="" help="Manifest path"
+#USAGE flag "--output <file>" default="" help="Markdown output path"
+import os
+import sys
+
+sys.path.insert(0, os.environ["MISE_CONFIG_ROOT"] + "/.mise/lib")
+from analysis_files import write_estimate
+
+raise SystemExit(
+    write_estimate(
+        workbench_path=os.environ.get("usage_workbench", ""),
+        manifest_path=os.environ.get("usage_manifest", ""),
+        output_path=os.environ.get("usage_output", ""),
+    )
+)
