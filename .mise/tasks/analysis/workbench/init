@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+#MISE description="Create a local mass-analysis workbench directory"
+#USAGE flag "--workbench <dir>" default="" help="Workbench path (default: /tmp/<agent>.d/<name>)"
+#USAGE flag "--name <name>" default="analysis-workbench" help="Workbench name used when --workbench is omitted"
+#USAGE example "mise run analysis:workbench:init --name codebase-qa" header="Create a named scratch workbench"
+set -euo pipefail
+
+agent="${GIT_AUTHOR_NAME:-${USER:-agent}}"
+name="${usage_name:-analysis-workbench}"
+if [ -n "${usage_workbench:-}" ]; then
+  workbench="$usage_workbench"
+else
+  workbench="/tmp/${agent}.d/${name}"
+fi
+
+mkdir -p \
+  "$workbench/artifacts/files" \
+  "$workbench/artifacts/sessions" \
+  "$workbench/artifacts/text" \
+  "$workbench/artifacts/drones" \
+  "$workbench/config" \
+  "$workbench/logs"
+
+if [ ! -f "$workbench/README.md" ]; then
+  cat > "$workbench/README.md" <<'EOF'
+# analysis workbench
+
+Scratch workbench for mass-analysis artifacts.
+
+Created by fold `analysis:workbench:init`.
+EOF
+fi
+
+printf '%s\n' "$workbench"

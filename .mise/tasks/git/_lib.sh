@@ -83,26 +83,36 @@ detect_active_agent() {
   local candidate local_part
 
   candidate="${AGENT_NAME:-}"
-  if [ -n "$candidate" ] && [ -d "$HOME/agents/$candidate/home" ]; then
+  if [ -n "$candidate" ]; then
     printf '%s\n' "$candidate"
     return 0
   fi
 
   candidate="${GIT_AUTHOR_NAME:-}"
-  if [ -n "$candidate" ] && [ -d "$HOME/agents/$candidate/home" ]; then
+  if [ -n "$candidate" ]; then
     printf '%s\n' "$candidate"
     return 0
   fi
 
   if [ -n "${GIT_AUTHOR_EMAIL:-}" ]; then
     local_part=${GIT_AUTHOR_EMAIL%@*}
-    if [ -n "$local_part" ] && [ -d "$HOME/agents/$local_part/home" ]; then
+    if [ -n "$local_part" ]; then
       printf '%s\n' "$local_part"
       return 0
     fi
   fi
 
-  printf '%s\n' "${GIT_AUTHOR_NAME:-}"
+  printf '%s\n' ""
+}
+
+agent_home_dir() {
+  if [ -z "${AGENT_HOME:-}" ]; then
+    return 1
+  fi
+  if [ ! -d "$AGENT_HOME" ]; then
+    return 1
+  fi
+  printf '%s\n' "$AGENT_HOME"
 }
 
 expected_signing_key() {
@@ -110,8 +120,7 @@ expected_signing_key() {
   local home_dir
 
   [ -n "$agent" ] || return 1
-  home_dir="$HOME/agents/$agent/home"
-  [ -d "$home_dir" ] || return 1
+  home_dir=$(agent_home_dir) || return 1
   git -C "$home_dir" config --get user.signingkey 2>/dev/null
 }
 
@@ -172,7 +181,11 @@ show_git_identity() {
       fi
     fi
   elif [ -n "$agent" ]; then
-    warn "could not determine expected signing key for active agent '$agent'"
+    if [ -z "${AGENT_HOME:-}" ]; then
+      warn "AGENT_HOME is not set; cannot determine expected signing key for active agent '$agent'"
+    else
+      warn "could not determine expected signing key for active agent '$agent' from AGENT_HOME=$AGENT_HOME"
+    fi
   fi
 }
 
@@ -305,6 +318,11 @@ show_commit_signatures() {
   if [ "$sig_mismatch" -ne 0 ]; then
     warn "one or more commits authored by ${GIT_AUTHOR_EMAIL:-active author} appear signed by a different identity"
   fi
+}
+
+is_semver_tag() {
+  local tag="$1"
+  printf '%s\n' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
 }
 
 latest_semver_tag() {

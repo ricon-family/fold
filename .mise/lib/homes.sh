@@ -14,7 +14,8 @@ GIT_BIN="${GIT:-git}"
 GPG_BIN="${GPG:-gpg}"
 NOTES_BIN="${NOTES:-notes}"
 MODULES_BIN="${MODULES:-modules}"
-export GIT_BIN GPG_BIN NOTES_BIN MODULES_BIN
+MISE_BIN="${MISE:-mise}"
+export GIT_BIN GPG_BIN NOTES_BIN MODULES_BIN MISE_BIN
 
 homes_agent_email() {
   printf '%s@ricon.family\n' "$1"
@@ -32,6 +33,221 @@ homes_resolve_home() {
   else
     homes_default_home "$agent"
   fi
+}
+
+homes_default_agents_root() {
+  printf '%s/agents\n' "$HOME"
+}
+
+homes_resolve_agents_root() {
+  local agents_root="$1"
+  if [ -n "$agents_root" ]; then
+    printf '%s\n' "$agents_root"
+  else
+    homes_default_agents_root
+  fi
+}
+
+homes_agent_dir() {
+  local agent="$1" agents_root="$2"
+  printf '%s/%s\n' "$agents_root" "$agent"
+}
+
+homes_agent_dir_for_home() {
+  local home_path="$1"
+  dirname "$home_path"
+}
+
+homes_agent_gitconfig_path_for_dir() {
+  local agent_dir="$1"
+  printf '%s/.gitconfig\n' "$agent_dir"
+}
+
+homes_agent_gitconfig_path() {
+  local agent="$1" agents_root="$2"
+  homes_agent_gitconfig_path_for_dir "$(homes_agent_dir "$agent" "$agents_root")"
+}
+
+homes_agent_include_key_for_dir() {
+  local agent="$1" agent_dir="$2"
+  if [ "$agent_dir" = "$HOME/agents/$agent" ]; then
+    printf 'includeIf.gitdir:~/agents/%s/.path\n' "$agent"
+    return 0
+  fi
+  printf 'includeIf.gitdir:%s/.path\n' "$agent_dir"
+}
+
+homes_agent_include_key() {
+  local agent="$1" agents_root="$2"
+  homes_agent_include_key_for_dir "$agent" "$(homes_agent_dir "$agent" "$agents_root")"
+}
+
+homes_infer_agent_from_home() {
+  local home_path="$1" base parent
+  [ -n "$home_path" ] || return 1
+  base=$(basename "$home_path")
+  parent=$(basename "$(dirname "$home_path")")
+  if [ "$base" = "home" ] && [ -n "$parent" ]; then
+    printf '%s\n' "$parent"
+    return 0
+  fi
+  return 1
+}
+
+homes_strip_wrapping_quotes() {
+  local value="$1"
+  if [[ "$value" == \"*\" ]]; then
+    value="${value#\"}"
+    value="${value%\"}"
+  fi
+  printf '%s\n' "$value"
+}
+
+homes_gpg_import_key_data() (
+  local key_data="$1" tmp
+  shift
+
+  tmp=$(mktemp) || return 1
+  trap 'rm -f "$tmp"' EXIT HUP INT TERM
+  printf '%s' "$key_data" > "$tmp" || return 1
+  "$GPG_BIN" --batch --import "$@" "$tmp"
+)
+
+homes_validate_gpg_key_data() {
+  local key_data="$1"
+
+  if [ -z "$key_data" ]; then
+    echo "ERROR: GPG key is empty" >&2
+    return 1
+  fi
+  if [[ "$key_data" == \"* ]]; then
+    echo "ERROR: GPG key starts with a double quote — likely corrupted" >&2
+    return 1
+  fi
+  if ! printf '%s' "$key_data" | head -1 | grep -q '^-----BEGIN PGP'; then
+    echo "ERROR: GPG key does not start with a PGP armor header" >&2
+    return 1
+  fi
+
+  if ! homes_gpg_import_key_data "$key_data" --dry-run >/dev/null 2>&1; then
+    echo "ERROR: GPG cannot parse key" >&2
+    return 1
+  fi
+}
+
+homes_json_string() {
+  local value="$1"
+  value=${value//\\/\\\\}
+  value=${value//\"/\\\"}
+  value=${value//$'\n'/\\n}
+  value=${value//$'\r'/\\r}
+  value=${value//$'\t'/\\t}
+  printf '"%s"' "$value"
+}
+
+homes_timeout_command() {
+  command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null
+}
+
+homes_git_is_repo() {
+  "$GIT_BIN" -C "$1" rev-parse --git-dir >/dev/null 2>&1
+}
+
+homes_git_head_label() {
+  local repo="$1" head branch
+  head=$("$GIT_BIN" -C "$repo" rev-parse --short HEAD 2>/dev/null) || return 1
+  branch=$("$GIT_BIN" -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+  [ -n "$branch" ] || branch="detached"
+  [ "$branch" = "HEAD" ] && branch="detached"
+  printf '%s @ %s\n' "$branch" "$head"
+}
+
+homes_git_worktree_state() {
+  local repo="$1" status
+  if ! status=$("$GIT_BIN" -C "$repo" status --porcelain 2>/dev/null); then
+    printf 'unknown\n'
+    return 1
+  fi
+  if [ -z "$status" ]; then
+    printf 'clean\n'
+  else
+    printf 'dirty\n'
+  fi
+}
+
+homes_git_origin_redacted() {
+  local repo="$1" origin
+  origin=$("$GIT_BIN" -C "$repo" remote get-url origin 2>/dev/null) || return 1
+  homes_redact_url "$origin"
+}
+
+homes_manifest_state() {
+  local manifest="$1"
+  if [ ! -f "$manifest" ]; then
+    printf 'missing\n'
+  elif homes_file_is_gitcrypt_blob "$manifest"; then
+    printf 'locked\n'
+  else
+    printf 'readable\n'
+  fi
+}
+
+homes_notes_changes_summary() {
+  local home_path="$1"
+  (cd "$home_path" && "$NOTES_BIN" changes --summary)
+}
+
+homes_has_mise_config() {
+  local dir="$1"
+  [ -f "$dir/mise.toml" ] || [ -f "$dir/.mise.toml" ]
+}
+
+homes_trust_mise_dir() {
+  local dir="$1"
+  homes_has_mise_config "$dir" || return 0
+  require_tool "$MISE_BIN"
+  printf 'mise trust: %s\n' "$dir"
+  (cd "$dir" && env -u GIT_CONFIG_COUNT "$MISE_BIN" trust)
+}
+
+homes_trust_mise_surface() {
+  local home_path="$1" module_dir
+
+  homes_trust_mise_dir "$home_path"
+
+  if [ -d "$home_path/modules" ]; then
+    for module_dir in "$home_path"/modules/*; do
+      [ -d "$module_dir" ] || continue
+      homes_trust_mise_dir "$module_dir"
+    done
+  fi
+}
+
+homes_mise_trust_state() {
+  local dir="$1" output last_line
+
+  if ! homes_has_mise_config "$dir"; then
+    printf 'none\n'
+    return 0
+  fi
+
+  if ! command -v "$MISE_BIN" >/dev/null 2>&1; then
+    printf 'missing-tool\n'
+    return 0
+  fi
+
+  if ! output=$(cd "$dir" && "$MISE_BIN" trust --show 2>&1); then
+    printf 'error\n'
+    return 0
+  fi
+
+  last_line=$(printf '%s\n' "$output" | awk 'NF { line = $0 } END { print line }')
+  case "$last_line" in
+    *': trusted') printf 'trusted\n' ;;
+    *': untrusted') printf 'untrusted\n' ;;
+    *': ignored') printf 'ignored\n' ;;
+    *) printf 'unknown\n' ;;
+  esac
 }
 
 homes_require_git_repo() {
@@ -52,13 +268,13 @@ homes_require_git_repo() {
 }
 
 homes_require_clean_worktree() {
-  local home_path="$1" status
+  local home_path="$1" state
 
-  if ! status=$("$GIT_BIN" -C "$home_path" status --porcelain); then
+  if ! state=$(homes_git_worktree_state "$home_path"); then
     echo "ERROR: could not inspect worktree: $home_path" >&2
     exit 1
   fi
-  if [ -n "$status" ]; then
+  if [ "$state" = "dirty" ]; then
     echo "ERROR: home worktree is dirty; commit/stash before continuing: $home_path" >&2
     "$GIT_BIN" -C "$home_path" status --short >&2
     exit 1
@@ -101,7 +317,7 @@ homes_require_no_pending_note_changes() {
     exit 1
   fi
 
-  if ! notes_changes=$(cd "$home_path" && "$NOTES_BIN" changes --summary 2>&1); then
+  if ! notes_changes=$(homes_notes_changes_summary "$home_path" 2>&1); then
     echo "ERROR: could not inspect notes workflow state before publishing" >&2
     printf '%s\n' "$notes_changes" >&2
     exit 1
@@ -121,6 +337,21 @@ homes_blob_hex10() {
   hex=$(LC_ALL=C od -An -tx1 -N10 "$tmp" | tr -d ' \n')
   rm -f "$tmp"
   printf '%s\n' "$hex"
+}
+
+homes_file_hex10() {
+  local path="$1" tmp hex
+  tmp=$(mktemp)
+  LC_ALL=C od -An -tx1 -N10 "$path" > "$tmp"
+  hex=$(tr -d ' \n' < "$tmp")
+  rm -f "$tmp"
+  printf '%s\n' "$hex"
+}
+
+homes_file_is_gitcrypt_blob() {
+  local path="$1"
+  [ -f "$path" ] || return 1
+  [ "$(homes_file_hex10 "$path")" = "00474954435259505400" ]
 }
 
 homes_assert_gitcrypt_blob() {
@@ -194,6 +425,24 @@ homes_redact_url() {
 
 homes_git_redacted() {
   "$GIT_BIN" "$@" 2> >(redact_github_tokens >&2)
+}
+
+homes_agent_github_git() {
+  local agent="$1" token status
+  shift
+  token=$(get_agent_github_token "$agent") || return 1
+  if env GH_TOKEN="$token" "$GIT_BIN" "$@" 2> >(redact_github_tokens >&2); then
+    status=0
+  else
+    status=$?
+  fi
+  unset token
+  return "$status"
+}
+
+homes_agent_github_remote_branch_exists() {
+  local agent="$1" remote_url="$2" branch="$3"
+  homes_agent_github_git "$agent" ls-remote --exit-code "$remote_url" "refs/heads/$branch" >/dev/null 2>&1
 }
 
 homes_require_remote_reachable() {

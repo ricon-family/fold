@@ -1,0 +1,19 @@
+#!/usr/bin/env python3
+#MISE description="Capture sessions inspect JSON for candidate session IDs"
+#USAGE flag "--workbench <dir>" default="" help="Workbench path for artifacts"
+#USAGE flag "--metadata-dir <dir>" default="" help="Directory containing inspect-candidates.txt"
+#USAGE flag "--ids-file <file>" default="" help="File of session IDs to inspect"
+import os
+import sys
+
+sys.path.insert(0, os.environ["MISE_CONFIG_ROOT"] + "/.mise/lib")
+from analysis_sessions import inspect
+
+raise SystemExit(
+    inspect(
+        workbench_path=os.environ.get("usage_workbench", ""),
+        metadata_dir_path=os.environ.get("usage_metadata_dir", ""),
+        ids_file_path=os.environ.get("usage_ids_file", ""),
+        sessions_command=os.environ.get("SESSIONS", "sessions"),
+    )
+)

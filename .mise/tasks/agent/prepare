@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+#MISE description="Prepare fold for an agent run"
+#
+# Idempotent, non-interactive setup owned by this repo.
+# Convention: notes/agent-prepare-hook.md.
+set -euo pipefail
+
+cd "$MISE_CONFIG_ROOT"
+
+log() { printf '[agent:prepare] %s\n' "$*"; }
+
+trust_shiv_package_config() {
+  local tool="${1:?usage: trust_shiv_package_config <tool>}" root package config
+
+  root=$(mise where "$tool" 2>/dev/null) || return 0
+  package="${tool#shiv:}"
+  config="$root/packages/$package/mise.toml"
+
+  if [ -f "$config" ]; then
+    mise trust "$config" >/dev/null
+  fi
+}
+
+ensure_git_crypt() {
+  if command -v git-crypt >/dev/null 2>&1; then
+    log "git-crypt: already installed"
+    return
+  fi
+
+  log "git-crypt: installing via rudi"
+  rudi install
+}
+
+trust_shiv_package_config shiv:rudi
+trust_shiv_package_config shiv:notes
+trust_shiv_package_config shiv:modules
+
+if [ -f notes/.manifest ]; then
+  ensure_git_crypt
+
+  log "notes: setup/unlock"
+  notes setup --yes --unlock
+
+  log "notes: installing hooks"
+  notes install-hooks
+else
+  log "notes: no notes/.manifest; skipping"
+fi
+
+if [ -f .modules/config ]; then
+  log "modules: unlocking manifest"
+  modules unlock
+
+  log "modules: installing hooks"
+  modules install-hooks
+
+  log "modules: initializing runtime clones"
+  modules init den
+else
+  log "modules: no .modules/config; skipping"
+fi
+
+log "done"

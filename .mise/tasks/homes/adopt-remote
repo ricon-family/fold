@@ -22,6 +22,10 @@ REMOTE_URL=$(homes_resolve_remote_url "$REPO" "${usage_remote_url:-}")
 BRANCH="${usage_branch:-main}"
 YES="${usage_yes:-false}"
 NO_PREPARE="${usage_no_prepare:-false}"
+USE_AGENT_GITHUB_AUTH=false
+if [ -n "$REPO" ] && [ -z "${usage_remote_url:-}" ]; then
+  USE_AGENT_GITHUB_AUTH=true
+fi
 
 validate_branch() {
   local branch="$1"
@@ -37,18 +41,22 @@ run_prepare() {
     return 0
   fi
 
-  require_tool mise
-  (cd "$HOME_PATH" && mise trust && mise install)
+  require_tool "$MISE_BIN"
+  (cd "$HOME_PATH" && "$MISE_BIN" trust && "$MISE_BIN" install)
   if [ -x "$HOME_PATH/.mise/tasks/agent/prepare" ]; then
-    (cd "$HOME_PATH" && mise run agent:prepare)
+    (cd "$HOME_PATH" && "$MISE_BIN" run agent:prepare)
   else
     echo "prepare: no agent:prepare task"
   fi
+  homes_trust_mise_surface "$HOME_PATH"
 }
 
 validate_agent "$AGENT"
 validate_branch "$BRANCH"
 require_tool "$GIT_BIN" date
+if [ "$USE_AGENT_GITHUB_AUTH" = "true" ]; then
+  require_tool "$SECRETS_BIN"
+fi
 
 printf 'Homes adopt-remote\n\n'
 printf 'agent:  %s\n' "$AGENT"
@@ -57,7 +65,12 @@ printf 'remote: %s\n' "$(homes_redact_url "$REMOTE_URL")"
 printf 'branch: %s\n' "$BRANCH"
 printf 'mode:   %s\n\n' "$( [ "$YES" = "true" ] && echo mutate || echo dry-run )"
 
-if ! homes_remote_branch_exists "$REMOTE_URL" "$BRANCH"; then
+if [ "$USE_AGENT_GITHUB_AUTH" = "true" ]; then
+  if ! homes_agent_github_remote_branch_exists "$AGENT" "$REMOTE_URL" "$BRANCH"; then
+    echo "ERROR: remote branch not found or inaccessible with $AGENT GitHub token: $BRANCH" >&2
+    exit 1
+  fi
+elif ! homes_remote_branch_exists "$REMOTE_URL" "$BRANCH"; then
   echo "ERROR: remote branch not found: $BRANCH" >&2
   exit 1
 fi
@@ -102,7 +115,11 @@ trap restore_on_error EXIT
 
 mkdir -p "$(dirname "$HOME_PATH")"
 clone_started=true
-homes_git_redacted clone --branch "$BRANCH" "$REMOTE_URL" "$HOME_PATH"
+if [ "$USE_AGENT_GITHUB_AUTH" = "true" ]; then
+  homes_agent_github_git "$AGENT" clone --branch "$BRANCH" "$REMOTE_URL" "$HOME_PATH"
+else
+  homes_git_redacted clone --branch "$BRANCH" "$REMOTE_URL" "$HOME_PATH"
+fi
 run_prepare
 
 trap - EXIT
