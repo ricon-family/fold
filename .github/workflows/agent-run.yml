@@ -273,10 +273,15 @@ jobs:
 
       - name: Back up sessions
         if: always()
-        working-directory: /home/runner/agents/${{ inputs.agent }}/home
         env:
           AGENT: ${{ inputs.agent }}
         run: |
+          if [ ! -d "$AGENT_HOME" ]; then
+            echo "Agent home not available; skipping session backup"
+            exit 0
+          fi
+
+          cd "$AGENT_HOME"
           if ! command -v shimmer >/dev/null 2>&1; then
             echo "shimmer not available; skipping session backup"
             exit 0
