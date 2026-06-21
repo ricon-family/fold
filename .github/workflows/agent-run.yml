@@ -180,10 +180,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-sessions-cli-
 
-      - name: Build sessions CLI
-        working-directory: /home/runner/agents/${{ inputs.agent }}/home
-        run: sessions cli:build
-
       - name: Install pi
         working-directory: /home/runner/agents/${{ inputs.agent }}/home
         run: mise use -g github:badlogic/pi-mono@0.73.0
