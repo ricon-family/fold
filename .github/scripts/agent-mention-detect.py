@@ -110,14 +110,65 @@ def extract_mentions(body: str) -> list[str]:
     return [match.group("mention").lower() for match in MENTION_PATTERN.finditer(body)]
 
 
+def json_env_map(name: str) -> dict[str, str]:
+    """Read a JSON object environment variable as lowercase string pairs."""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return {}
+
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as error:
+        print(f"{name} must be a JSON object: {error}", file=sys.stderr)
+        sys.exit(2)
+
+    if not isinstance(parsed, dict):
+        print(f"{name} must be a JSON object", file=sys.stderr)
+        sys.exit(2)
+
+    result: dict[str, str] = {}
+    for key, value in parsed.items():
+        if not isinstance(key, str) or not isinstance(value, str):
+            print(f"{name} entries must be string:string pairs", file=sys.stderr)
+            sys.exit(2)
+        if key.strip() and value.strip():
+            result[key.strip().lower()] = value.strip().lower()
+    return result
+
+
+def build_agent_mention_map(
+    roster: list[str], configured_logins: dict[str, str]
+) -> dict[str, str]:
+    """Map GitHub mention logins to agent names."""
+    missing = [agent for agent in roster if agent not in configured_logins]
+    if missing:
+        print(
+            "AGENT_GITHUB_LOGINS missing entries for: " + ", ".join(missing),
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    agent_by_mention: dict[str, str] = {}
+    for agent in roster:
+        login = configured_logins[agent]
+        if login in agent_by_mention and agent_by_mention[login] != agent:
+            print(
+                f"duplicate GitHub login @{login} for agents "
+                f"{agent_by_mention[login]} and {agent}",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        agent_by_mention[login] = agent
+    return agent_by_mention
+
+
 def match_agents(
     mentions: list[str],
     roster: list[str],
-    handle_suffix: str,
+    agent_by_mention: dict[str, str],
     aliases: list[str],
 ) -> tuple[list[str], list[str]]:
     """Map mentions to agents while preserving roster order for wake outputs."""
-    agent_by_mention = {f"{agent}{handle_suffix}": agent for agent in roster}
     matched_agents: set[str] = set()
     matched_mentions: list[str] = []
 
@@ -188,7 +239,7 @@ def main() -> int:
     event = load_event(event_path)
     roster = csv_env("AGENT_ROSTER")
     aliases = csv_env("TEAM_ALIASES")
-    handle_suffix = os.environ.get("AGENT_HANDLE_SUFFIX", "-ricon").strip().lower()
+    configured_logins = json_env_map("AGENT_GITHUB_LOGINS")
     allowed_associations = {
         association.upper() for association in csv_env("ALLOWED_ASSOCIATIONS", "OWNER,MEMBER")
     }
@@ -205,7 +256,8 @@ def main() -> int:
     body = str(event_value(event, "comment", "body"))
     stripped_body = strip_non_waking_text(body)
     mentions = extract_mentions(stripped_body)
-    matched_agents, matched_mentions = match_agents(mentions, roster, handle_suffix, aliases)
+    agent_by_mention = build_agent_mention_map(roster, configured_logins)
+    matched_agents, matched_mentions = match_agents(mentions, roster, agent_by_mention, aliases)
 
     if not matched_agents:
         set_no_wake("no agent mention found outside quotes/code", roster)
