@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+#MISE description="Reset live-watch baselines for selected GitHub issues"
+#USAGE flag "--repo <repo>" required=#true help="Repository in OWNER/REPO form"
+#USAGE flag "--issues <issues>" required=#true help="Comma or space separated issue numbers"
+#USAGE flag "--state-dir <state_dir>" default="" help="Directory for watch state (default: /tmp/fold-github-issues-watch/...)"
+#USAGE example "mise run github:issues:baseline --repo ricon-family/ricon-pi --issues 13,14" header="Baseline two issues"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck disable=SC1091 # repo-local library
+source "$ROOT/.mise/lib/github/issues.sh"
+
+REPO="${usage_repo:?repo required}"
+ISSUES="${usage_issues:?issues required}"
+STATE_DIR="${usage_state_dir:-}"
+
+require_tool "$GH_BIN" jq xargs shasum awk paste
+require_issue_selection "$REPO" "$ISSUES"
+
+if [ -z "$STATE_DIR" ]; then
+  STATE_DIR="$(default_issue_state_dir "$REPO" "$ISSUES")"
+fi
+
+for issue in $(parse_issue_numbers "$ISSUES"); do
+  save_issue_baseline "$REPO" "$issue" "$STATE_DIR"
+  title=$(jq -r '.title' "$STATE_DIR/issue-$issue.json")
+  printf 'baseline reset for #%s (%s)\n' "$issue" "$title"
+done
+
+printf 'state_dir: %s\n' "$STATE_DIR"

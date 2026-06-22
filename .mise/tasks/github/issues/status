@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+#MISE description="Show status for selected GitHub issues"
+#USAGE flag "--repo <repo>" required=#true help="Repository in OWNER/REPO form"
+#USAGE flag "--issues <issues>" required=#true help="Comma or space separated issue numbers"
+#USAGE example "mise run github:issues:status --repo ricon-family/ricon-pi --issues 13,14" header="Show two issues"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck disable=SC1091 # repo-local library
+source "$ROOT/.mise/lib/github/issues.sh"
+
+REPO="${usage_repo:?repo required}"
+ISSUES="${usage_issues:?issues required}"
+
+require_tool "$GH_BIN" jq xargs shasum awk paste
+require_issue_selection "$REPO" "$ISSUES"
+
+printf 'repo: %s\n\n' "$REPO"
+for issue in $(parse_issue_numbers "$ISSUES"); do
+  issue_json "$REPO" "$issue" | render_issue_status
+done
