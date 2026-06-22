@@ -106,6 +106,16 @@ SH
   [ -f "$state_dir/issue-13.sha" ]
 }
 
+@test "github:issues:watch rejects zero sleep seconds" {
+  state_dir="$BATS_TEST_TMPDIR/state"
+  export MOCK_ISSUE_VERSION=1
+
+  run fold_task github:issues:watch --repo ricon-family/ricon-pi --issues 13 --state-dir "$state_dir" --watch-seconds 1 --sleep-seconds 0
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"ERROR: --sleep-seconds must be at least 1 second: 0"* ]]
+}
+
 @test "github:issues:snapshot writes JSON and text artifacts" {
   out_dir="$BATS_TEST_TMPDIR/snapshot"
   export MOCK_ISSUE_VERSION=2

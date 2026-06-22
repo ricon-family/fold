@@ -60,6 +60,17 @@ validate_seconds() {
   fi
 }
 
+validate_positive_seconds() {
+  local label="$1"
+  local value="$2"
+
+  validate_seconds "$label" "$value"
+  if [ "$value" -lt 1 ]; then
+    echo "ERROR: $label must be at least 1 second: $value" >&2
+    exit 1
+  fi
+}
+
 repo_slug() {
   printf '%s' "$1" | tr '/[:upper:]' '_[:lower:]' | tr -cd 'a-z0-9_.-'
 }

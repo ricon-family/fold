@@ -24,7 +24,7 @@ KEEP_WATCHING="${usage_keep_watching:-false}"
 require_tool "$GH_BIN" jq xargs shasum awk paste
 require_issue_selection "$REPO" "$ISSUES"
 validate_seconds "--watch-seconds" "$WATCH_SECONDS"
-validate_seconds "--sleep-seconds" "$SLEEP_SECONDS"
+validate_positive_seconds "--sleep-seconds" "$SLEEP_SECONDS"
 
 if [ -z "$STATE_DIR" ]; then
   STATE_DIR="$(default_issue_state_dir "$REPO" "$ISSUES")"
