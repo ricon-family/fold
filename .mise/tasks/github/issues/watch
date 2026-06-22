@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+#MISE description="Poll selected GitHub issues and return on first update"
+#USAGE flag "--repo <repo>" required=#true help="Repository in OWNER/REPO form"
+#USAGE flag "--issues <issues>" required=#true help="Comma or space separated issue numbers"
+#USAGE flag "--state-dir <state_dir>" default="" help="Directory for watch state (default: /tmp/fold-github-issues-watch/...)"
+#USAGE flag "--watch-seconds <seconds>" default="300" help="Total seconds to poll"
+#USAGE flag "--sleep-seconds <seconds>" default="15" help="Seconds between polls"
+#USAGE flag "--keep-watching" default=#false help="Keep polling after updates instead of returning"
+#USAGE example "mise run github:issues:watch --repo ricon-family/ricon-pi --issues 13,14" header="Watch two issues"
+#USAGE example "mise run github:issues:watch --repo ricon-family/ricon-pi --issues 13,14 --keep-watching" header="Keep watching after updates"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck disable=SC1091 # repo-local library
+source "$ROOT/.mise/lib/github/issues.sh"
+
+REPO="${usage_repo:?repo required}"
+ISSUES="${usage_issues:?issues required}"
+STATE_DIR="${usage_state_dir:-}"
+WATCH_SECONDS="${usage_watch_seconds:-300}"
+SLEEP_SECONDS="${usage_sleep_seconds:-15}"
+KEEP_WATCHING="${usage_keep_watching:-false}"
+
+require_tool "$GH_BIN" jq xargs shasum awk paste
+require_issue_selection "$REPO" "$ISSUES"
+validate_seconds "--watch-seconds" "$WATCH_SECONDS"
+validate_seconds "--sleep-seconds" "$SLEEP_SECONDS"
+
+if [ -z "$STATE_DIR" ]; then
+  STATE_DIR="$(default_issue_state_dir "$REPO" "$ISSUES")"
+fi
+mkdir -p "$STATE_DIR"
+
+printf 'Watching %s issues for %ss (poll every %ss). Ctrl-C to stop.\n' \
+  "$REPO" "$WATCH_SECONDS" "$SLEEP_SECONDS"
+printf 'Issues: %s\n' "$(parse_issue_numbers "$ISSUES" | paste -sd ', ' -)"
+printf 'State:  %s\n' "$STATE_DIR"
+if [ "$KEEP_WATCHING" = "true" ]; then
+  printf 'Behavior: keep watching after updates\n\n'
+else
+  printf 'Behavior: return on first update\n\n'
+fi
+
+deadline=$((SECONDS + WATCH_SECONDS))
+updates_seen=false
+
+while [ "$SECONDS" -le "$deadline" ]; do
+  for issue in $(parse_issue_numbers "$ISSUES"); do
+    json="$(issue_json "$REPO" "$issue")"
+    digest="$(printf '%s' "$json" | issue_digest)"
+    state_file="$STATE_DIR/issue-$issue.sha"
+    json_file="$STATE_DIR/issue-$issue.json"
+
+    if [ ! -f "$state_file" ]; then
+      title=$(printf '%s' "$json" | jq -r '.title')
+      printf '%s baseline #%s (%s)\n' "$(date '+%H:%M:%S')" "$issue" "$title"
+      printf '%s\n' "$digest" > "$state_file"
+      printf '%s\n' "$json" > "$json_file"
+      continue
+    fi
+
+    previous_digest=$(cat "$state_file")
+    if [ "$previous_digest" != "$digest" ]; then
+      title=$(printf '%s' "$json" | jq -r '.title')
+      printf '\n%s update detected on #%s (%s)\n' "$(date '+%H:%M:%S')" "$issue" "$title"
+      printf '%s\n' "$digest" > "$state_file"
+      printf '%s\n' "$json" > "$json_file"
+      "$GH_BIN" issue view "$issue" --repo "$REPO" --comments
+      printf '\n'
+      updates_seen=true
+
+      if [ "$KEEP_WATCHING" != "true" ]; then
+        printf 'returning after update. Use --keep-watching to keep polling.\n'
+        exit 0
+      fi
+    fi
+  done
+
+  if [ $((SECONDS + SLEEP_SECONDS)) -gt "$deadline" ]; then
+    break
+  fi
+  sleep "$SLEEP_SECONDS"
+done
+
+if [ "$updates_seen" = "true" ]; then
+  printf 'watch complete after updates.\n'
+else
+  printf 'watch complete; no updates detected.\n'
+fi

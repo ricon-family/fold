@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+#MISE description="Snapshot selected GitHub issues to JSON and text files"
+#USAGE flag "--repo <repo>" required=#true help="Repository in OWNER/REPO form"
+#USAGE flag "--issues <issues>" required=#true help="Comma or space separated issue numbers"
+#USAGE flag "--out-dir <out_dir>" default="" help="Output directory (default: mktemp under /tmp)"
+#USAGE example "mise run github:issues:snapshot --repo ricon-family/ricon-pi --issues 13,14" header="Snapshot two issues"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck disable=SC1091 # repo-local library
+source "$ROOT/.mise/lib/github/issues.sh"
+
+REPO="${usage_repo:?repo required}"
+ISSUES="${usage_issues:?issues required}"
+OUT_DIR="${usage_out_dir:-}"
+
+require_tool "$GH_BIN" jq xargs shasum awk paste mktemp
+require_issue_selection "$REPO" "$ISSUES"
+
+if [ -z "$OUT_DIR" ]; then
+  OUT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/fold-github-issues-snapshot.XXXXXX")"
+fi
+mkdir -p "$OUT_DIR"
+
+for issue in $(parse_issue_numbers "$ISSUES"); do
+  issue_json "$REPO" "$issue" > "$OUT_DIR/issue-$issue.json"
+  "$GH_BIN" issue view "$issue" --repo "$REPO" --comments > "$OUT_DIR/issue-$issue.txt"
+  printf 'snapshotted #%s -> %s\n' "$issue" "$OUT_DIR/issue-$issue.json"
+done
+
+printf 'out_dir: %s\n' "$OUT_DIR"
