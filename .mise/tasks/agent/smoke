@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+#MISE description="Smoke-check an agent home after preparation"
+#USAGE flag "--home <path>" required=#true help="Prepared agent home path to check"
+#USAGE example "mise run agent:smoke -- --home ~/agents/c0da/home" header="Check one prepared home"
+set -euo pipefail
+
+HOME_DIR="${usage_home:?home required}"
+NOTES_BIN="${NOTES:-notes}"
+JQ_BIN="${JQ:-jq}"
+
+failures=0
+
+row() {
+  local check="$1" status="$2" detail="$3"
+  printf '%s\t%s\t%s\n' "$check" "$status" "$detail"
+  if [ "$status" = "FAIL" ]; then
+    failures=$((failures + 1))
+  fi
+}
+
+is_git_repo() {
+  git -C "$1" rev-parse --is-inside-work-tree >/dev/null 2>&1
+}
+
+manifest_readable() {
+  local manifest="$1"
+  [ -f "$manifest" ] || return 1
+  LC_ALL=C awk '
+    NF == 0 { next }
+    NF != 3 && NF != 4 { bad = 1 }
+    $3 !~ /^[0-9a-f]{40}$/ { bad = 1 }
+    END { exit bad }
+  ' "$manifest" 2>/dev/null
+}
+
+check_notes_repo() {
+  local label="$1" dir="$2" status encryption obfuscation
+
+  if [ ! -f "$dir/notes/.manifest" ]; then
+    row "$label notes" OK "not notes-managed"
+    return 0
+  fi
+
+  if ! status=$(cd "$dir" && "$NOTES_BIN" status --json 2>/dev/null); then
+    row "$label notes" FAIL "notes status failed"
+    return 0
+  fi
+
+  encryption=$(printf '%s' "$status" | "$JQ_BIN" -r '.encryption.status // ""')
+  obfuscation=$(printf '%s' "$status" | "$JQ_BIN" -r '.obfuscation.status // ""')
+  if [ "$encryption" = "unlocked" ] && [ "$obfuscation" = "deobfuscated" ]; then
+    row "$label notes" OK "unlocked/deobfuscated"
+  else
+    row "$label notes" FAIL "${encryption:-?}/${obfuscation:-?}"
+  fi
+}
+
+check_notes_hooks() {
+  local label="$1" dir="$2" missing=""
+
+  if [ ! -f "$dir/notes/.manifest" ]; then
+    row "$label notes hooks" OK "not notes-managed"
+    return 0
+  fi
+
+  [ -f "$dir/.git/hooks/pre-commit" ] || missing="${missing} pre-commit"
+  [ -f "$dir/.git/hooks/post-checkout" ] || missing="${missing} post-checkout"
+  if [ -z "$missing" ]; then
+    row "$label notes hooks" OK "pre-commit and post-checkout present"
+  else
+    row "$label notes hooks" FAIL "missing:${missing}"
+  fi
+}
+
+check_required_modules() {
+  local modules_raw="${AGENT_PREPARE_MODULES:-}" module missing=""
+
+  if [ -z "$modules_raw" ]; then
+    row "required modules" OK "none declared"
+    return 0
+  fi
+
+  while IFS= read -r module; do
+    [ -n "$module" ] || continue
+    [ -d "$HOME_DIR/modules/$module/.git" ] || missing="${missing} $module"
+  done < <(printf '%s' "$modules_raw" | xargs printf '%s\n')
+
+  if [ -z "$missing" ]; then
+    row "required modules" OK "$modules_raw"
+  else
+    row "required modules" FAIL "missing:${missing}"
+  fi
+}
+
+if [ ! -d "$HOME_DIR" ]; then
+  row "home path" FAIL "missing: $HOME_DIR"
+else
+  row "home path" OK "$HOME_DIR"
+fi
+
+if [ -d "$HOME_DIR" ] && is_git_repo "$HOME_DIR"; then
+  row "home git" OK "git repo"
+else
+  row "home git" FAIL "not a git repo"
+fi
+
+if [ -x "$HOME_DIR/.mise/tasks/agent/prepare" ]; then
+  row "agent:prepare" OK "present"
+else
+  row "agent:prepare" FAIL "missing or not executable"
+fi
+
+check_notes_repo "home" "$HOME_DIR"
+check_notes_hooks "home" "$HOME_DIR"
+
+if [ -f "$HOME_DIR/.modules/config" ]; then
+  if manifest_readable "$HOME_DIR/.modules/manifest"; then
+    row "home modules manifest" OK "readable"
+  else
+    row "home modules manifest" FAIL "missing or encrypted"
+  fi
+else
+  row "home modules manifest" OK "no modules config"
+fi
+
+check_required_modules
+
+for module in den fold; do
+  module_dir="$HOME_DIR/modules/$module"
+  if [ -d "$module_dir/.git" ]; then
+    row "module:$module clone" OK "present"
+    check_notes_repo "module:$module" "$module_dir"
+    check_notes_hooks "module:$module" "$module_dir"
+  else
+    row "module:$module clone" OK "not present"
+  fi
+done
+
+if [ "$failures" -ne 0 ]; then
+  exit 1
+fi

@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+#MISE description="Check whether a GitHub Pages custom domain is ready to link externally"
+#USAGE flag "--repo <repo>" required=#true help="Repository in OWNER/REPO form"
+#USAGE flag "--domain <domain>" required=#true help="Configured custom domain, usually the apex domain"
+#USAGE flag "--www-domain <www_domain>" default="" help="Companion www domain (default: www.<domain>)"
+#USAGE flag "--require-aaaa" default=#false help="Fail unless the four GitHub Pages AAAA records are present"
+#USAGE example "mise run github:pages:domain:ready --repo KnickKnackLabs/knacklabs.co --domain knacklabs.co" header="Gate an external email/site link"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck disable=SC1091 # repo-local library
+source "$ROOT/.mise/lib/github/pages.sh"
+
+REPO="${usage_repo:?repo required}"
+DOMAIN="${usage_domain:?domain required}"
+WWW_DOMAIN="${usage_www_domain:-}"
+REQUIRE_AAAA="${usage_require_aaaa:-false}"
+
+if [ -z "$WWW_DOMAIN" ]; then
+  WWW_DOMAIN="www.$DOMAIN"
+fi
+
+require_tool "$GH_BIN" jq dig curl grep tr
+validate_repo "$REPO"
+validate_domain "$DOMAIN"
+validate_domain "$WWW_DOMAIN"
+
+fail=0
+
+print_cmd_header "DNS A records"
+if ! check_public_a_records "$DOMAIN"; then
+  fail=1
+fi
+
+print_cmd_header "www CNAME"
+if ! check_public_www_cname "$REPO" "$WWW_DOMAIN"; then
+  fail=1
+fi
+
+print_cmd_header "DNS AAAA records"
+if [ "$REQUIRE_AAAA" = "true" ]; then
+  if ! check_public_aaaa_records "$DOMAIN"; then
+    fail=1
+  fi
+else
+  aaaa_missing=0
+  for server in 1.1.1.1 8.8.8.8; do
+    for ip in $GITHUB_PAGES_AAAA_RECORDS; do
+      if ! record_present "$server" "$DOMAIN" AAAA "$ip"; then
+        aaaa_missing=1
+      fi
+    done
+  done
+  if [ "$aaaa_missing" -eq 0 ]; then
+    echo "✓ GitHub Pages AAAA records present"
+  else
+    echo "WARN: missing AAAA records; site can still be ready over IPv4, but GitHub recommends adding them."
+  fi
+fi
+
+print_cmd_header "GitHub Pages API"
+if ! check_pages_api_ready "$REPO" "$DOMAIN"; then
+  fail=1
+fi
+
+print_cmd_header "HTTPS"
+if ! check_https_ready "$DOMAIN" "$WWW_DOMAIN"; then
+  fail=1
+fi
+
+if [ "$fail" -eq 0 ]; then
+  printf '\nREADY: safe to use https://%s in external links.\n' "$DOMAIN"
+else
+  printf '\nNOT READY: fix DNS/GitHub Pages state or wait for propagation.\n' >&2
+fi
+
+exit "$fail"
