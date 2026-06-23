@@ -42,7 +42,7 @@ if [ -f notes/.manifest ]; then
   notes setup --yes --unlock
 
   log "notes: installing hooks"
-  notes install-hooks
+  notes install-hooks --yes
 else
   log "notes: no notes/.manifest; skipping"
 fi
