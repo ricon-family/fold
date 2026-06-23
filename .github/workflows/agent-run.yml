@@ -188,12 +188,6 @@ jobs:
         working-directory: /home/runner/agents/${{ inputs.agent }}/home
         run: shimmer gpg:setup ${{ inputs.agent }}
 
-      - name: Setup email
-        working-directory: /home/runner/agents/${{ inputs.agent }}/home
-        env:
-          EMAIL_PASSWORD: ${{ secrets.AGENT_EMAIL_PASSWORD }}
-        run: emails setup ${{ inputs.agent }}
-
       - name: Prepare home repo
         working-directory: /home/runner/agents/${{ inputs.agent }}/home
         env:
