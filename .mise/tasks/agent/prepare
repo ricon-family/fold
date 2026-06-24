@@ -31,6 +31,21 @@ ensure_git_crypt() {
   rudi install
 }
 
+init_requested_repo_modules() {
+  local modules_raw modules
+  modules_raw="${AGENT_PREPARE_REPO_MODULES:-}"
+
+  if [ -z "$modules_raw" ]; then
+    log "modules: no repo modules requested"
+    return 0
+  fi
+
+  # shellcheck disable=SC2206 # intentional shell-word list from repo-owned env config
+  modules=($modules_raw)
+  log "modules: initializing requested repo modules (${modules_raw})"
+  modules init "${modules[@]}"
+}
+
 trust_shiv_package_config shiv:rudi
 trust_shiv_package_config shiv:notes
 trust_shiv_package_config shiv:modules
@@ -54,8 +69,7 @@ if [ -f .modules/config ]; then
   log "modules: installing hooks"
   modules install-hooks
 
-  log "modules: initializing runtime clones"
-  modules init den
+  init_requested_repo_modules
 else
   log "modules: no .modules/config; skipping"
 fi
