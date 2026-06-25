@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+#MISE description="Enable HTTPS enforcement for a GitHub Pages custom domain"
+#USAGE flag "--repo <repo>" required=#true help="Repository in OWNER/REPO form"
+#USAGE flag "--domain <domain>" required=#true help="Configured custom domain"
+#USAGE flag "--source-branch <source_branch>" default="main" help="Pages source branch"
+#USAGE flag "--source-path <source_path>" default="/" help="Pages source path"
+#USAGE flag "--yes" default=#false help="Actually update GitHub Pages settings"
+#USAGE example "mise run github:pages:https:enable --repo KnickKnackLabs/knacklabs.co --domain knacklabs.co --yes" header="Enable HTTPS enforcement"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck disable=SC1091 # repo-local library
+source "$ROOT/.mise/lib/github/pages.sh"
+
+REPO="${usage_repo:?repo required}"
+DOMAIN="${usage_domain:?domain required}"
+SOURCE_BRANCH="${usage_source_branch:-main}"
+SOURCE_PATH="${usage_source_path:-/}"
+YES="${usage_yes:-false}"
+
+require_tool "$GH_BIN" jq tr
+validate_repo "$REPO"
+validate_domain "$DOMAIN"
+validate_source_path "$SOURCE_PATH"
+
+if [ "$YES" != "true" ]; then
+  cat >&2 <<'MD'
+Refusing to change GitHub Pages settings without --yes.
+
+This task updates the repository Pages config to enforce HTTPS.
+Run again with --yes after DNS has propagated and the certificate is ready.
+MD
+  exit 1
+fi
+
+"$GH_BIN" api -X PUT "repos/$REPO/pages" \
+  -F https_enforced=true \
+  -f cname="$DOMAIN" \
+  -f source[branch]="$SOURCE_BRANCH" \
+  -f source[path]="$SOURCE_PATH" \
+  --jq '{status,cname,html_url,https_certificate,https_enforced,source}'

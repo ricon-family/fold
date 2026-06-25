@@ -42,7 +42,7 @@ jobs:
         id: detect
         env:
           AGENT_ROSTER: baby-joel,brownie,c0da,ikma,iris,johnson,junior,k7r2,quick,rho,x1f9,zeke
-          AGENT_HANDLE_SUFFIX: "-ricon"
+          AGENT_GITHUB_LOGINS: "{\"baby-joel\":\"baby-joel\",\"brownie\":\"brownie-ricon\",\"c0da\":\"c0da-ricon\",\"ikma\":\"ikma-ricon\",\"iris\":\"iris-ricon\",\"johnson\":\"johnson-ricon\",\"junior\":\"junior-ricon\",\"k7r2\":\"k7r2-ricon\",\"quick\":\"quick-ricon\",\"rho\":\"rho-ricon\",\"x1f9\":\"x1f9-ricon\",\"zeke\":\"zeke-ricon\"}"
           # Team fanout stays disabled until fanout limits/jitter are designed explicitly.
           TEAM_ALIASES: ""
           ALLOWED_ASSOCIATIONS: OWNER,MEMBER

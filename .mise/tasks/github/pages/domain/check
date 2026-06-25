@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+#MISE description="Diagnose GitHub Pages custom-domain DNS, API, and HTTP state"
+#USAGE flag "--repo <repo>" required=#true help="Repository in OWNER/REPO form"
+#USAGE flag "--domain <domain>" required=#true help="Configured custom domain, usually the apex domain"
+#USAGE flag "--www-domain <www_domain>" default="" help="Companion www domain (default: www.<domain>)"
+#USAGE flag "--pages-ip <pages_ip>" default="185.199.108.153" help="GitHub Pages IP for forced-resolution curl checks"
+#USAGE example "mise run github:pages:domain:check --repo KnickKnackLabs/knacklabs.co --domain knacklabs.co" header="Diagnose a Pages domain"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck disable=SC1091 # repo-local library
+source "$ROOT/.mise/lib/github/pages.sh"
+
+REPO="${usage_repo:?repo required}"
+DOMAIN="${usage_domain:?domain required}"
+WWW_DOMAIN="${usage_www_domain:-}"
+PAGES_IP="${usage_pages_ip:-185.199.108.153}"
+
+if [ -z "$WWW_DOMAIN" ]; then
+  WWW_DOMAIN="www.$DOMAIN"
+fi
+
+require_tool "$GH_BIN" jq dig curl sed grep tr
+validate_repo "$REPO"
+validate_domain "$DOMAIN"
+validate_domain "$WWW_DOMAIN"
+
+if ! show_pages_api "$REPO"; then
+  echo "WARN: continuing with DNS/HTTP diagnostics after Pages API warning." >&2
+fi
+show_dns_summary "$REPO" "$DOMAIN" "$WWW_DOMAIN"
+show_http_summary "$DOMAIN" "$WWW_DOMAIN"
+show_resolve_summary "$DOMAIN" "$WWW_DOMAIN" "$PAGES_IP"
