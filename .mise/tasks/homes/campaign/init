@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+#MISE description="Initialize a multi-home campaign workbench"
+#USAGE flag "--repo <repo>" var=#true default="" help="Repo target (repeatable): OWNER/REPO or OWNER/REPO:auth-name; auth '-' or omitted uses ambient auth"
+#USAGE flag "--branch <branch>" required=#true help="Campaign branch to create in every clone"
+#USAGE flag "--base <branch>" default="main" help="Base branch to clone"
+#USAGE flag "--work-dir <path>" default="" help="Campaign state directory (default: /tmp/<agent>.d/fold-homes-campaign/state)"
+#USAGE flag "--force" default=#false help="Replace an existing campaign state directory"
+#USAGE example "mise run homes:campaign:init --repo c0da-ricon/home:c0da --branch c0da/example" header="Clone one private home using a named agent token"
+#USAGE example "mise run homes:campaign:init --repo KnickKnackLabs/emails:- --branch c0da/example" header="Clone one repo using ambient auth"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck source=.mise/lib/homes_campaign.sh
+source "$ROOT/.mise/lib/homes_campaign.sh"
+
+REPO_TARGETS="${usage_repo:-}"
+BRANCH="${usage_branch:?branch required}"
+BASE_BRANCH="${usage_base:-main}"
+WORK_DIR=$(campaign_resolve_work_dir "${usage_work_dir:-}")
+FORCE="${usage_force:-false}"
+TARGET_VALUES=""
+tmp_targets=""
+
+cleanup() {
+  [ -z "$TARGET_VALUES" ] || rm -f "$TARGET_VALUES"
+  [ -z "$tmp_targets" ] || rm -f "$tmp_targets"
+}
+trap cleanup EXIT
+
+TARGET_VALUES=$(mktemp)
+campaign_parse_values "$REPO_TARGETS" > "$TARGET_VALUES"
+if [ ! -s "$TARGET_VALUES" ]; then
+  rm -f "$TARGET_VALUES"
+  TARGET_VALUES=""
+  campaign_die "provide at least one --repo target"
+fi
+
+if [ -e "$WORK_DIR" ]; then
+  if [ "$FORCE" = "true" ]; then
+    rm -rf "$WORK_DIR"
+  else
+    campaign_die "work dir already exists: $WORK_DIR (use --force to replace)"
+  fi
+fi
+
+mkdir -p "$WORK_DIR/clones"
+TARGETS_FILE="$WORK_DIR/targets.tsv"
+LOG_FILE="$WORK_DIR/init.log"
+
+tmp_targets=$(mktemp)
+printf 'repo\tauth\tclone\tbranch\tbase\n' > "$tmp_targets"
+: > "$LOG_FILE"
+
+while IFS= read -r target; do
+  [ -n "$target" ] || continue
+
+  parsed=$(campaign_parse_repo_target "$target")
+  repo=${parsed%%$'\t'*}
+  auth=${parsed#*$'\t'}
+  slug=$(campaign_slugify_repo "$repo")
+  clone_dir="$WORK_DIR/clones/$slug"
+  token=$(campaign_get_auth_token "$auth")
+  url="https://github.com/${repo}.git"
+
+  printf '[homes:campaign:init] clone %s -> %s\n' "$repo" "$clone_dir" | tee -a "$LOG_FILE"
+  campaign_run_git "$token" clone --branch "$BASE_BRANCH" --single-branch "$url" "$clone_dir" >>"$LOG_FILE" 2>&1
+
+  printf '[homes:campaign:init] branch %s in %s\n' "$BRANCH" "$clone_dir" | tee -a "$LOG_FILE"
+  campaign_run_git "$token" -C "$clone_dir" checkout -B "$BRANCH" >>"$LOG_FILE" 2>&1
+
+  printf '%s\t%s\t%s\t%s\t%s\n' "$repo" "$auth" "$clone_dir" "$BRANCH" "$BASE_BRANCH" >> "$tmp_targets"
+done < "$TARGET_VALUES"
+rm -f "$TARGET_VALUES"
+TARGET_VALUES=""
+
+mv "$tmp_targets" "$TARGETS_FILE"
+tmp_targets=""
+
+printf '\nCampaign initialized: %s\n' "$WORK_DIR"
+printf 'Targets: %s\n\n' "$TARGETS_FILE"
+printf 'Repo\tAuth\tClone\n'
+awk -F '\t' 'NR > 1 { print $1 "\t" $2 "\t" $3 }' "$TARGETS_FILE"

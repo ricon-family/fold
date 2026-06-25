@@ -1,0 +1,205 @@
+#!/usr/bin/env bash
+#MISE description="Show status for campaign clones"
+#USAGE flag "--work-dir <path>" default="" help="Campaign state directory (default: /tmp/<agent>.d/fold-homes-campaign/state)"
+#USAGE flag "--repo <repo>" var=#true default="" help="Repo filter (repeatable): OWNER/REPO or OWNER/REPO:auth-name"
+#USAGE flag "--checks <path>" var=#true default="" help="TSV check file (repeatable): column<TAB>command"
+#USAGE flag "--check <check>" var=#true default="" help="Inline check (repeatable): column=command"
+#USAGE example "mise run homes:campaign:status" header="Show generic campaign status"
+#USAGE example "mise run homes:campaign:status --checks checks/homes-agent-home.tsv" header="Show generic status plus agent-home checks"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck source=.mise/lib/homes_campaign.sh
+source "$ROOT/.mise/lib/homes_campaign.sh"
+
+WORK_DIR=$(campaign_resolve_work_dir "${usage_work_dir:-}")
+REPO_FILTERS="${usage_repo:-}"
+CHECK_FILES="${usage_checks:-}"
+INLINE_CHECKS="${usage_check:-}"
+TARGETS_FILE="$WORK_DIR/targets.tsv"
+[ -f "$TARGETS_FILE" ] || campaign_die "targets file not found: $TARGETS_FILE (run homes:campaign:init first)"
+
+filters_file=$(mktemp)
+cleanup() {
+  rm -f "$filters_file"
+}
+trap cleanup EXIT
+
+check_names=()
+check_commands=()
+
+sanitize_cell() {
+  awk '
+    BEGIN { ORS = "" }
+    {
+      gsub(/\t/, " ")
+      if (NR > 1) printf " "
+      printf "%s", $0
+    }
+  ' | cut -c 1-160
+}
+
+add_check() {
+  local name="$1" command="$2"
+
+  if [ -z "$name" ]; then
+    campaign_die "check name cannot be empty"
+  fi
+  if [[ "$name" == *$'\t'* ]]; then
+    campaign_die "check name cannot contain tabs: $name"
+  fi
+  if [ -z "$command" ]; then
+    campaign_die "check command cannot be empty for $name"
+  fi
+
+  check_names+=("$name")
+  check_commands+=("$command")
+}
+
+load_check_file() {
+  local path="$1" line name command
+
+  if [ "$path" != "-" ] && [ ! -f "$path" ]; then
+    campaign_die "check file not found: $path"
+  fi
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    [ -n "${line//[[:space:]]/}" ] || continue
+    [[ "$line" == \#* ]] && continue
+
+    if [[ "$line" != *$'\t'* ]]; then
+      campaign_die "check file rows must be: column<TAB>command"
+    fi
+
+    name=${line%%$'\t'*}
+    command=${line#*$'\t'}
+    add_check "$name" "$command"
+  done < <(
+    if [ "$path" = "-" ]; then
+      cat
+    else
+      cat "$path"
+    fi
+  )
+}
+
+load_inline_check() {
+  local spec="$1" name command
+
+  if [[ "$spec" != *=* ]]; then
+    campaign_die "inline checks must be: column=command"
+  fi
+
+  name=${spec%%=*}
+  command=${spec#*=}
+  add_check "$name" "$command"
+}
+
+run_check() {
+  local clone="$1" command="$2" output status sanitized
+
+  status=0
+  output=$(cd "$clone" && bash -lc "$command" 2>&1) || status=$?
+
+  if [ "$status" -eq 0 ]; then
+    if [ -z "$output" ]; then
+      printf 'ok'
+    else
+      printf '%s' "$output" | sanitize_cell
+    fi
+    return 0
+  fi
+
+  sanitized=$(printf '%s' "$output" | sanitize_cell)
+  if [ -n "$sanitized" ]; then
+    printf 'fail:%s %s' "$status" "$sanitized"
+  else
+    printf 'fail:%s' "$status"
+  fi
+}
+
+branch_state() {
+  local clone="$1" branch
+
+  if branch=$(git -C "$clone" branch --show-current 2>/dev/null) && [ -n "$branch" ]; then
+    printf '%s' "$branch"
+    return 0
+  fi
+
+  if branch=$(git -C "$clone" rev-parse --short HEAD 2>/dev/null) && [ -n "$branch" ]; then
+    printf 'detached:%s' "$branch"
+    return 0
+  fi
+
+  printf 'unknown'
+}
+
+dirty_state() {
+  local clone="$1" count
+
+  if ! count=$(git -C "$clone" status --short 2>/dev/null | wc -l | tr -d ' '); then
+    printf 'unknown'
+    return 0
+  fi
+
+  if [ "${count:-0}" -eq 0 ]; then
+    printf 'clean'
+  else
+    printf '%s changes' "$count"
+  fi
+}
+
+campaign_select_filters_file "$REPO_FILTERS" "$filters_file"
+
+while IFS= read -r check_file; do
+  [ -n "$check_file" ] || continue
+  load_check_file "$check_file"
+done < <(campaign_parse_values "$CHECK_FILES")
+
+while IFS= read -r inline_check; do
+  [ -n "$inline_check" ] || continue
+  load_inline_check "$inline_check"
+done < <(campaign_parse_values "$INLINE_CHECKS")
+
+selected=0
+printf 'Repo\tClone\tBranch\tDirty'
+for name in ${check_names[@]+"${check_names[@]}"}; do
+  printf '\t%s' "$name"
+done
+printf '\n'
+
+while IFS=$'\t' read -r repo _auth clone _branch _base; do
+  if [ "$repo" = "repo" ]; then
+    continue
+  fi
+
+  if [ -s "$filters_file" ] && ! grep -Fxq "$repo" "$filters_file"; then
+    continue
+  fi
+
+  selected=$((selected + 1))
+
+  if [ ! -d "$clone/.git" ]; then
+    printf '%s\t%s\tmissing\tmissing' "$repo" "$clone"
+    for _name in ${check_names[@]+"${check_names[@]}"}; do
+      printf '\tclone-missing'
+    done
+    printf '\n'
+    continue
+  fi
+
+  printf '%s\t%s\t%s\t%s' \
+    "$repo" \
+    "$clone" \
+    "$(branch_state "$clone")" \
+    "$(dirty_state "$clone")"
+
+  for command in ${check_commands[@]+"${check_commands[@]}"}; do
+    printf '\t%s' "$(run_check "$clone" "$command")"
+  done
+  printf '\n'
+done < "$TARGETS_FILE"
+
+if [ "$selected" -eq 0 ]; then
+  campaign_die "no campaign targets matched"
+fi
