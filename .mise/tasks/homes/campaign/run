@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+#MISE description="Run a command in campaign clones"
+#USAGE flag "--work-dir <path>" default="" help="Campaign state directory (default: /tmp/<agent>.d/fold-homes-campaign/state)"
+#USAGE flag "--repo <repo>" var=#true default="" help="Repo filter (repeatable): OWNER/REPO or OWNER/REPO:auth-name"
+#USAGE flag "--keep-going" default=#false help="Run remaining targets even if one command fails"
+#USAGE arg "[args]" var=#true default="" help="Command and arguments to run in each selected clone"
+#USAGE example "mise run homes:campaign:run -- git status --short" header="Run a command in all campaign clones"
+#USAGE example "mise run homes:campaign:run --repo c0da-ricon/home -- bash -n .mise/tasks/agent/prepare" header="Run a command in one clone"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck source=.mise/lib/homes_campaign.sh
+source "$ROOT/.mise/lib/homes_campaign.sh"
+
+WORK_DIR=$(campaign_resolve_work_dir "${usage_work_dir:-}")
+REPO_FILTERS="${usage_repo:-}"
+KEEP_GOING="${usage_keep_going:-false}"
+ARGS="${usage_args:-}"
+TARGETS_FILE="$WORK_DIR/targets.tsv"
+[ -f "$TARGETS_FILE" ] || campaign_die "targets file not found: $TARGETS_FILE (run homes:campaign:init first)"
+
+cmd_file=$(mktemp)
+filters_file=$(mktemp)
+cleanup() {
+  rm -f "$cmd_file" "$filters_file"
+}
+trap cleanup EXIT
+
+campaign_parse_values "$ARGS" > "$cmd_file"
+if [ ! -s "$cmd_file" ]; then
+  campaign_die "provide a command after --"
+fi
+
+cmd=()
+while IFS= read -r arg; do
+  [ -n "$arg" ] || continue
+  cmd+=("$arg")
+done < "$cmd_file"
+
+campaign_select_filters_file "$REPO_FILTERS" "$filters_file"
+
+selected=0
+failed=0
+
+while IFS=$'\t' read -r repo _auth clone _branch _base; do
+  if [ "$repo" = "repo" ]; then
+    continue
+  fi
+
+  if [ -s "$filters_file" ] && ! grep -Fxq "$repo" "$filters_file"; then
+    continue
+  fi
+
+  selected=$((selected + 1))
+  printf '\n== %s ==\n' "$repo"
+  printf 'clone: %s\n' "$clone"
+
+  if [ ! -d "$clone/.git" ]; then
+    printf 'ERROR: clone missing: %s\n' "$clone" >&2
+    failed=1
+    [ "$KEEP_GOING" = "true" ] || exit 1
+    continue
+  fi
+
+  if ! (cd "$clone" && "${cmd[@]}"); then
+    failed=1
+    [ "$KEEP_GOING" = "true" ] || exit 1
+  fi
+done < "$TARGETS_FILE"
+
+if [ "$selected" -eq 0 ]; then
+  campaign_die "no campaign targets matched"
+fi
+
+if [ "$failed" -ne 0 ]; then
+  exit 1
+fi

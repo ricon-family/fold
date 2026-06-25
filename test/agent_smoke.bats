@@ -53,6 +53,10 @@ add_modules_manifest() {
   local dir="$1"
   mkdir -p "$dir/.modules"
   touch "$dir/.modules/config"
+  cat > "$dir/mise.toml" <<'EOF'
+[env]
+AGENT_PREPARE_MODULES = "den fold"
+EOF
   cat > "$dir/.modules/manifest" <<'EOF'
 den	https://github.com/ricon-family/den.git	0123456789abcdef0123456789abcdef01234567	main
 fold	https://github.com/ricon-family/fold.git	abcdef0123456789abcdef0123456789abcdef01	main

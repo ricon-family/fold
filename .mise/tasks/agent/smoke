@@ -72,8 +72,31 @@ check_notes_hooks() {
   fi
 }
 
+home_prepare_modules() {
+  local config="$HOME_DIR/mise.toml"
+  [ -f "$config" ] || return 0
+
+  awk '
+    /^\[/ { in_env = ($0 == "[env]"); next }
+    in_env && $0 ~ /^[[:space:]]*AGENT_PREPARE_MODULES[[:space:]]*=/ {
+      sub(/^[^=]*=[[:space:]]*/, "", $0)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0)
+      if ($0 ~ /^"/) {
+        sub(/^"/, "", $0)
+        sub(/".*$/, "", $0)
+      }
+      print $0
+      exit
+    }
+  ' "$config"
+}
+
 check_required_modules() {
-  local modules_raw="${AGENT_PREPARE_MODULES:-}" module missing=""
+  local modules_raw module missing=""
+  modules_raw=$(home_prepare_modules)
+  if [ -z "$modules_raw" ]; then
+    modules_raw="${AGENT_PREPARE_MODULES:-}"
+  fi
 
   if [ -z "$modules_raw" ]; then
     row "required modules" OK "none declared"
