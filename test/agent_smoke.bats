@@ -59,6 +59,14 @@ fold	https://github.com/ricon-family/fold.git	abcdef0123456789abcdef0123456789ab
 EOF
 }
 
+add_prepare_modules_env() {
+  local dir="$1" modules="$2"
+  cat > "$dir/mise.toml" <<EOF
+[env]
+AGENT_PREPARE_MODULES = "$modules"
+EOF
+}
+
 add_module_clone() {
   local home="$1" module="$2"
   local dir="$home/modules/$module"
@@ -72,10 +80,11 @@ add_module_clone() {
   add_prepare_task "$home"
   add_notes_ready "$home"
   add_modules_manifest "$home"
+  add_prepare_modules_env "$home" "den fold"
   add_module_clone "$home" den
   add_module_clone "$home" fold
 
-  run env AGENT_PREPARE_MODULES="den fold" bash -c 'fold_task agent:smoke --home "$1"' _ "$home"
+  run fold_task agent:smoke --home "$home"
 
   [ "$status" -eq 0 ]
   [[ "$output" == *$'home notes\tOK\tunlocked/deobfuscated'* ]]
@@ -100,9 +109,10 @@ add_module_clone() {
   make_git_repo "$home"
   add_prepare_task "$home"
   add_modules_manifest "$home"
+  add_prepare_modules_env "$home" "den fold"
   add_module_clone "$home" den
 
-  run env AGENT_PREPARE_MODULES="den fold" bash -c 'fold_task agent:smoke --home "$1"' _ "$home"
+  run fold_task agent:smoke --home "$home"
 
   [ "$status" -ne 0 ]
   [[ "$output" == *$'required modules\tFAIL\tmissing: fold'* ]]
