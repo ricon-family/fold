@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+#MISE description="Check prepared-state postconditions for campaign homes"
+#USAGE flag "--work-dir <path>" default="" help="Campaign state directory (default: /tmp/<agent>.d/fold-homes-campaign/state)"
+#USAGE flag "--state <path>" default="" help="Deprecated alias for --work-dir"
+#USAGE flag "--repo <repo>" var=#true default="" help="Repo filter (repeatable): OWNER/REPO"
+#USAGE example "mise run homes:smoke:state" header="Show module/notes state after homes:smoke:prepare"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck source=.mise/lib/homes_campaign.sh
+source "$ROOT/.mise/lib/homes_campaign.sh"
+
+if [ -n "${usage_work_dir:-}" ] && [ -n "${usage_state:-}" ] && [ "${usage_work_dir}" != "${usage_state}" ]; then
+  campaign_die "--work-dir and --state disagree"
+fi
+WORK_DIR_INPUT="${usage_work_dir:-${usage_state:-}}"
+WORK_DIR=$(campaign_resolve_work_dir "$WORK_DIR_INPUT")
+TARGETS="$WORK_DIR/targets.tsv"
+OUT="$WORK_DIR/prepared-state.tsv"
+campaign_require_file "$TARGETS" "campaign targets"
+
+filters=()
+if [ -n "${usage_repo:-}" ]; then
+  while IFS= read -r repo; do
+    [ -n "$repo" ] || continue
+    filters+=("${repo%%:*}")
+  done < <(printf '%s' "${usage_repo}" | xargs printf '%s\n')
+fi
+
+matches_filter() {
+  local repo="$1" filter
+  [ "${#filters[@]}" -eq 0 ] && return 0
+  for filter in ${filters[@]+"${filters[@]}"}; do
+    [ "$repo" = "$filter" ] && return 0
+  done
+  return 1
+}
+
+printf 'agent\thome_notes\thome_modules\tden_clone\tden_notes\tfold_clone\tfold_notes\n' > "$OUT"
+selected=0
+while IFS=$'\t' read -r repo agent clone branch base; do
+  [ "$repo" != repo ] || continue
+  matches_filter "$repo" || continue
+  selected=$((selected + 1))
+  den="$clone/modules/den"
+  fold="$clone/modules/fold"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$agent" \
+    "$(campaign_notes_state "$clone")" \
+    "$(campaign_modules_state "$clone")" \
+    "$(campaign_clone_state "$den")" \
+    "$(campaign_notes_state "$den")" \
+    "$(campaign_clone_state "$fold")" \
+    "$(campaign_notes_state "$fold")" >> "$OUT"
+done < "$TARGETS"
+
+[ "$selected" -gt 0 ] || { echo "ERROR: no targets matched" >&2; exit 1; }
+cat "$OUT"

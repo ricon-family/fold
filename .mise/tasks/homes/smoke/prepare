@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+#MISE description="Run agent:prepare smoke in each campaign home clone"
+#USAGE flag "--work-dir <path>" default="" help="Campaign state directory (default: /tmp/<agent>.d/fold-homes-campaign/state)"
+#USAGE flag "--state <path>" default="" help="Deprecated alias for --work-dir"
+#USAGE flag "--repo <repo>" var=#true default="" help="Repo filter (repeatable): OWNER/REPO"
+#USAGE flag "--jobs <count>" default="1" help="Maximum concurrent prepare jobs"
+#USAGE flag "--keep-going" default=#true help="Continue after failures (serial mode only; parallel mode always records all selected targets)"
+#USAGE example "mise run homes:smoke:prepare --jobs 6" header="Prepare-smoke all campaign clones"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck source=.mise/lib/homes_campaign.sh
+source "$ROOT/.mise/lib/homes_campaign.sh"
+
+MISE_BIN="${MISE:-mise}"
+SHIMMER_BIN="${SHIMMER:-shimmer}"
+
+if [ -n "${usage_work_dir:-}" ] && [ -n "${usage_state:-}" ] && [ "${usage_work_dir}" != "${usage_state}" ]; then
+  campaign_die "--work-dir and --state disagree"
+fi
+WORK_DIR_INPUT="${usage_work_dir:-${usage_state:-}}"
+WORK_DIR=$(campaign_resolve_work_dir "$WORK_DIR_INPUT")
+KEEP_GOING="${usage_keep_going:-true}"
+JOBS="${usage_jobs:-1}"
+TARGETS="$WORK_DIR/targets.tsv"
+RESULTS="$WORK_DIR/agent-prepare-smoke.tsv"
+LOG_DIR="$WORK_DIR/logs/agent-prepare-smoke"
+RESULT_PARTS="$WORK_DIR/logs/agent-prepare-smoke-results"
+mkdir -p "$LOG_DIR"
+rm -rf "$RESULT_PARTS"
+mkdir -p "$RESULT_PARTS"
+campaign_require_file "$TARGETS" "campaign targets"
+
+case "$JOBS" in
+  ''|*[!0-9]*)
+    echo "ERROR: --jobs must be a positive integer" >&2
+    exit 1
+    ;;
+esac
+if [ "$JOBS" -lt 1 ]; then
+  echo "ERROR: --jobs must be >= 1" >&2
+  exit 1
+fi
+
+filters=()
+if [ -n "${usage_repo:-}" ]; then
+  while IFS= read -r repo; do
+    [ -n "$repo" ] || continue
+    filters+=("${repo%%:*}")
+  done < <(printf '%s' "${usage_repo}" | xargs printf '%s\n')
+fi
+
+matches_filter() {
+  local repo="$1" filter
+  [ "${#filters[@]}" -eq 0 ] && return 0
+  for filter in ${filters[@]+"${filters[@]}"}; do
+    [ "$repo" = "$filter" ] && return 0
+  done
+  return 1
+}
+
+run_one() {
+  local repo="$1" agent="$2" clone="$3" branch="$4" base="$5"
+  local log part start status elapsed
+
+  log="$LOG_DIR/${agent}.log"
+  part="$RESULT_PARTS/${agent}.tsv"
+  start=$(date +%s)
+  status="PASS"
+  (
+    printf '== %s (%s) ==\n' "$agent" "$repo" &&
+    printf 'clone=%s\nbranch=%s\nbase=%s\n' "$clone" "$branch" "$base" &&
+    cd "$clone" &&
+    "$MISE_BIN" trust &&
+    "$MISE_BIN" install &&
+    eval "$("$SHIMMER_BIN" as "$agent")" &&
+    "$MISE_BIN" run agent:prepare &&
+    "$CAMPAIGN_GIT_BIN" status --short --branch
+  ) >"$log" 2>&1 || status="FAIL:$?"
+  elapsed=$(($(date +%s) - start))
+
+  printf '%s\t%s\t%s\t%s\t%s\n' "$agent" "$repo" "$status" "$elapsed" "$log" > "$part"
+  printf '%-10s %s (%ss)\n' "$agent" "$status" "$elapsed"
+  [ "$status" = PASS ]
+}
+
+selected_file=$(mktemp)
+cleanup() {
+  rm -f "$selected_file"
+}
+trap cleanup EXIT
+
+while IFS=$'\t' read -r repo agent clone branch base; do
+  [ "$repo" != "repo" ] || continue
+  matches_filter "$repo" || continue
+  printf '%s\t%s\t%s\t%s\t%s\n' "$repo" "$agent" "$clone" "$branch" "$base" >> "$selected_file"
+done < "$TARGETS"
+
+if [ ! -s "$selected_file" ]; then
+  echo "ERROR: no targets matched" >&2
+  exit 1
+fi
+
+if [ "$JOBS" -le 1 ]; then
+  failed=0
+  while IFS=$'\t' read -r repo agent clone branch base; do
+    if ! run_one "$repo" "$agent" "$clone" "$branch" "$base"; then
+      failed=1
+      [ "$KEEP_GOING" = true ] || break
+    fi
+  done < "$selected_file"
+else
+  sem=$(mktemp -u)
+  mkfifo "$sem"
+  exec 9<>"$sem"
+  rm -f "$sem"
+  for _ in $(seq 1 "$JOBS"); do
+    printf '.' >&9
+  done
+
+  pids=()
+  while IFS=$'\t' read -r repo agent clone branch base; do
+    read -r -n 1 -u 9 _token
+    {
+      run_one "$repo" "$agent" "$clone" "$branch" "$base" || true
+      printf '.' >&9
+    } &
+    pids+=("$!")
+  done < "$selected_file"
+
+  for pid in ${pids[@]+"${pids[@]}"}; do
+    wait "$pid"
+  done
+  exec 9>&-
+  failed=0
+fi
+
+printf 'agent\trepo\tstatus\telapsed_s\tlog\n' > "$RESULTS"
+while IFS=$'\t' read -r _repo agent _clone _branch _base; do
+  if [ -f "$RESULT_PARTS/${agent}.tsv" ]; then
+    cat "$RESULT_PARTS/${agent}.tsv" >> "$RESULTS"
+  else
+    printf '%s\t%s\t%s\t%s\t%s\n' "$agent" "$_repo" "FAIL:no-result" "0" "" >> "$RESULTS"
+  fi
+done < "$selected_file"
+
+if awk -F '\t' 'NR > 1 && $3 != "PASS" { found = 1 } END { exit !found }' "$RESULTS"; then
+  failed=1
+fi
+
+printf '\nresults=%s\n' "$RESULTS"
+[ "$failed" -eq 0 ]

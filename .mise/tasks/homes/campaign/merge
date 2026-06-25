@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+#MISE description="Fast-forward target branches from campaign branches"
+#USAGE flag "--work-dir <path>" default="" help="Campaign state directory (default: /tmp/<agent>.d/fold-homes-campaign/state)"
+#USAGE flag "--repo <repo>" var=#true default="" help="Repo filter (repeatable): OWNER/REPO or OWNER/REPO:auth-name"
+#USAGE flag "--target <branch>" default="main" help="Branch to fast-forward (default: main)"
+#USAGE flag "--dry-run" default=#false help="Check mergeability without pushing"
+#USAGE flag "--keep-going" default=#false help="Check remaining targets even if one target fails"
+#USAGE example "mise run homes:campaign:merge --dry-run" header="Check every campaign branch can fast-forward main"
+#USAGE example "mise run homes:campaign:merge --repo c0da-ricon/home" header="Fast-forward one target repo"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck source=.mise/lib/homes_campaign.sh
+source "$ROOT/.mise/lib/homes_campaign.sh"
+
+WORK_DIR=$(campaign_resolve_work_dir "${usage_work_dir:-}")
+REPO_FILTERS="${usage_repo:-}"
+TARGET_BRANCH="${usage_target:-main}"
+DRY_RUN="${usage_dry_run:-false}"
+KEEP_GOING="${usage_keep_going:-false}"
+TARGETS_FILE="$WORK_DIR/targets.tsv"
+[ -f "$TARGETS_FILE" ] || campaign_die "targets file not found: $TARGETS_FILE (run homes:campaign:init first)"
+
+filters_file=$(mktemp)
+cleanup() {
+  rm -f "$filters_file"
+}
+trap cleanup EXIT
+
+campaign_select_filters_file "$REPO_FILTERS" "$filters_file"
+
+merge_one() {
+  local repo="$1" auth="$2" clone="$3" source_branch="$4"
+  local token target_ref source_ref target_sha source_sha
+
+  if [ ! -d "$clone/.git" ]; then
+    printf 'ERROR: clone missing: %s\n' "$clone" >&2
+    return 1
+  fi
+
+  token=$(campaign_get_auth_token "$auth")
+  target_ref="refs/remotes/origin/$TARGET_BRANCH"
+  source_ref="$source_branch"
+
+  campaign_run_git "$token" -C "$clone" fetch origin \
+    "+refs/heads/$TARGET_BRANCH:$target_ref" >/dev/null
+
+  target_sha=$(git -C "$clone" rev-parse --short=12 "$target_ref")
+  source_sha=$(git -C "$clone" rev-parse --short=12 "$source_ref")
+
+  if ! git -C "$clone" merge-base --is-ancestor "$target_ref" "$source_ref"; then
+    printf 'DIV %-28s %s %s is not ancestor of %s %s\n' \
+      "$repo" "$TARGET_BRANCH" "$target_sha" "$source_branch" "$source_sha"
+    return 1
+  fi
+
+  if [ "$target_sha" = "$source_sha" ]; then
+    printf 'OK  %-28s %s already at %s\n' "$repo" "$TARGET_BRANCH" "$target_sha"
+    return 0
+  fi
+
+  if [ "$DRY_RUN" = "true" ]; then
+    printf 'DRY %-28s %s %s -> %s\n' "$repo" "$TARGET_BRANCH" "$target_sha" "$source_sha"
+    return 0
+  fi
+
+  campaign_run_git "$token" -C "$clone" push origin "$source_ref:refs/heads/$TARGET_BRANCH" >/dev/null
+  printf 'MER %-28s %s %s -> %s\n' "$repo" "$TARGET_BRANCH" "$target_sha" "$source_sha"
+}
+
+selected=0
+failed=0
+
+while IFS=$'\t' read -r repo auth clone branch _base; do
+  if [ "$repo" = "repo" ]; then
+    continue
+  fi
+
+  if [ -s "$filters_file" ] && ! grep -Fxq "$repo" "$filters_file"; then
+    continue
+  fi
+
+  selected=$((selected + 1))
+  if ! merge_one "$repo" "$auth" "$clone" "$branch"; then
+    failed=1
+    [ "$KEEP_GOING" = "true" ] || exit 1
+  fi
+done < "$TARGETS_FILE"
+
+if [ "$selected" -eq 0 ]; then
+  campaign_die "no campaign targets matched"
+fi
+
+if [ "$failed" -ne 0 ]; then
+  exit 1
+fi
