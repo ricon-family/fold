@@ -1,0 +1,188 @@
+#!/usr/bin/env bash
+#MISE description="Create/provision a desk-scoped agent home without waking the agent"
+#USAGE flag "--desk <path>" default="" help="Existing desk root path to provision (default: create/use --desk-id)"
+#USAGE flag "--desk-id <id>" default="" help="Desk id to create with desks new when --desk is omitted"
+#USAGE flag "--purpose <slug>" default="desk" help="Purpose slug used in generated desk ids"
+#USAGE flag "--home <path>" default="" help="Home repo path (default: <desk>/home)"
+#USAGE flag "--repo <repo>" default="" help="GitHub home repo OWNER/REPO (default: <agent github login>/home)"
+#USAGE flag "--remote-url <url>" default="" help="Remote URL to clone; passed through to homes:adopt-remote"
+#USAGE flag "--branch <branch>" default="main" help="Home repo branch"
+#USAGE flag "--shell <name>" default="" help="Shell name to render in the next wake command"
+#USAGE flag "--packet <path>" default="" help="Packet path to render in the next wake command"
+#USAGE flag "-y --yes" default=#false help="Create/provision the desk home; dry-run by default"
+#USAGE arg "<agent>" help="Agent identity to prepare"
+#USAGE example "mise run agent:desk:prepare brownie --purpose shell12-review --yes" header="Create and provision a desk home"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck source=.mise/lib/agent_desk.sh
+source "$ROOT/.mise/lib/agent_desk.sh"
+# shellcheck source=.mise/lib/homes.sh
+source "$ROOT/.mise/lib/homes.sh"
+
+MISE_BIN="${MISE:-mise}"
+DESKS_BIN="${DESKS:-desks}"
+
+AGENT="${usage_agent:?agent required}"
+DESK_PATH="${usage_desk:-}"
+DESK_ID="${usage_desk_id:-}"
+PURPOSE="${usage_purpose:-desk}"
+HOME_PATH="${usage_home:-}"
+REPO="${usage_repo:-}"
+REMOTE_URL="${usage_remote_url:-}"
+BRANCH="${usage_branch:-main}"
+SHELL_NAME="${usage_shell:-}"
+PACKET_PATH="${usage_packet:-}"
+YES="${usage_yes:-false}"
+TIMESTAMP="${FOLD_AGENT_DESK_PREPARE_TIMESTAMP:-$(date +%Y%m%d%H%M%S)}"
+CREATED_DESK=false
+DRY_RUN_NOTE=""
+
+abs_maybe_missing() {
+  local path="$1"
+  case "$path" in
+    /*) printf '%s\n' "$path" ;;
+    *) printf '%s/%s\n' "$PWD" "$path" ;;
+  esac
+}
+
+validate_branch_name() {
+  local branch="$1"
+  if [[ ! "$branch" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+    echo "ERROR: invalid branch name: $branch" >&2
+    exit 1
+  fi
+}
+
+resolve_repo() {
+  if [ -n "$REMOTE_URL" ]; then
+    [ -n "$REPO" ] && validate_repo "$REPO"
+    return 0
+  fi
+
+  if [ -n "$REPO" ]; then
+    validate_repo "$REPO"
+    return 0
+  fi
+
+  require_tool "$SECRETS_BIN"
+  REPO="$(get_agent_github_login "$AGENT")/home"
+}
+
+resolve_desk() {
+  if [ -n "$DESK_PATH" ]; then
+    DESK_PATH="$(abs_maybe_missing "$DESK_PATH")"
+    if [ "$YES" = "true" ] && [ ! -d "$DESK_PATH" ]; then
+      echo "ERROR: explicit --desk path must already exist: $DESK_PATH" >&2
+      echo "Omit --desk or create the desk with desks new first." >&2
+      exit 1
+    fi
+    return 0
+  fi
+
+  if [ -z "$DESK_ID" ]; then
+    agent_desk_validate_name purpose "$PURPOSE"
+    DESK_ID="$AGENT-$PURPOSE-$TIMESTAMP"
+  fi
+  agent_desk_validate_name desk-id "$DESK_ID"
+
+  if [ "$YES" = "true" ]; then
+    require_tool "$DESKS_BIN"
+    "$DESKS_BIN" new --id "$DESK_ID"
+    DESK_PATH="$($DESKS_BIN path "$DESK_ID")"
+    CREATED_DESK=true
+  else
+    DESK_PATH="$HOME/desks/$DESK_ID"
+    DRY_RUN_NOTE="desk path is estimated; desks path is resolved after creation"
+  fi
+}
+
+render_next_wake() {
+  local shell_arg packet_arg
+  shell_arg="${SHELL_NAME:-${DESK_ID:-$(basename "$DESK_PATH")}}"
+  packet_arg="${PACKET_PATH:-<packet.md>}"
+  printf 'mise run agent:desk:wake %s --desk %s --shell %s --packet %s --yes\n' \
+    "$AGENT" "$DESK_PATH" "$shell_arg" "$packet_arg"
+}
+
+run_nested_mise() {
+  (cd "$ROOT" && "$MISE_BIN" "$@")
+}
+
+validate_agent "$AGENT"
+validate_branch_name "$BRANCH"
+resolve_repo
+resolve_desk
+
+if [ -z "$HOME_PATH" ]; then
+  HOME_PATH="$DESK_PATH/home"
+else
+  HOME_PATH="$(abs_maybe_missing "$HOME_PATH")"
+fi
+
+if [ -z "$REMOTE_URL" ] && [ -z "$REPO" ]; then
+  echo "ERROR: internal repo resolution failed" >&2
+  exit 1
+fi
+
+printf 'Agent desk prepare\n\n'
+printf 'agent:   %s\n' "$AGENT"
+if [ -n "$DESK_ID" ]; then
+  printf 'desk id: %s\n' "$DESK_ID"
+fi
+printf 'desk:    %s\n' "$DESK_PATH"
+printf 'home:    %s\n' "$HOME_PATH"
+if [ -n "$REPO" ]; then
+  printf 'repo:    %s\n' "$REPO"
+fi
+if [ -n "$REMOTE_URL" ]; then
+  printf 'remote:  %s\n' "$(homes_redact_url "$REMOTE_URL")"
+fi
+printf 'branch:  %s\n' "$BRANCH"
+printf 'mode:    %s\n' "$( [ "$YES" = "true" ] && echo mutate || echo dry-run )"
+if [ -n "$DRY_RUN_NOTE" ]; then
+  printf 'note:    %s\n' "$DRY_RUN_NOTE"
+fi
+
+printf '\nPlan\n'
+if [ -n "$DESK_ID" ] && [ "$CREATED_DESK" != "true" ]; then
+  printf '1. create desk: %s new --id %s\n' "$DESKS_BIN" "$DESK_ID"
+else
+  printf '1. use desk: %s\n' "$DESK_PATH"
+fi
+printf '2. setup auth: mise run homes:auth:setup %s --home %s --yes\n' "$AGENT" "$HOME_PATH"
+printf '3. adopt home: mise run homes:adopt-remote %s --home %s' "$AGENT" "$HOME_PATH"
+if [ -n "$REPO" ]; then
+  printf ' --repo %s' "$REPO"
+fi
+if [ -n "$REMOTE_URL" ]; then
+  printf ' --remote-url %s' "$(homes_redact_url "$REMOTE_URL")"
+fi
+printf ' --branch %s --yes\n' "$BRANCH"
+printf '4. verify: mise run homes:status %s --home %s --json --check\n' "$AGENT" "$HOME_PATH"
+printf '5. wake later: '
+render_next_wake
+
+if [ "$YES" != "true" ]; then
+  printf '\ndry-run: rerun with --yes to create/provision; no agent will be woken.\n'
+  exit 0
+fi
+
+printf '\n== setup home auth ==\n'
+run_nested_mise run homes:auth:setup "$AGENT" --home "$HOME_PATH" --yes
+
+printf '\n== adopt home ==\n'
+adopt_args=(run homes:adopt-remote "$AGENT" --home "$HOME_PATH" --branch "$BRANCH" --yes)
+if [ -n "$REPO" ]; then
+  adopt_args+=(--repo "$REPO")
+fi
+if [ -n "$REMOTE_URL" ]; then
+  adopt_args+=(--remote-url "$REMOTE_URL")
+fi
+run_nested_mise "${adopt_args[@]}"
+
+printf '\n== verify home readiness ==\n'
+run_nested_mise run homes:status "$AGENT" --home "$HOME_PATH" --json --check
+
+printf '\nReady. Next wake command:\n'
+render_next_wake
