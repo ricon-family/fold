@@ -47,6 +47,22 @@ write_fake_mise_for_prepare() {
 set -euo pipefail
 printf 'mise %s\n' "$*" >> "${MISE_LOG:?}"
 case "${1:-} ${2:-}" in
+  "run homes:auth:setup")
+    home=""
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = "--home" ]; then
+        home="${2:-}"
+        break
+      fi
+      shift
+    done
+    if [ -z "$home" ]; then
+      echo "homes:auth:setup missing --home" >&2
+      exit 2
+    fi
+    mkdir -p "$(dirname "$home")"
+    printf '[user]\n\tname = fixture\n' > "$(dirname "$home")/.gitconfig"
+    ;;
   "run homes:adopt-remote")
     home=""
     while [ "$#" -gt 0 ]; do
@@ -56,18 +72,40 @@ case "${1:-} ${2:-}" in
       fi
       shift
     done
-    if [ -n "$home" ]; then
-      mkdir -p "$home"
-      git init -q -b main "$home"
-      git -C "$home" config user.name fixture
-      git -C "$home" config user.email fixture@example.test
-      git -C "$home" config commit.gpgsign false
-      printf 'prepared home\n' > "$home/AGENTS.md"
-      git -C "$home" add AGENTS.md
-      git -C "$home" commit -q -m 'prepared home'
+    if [ -z "$home" ]; then
+      echo "homes:adopt-remote missing --home" >&2
+      exit 2
     fi
+    if [ ! -f "$(dirname "$home")/.gitconfig" ]; then
+      echo "auth not set up before adopt" >&2
+      exit 1
+    fi
+    mkdir -p "$home"
+    git init -q -b main "$home"
+    git -C "$home" config user.name fixture
+    git -C "$home" config user.email fixture@example.test
+    git -C "$home" config commit.gpgsign false
+    printf 'prepared home\n' > "$home/AGENTS.md"
+    git -C "$home" add AGENTS.md
+    git -C "$home" commit -q -m 'prepared home'
     ;;
   "run homes:status")
+    home=""
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = "--home" ]; then
+        home="${2:-}"
+        break
+      fi
+      shift
+    done
+    if [ -z "$home" ]; then
+      echo "homes:status missing --home" >&2
+      exit 2
+    fi
+    if [ ! -f "$(dirname "$home")/.gitconfig" ]; then
+      printf '{"ready":false,"next":"mise run homes:auth:setup --yes"}\n'
+      exit 1
+    fi
     printf '{"ready":true}\n'
     ;;
   *)
@@ -145,6 +183,7 @@ make_repo() {
   [[ "$output" == *"home:    $desk_path/home"* ]]
   [[ "$output" == *"repo:    quick-ricon/home"* ]]
   [[ "$output" == *"dry-run: rerun with --yes"* ]]
+  [[ "$output" == *"setup auth: mise run homes:auth:setup quick --home $desk_path/home --yes"* ]]
   [[ "$output" == *"mise run agent:desk:wake quick --desk $desk_path --shell quick-probe --packet /tmp/packet.md --yes"* ]]
   [ ! -e "$desk/home" ]
 }
@@ -164,11 +203,16 @@ make_repo() {
     --yes
 
   [ "$status" -eq 0 ]
+  [[ "$output" == *"== setup home auth =="* ]]
   [[ "$output" == *"== adopt home =="* ]]
   [[ "$output" == *"== verify home readiness =="* ]]
   [[ "$output" == *"Ready. Next wake command:"* ]]
-  grep -F "mise run homes:adopt-remote quick --home $desk_path/home --branch main --yes --repo quick-ricon/home" "$MISE_LOG" >/dev/null
-  grep -F "mise run homes:status quick --home $desk_path/home --json --check" "$MISE_LOG" >/dev/null
+  auth_line=$(grep -nF "mise run homes:auth:setup quick --home $desk_path/home --yes" "$MISE_LOG" | cut -d: -f1)
+  adopt_line=$(grep -nF "mise run homes:adopt-remote quick --home $desk_path/home --branch main --yes --repo quick-ricon/home" "$MISE_LOG" | cut -d: -f1)
+  status_line=$(grep -nF "mise run homes:status quick --home $desk_path/home --json --check" "$MISE_LOG" | cut -d: -f1)
+  [ "$auth_line" -lt "$adopt_line" ]
+  [ "$adopt_line" -lt "$status_line" ]
+  [ -f "$desk/.gitconfig" ]
   [ -d "$desk/home/.git" ]
   if [ -f "$SHELL_LOG" ]; then
     ! grep -q 'shell run' "$SHELL_LOG"
@@ -191,10 +235,13 @@ make_repo() {
   desk="$FAKE_DESKS_ROOT/$desk_id"
   grep -F "desks new --id $desk_id" "$DESKS_LOG" >/dev/null
   grep -F "desks path $desk_id" "$DESKS_LOG" >/dev/null
-  grep -F "mise run homes:adopt-remote quick --home $desk/home --branch main --yes --repo quick-ricon/home" "$MISE_LOG" >/dev/null
+  auth_line=$(grep -nF "mise run homes:auth:setup quick --home $desk/home --yes" "$MISE_LOG" | cut -d: -f1)
+  adopt_line=$(grep -nF "mise run homes:adopt-remote quick --home $desk/home --branch main --yes --repo quick-ricon/home" "$MISE_LOG" | cut -d: -f1)
+  [ "$auth_line" -lt "$adopt_line" ]
   [[ "$output" == *"desk id: $desk_id"* ]]
   [[ "$output" == *"mise run agent:desk:wake quick --desk $desk --shell $desk_id --packet /tmp/packet.md --yes"* ]]
   [ -f "$desk/.desk/registry.json" ]
+  [ -f "$desk/.gitconfig" ]
   [ -d "$desk/home/.git" ]
 }
 

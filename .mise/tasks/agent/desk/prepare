@@ -150,7 +150,8 @@ if [ -n "$DESK_ID" ] && [ "$CREATED_DESK" != "true" ]; then
 else
   printf '1. use desk: %s\n' "$DESK_PATH"
 fi
-printf '2. adopt home: mise run homes:adopt-remote %s --home %s' "$AGENT" "$HOME_PATH"
+printf '2. setup auth: mise run homes:auth:setup %s --home %s --yes\n' "$AGENT" "$HOME_PATH"
+printf '3. adopt home: mise run homes:adopt-remote %s --home %s' "$AGENT" "$HOME_PATH"
 if [ -n "$REPO" ]; then
   printf ' --repo %s' "$REPO"
 fi
@@ -158,14 +159,17 @@ if [ -n "$REMOTE_URL" ]; then
   printf ' --remote-url %s' "$(homes_redact_url "$REMOTE_URL")"
 fi
 printf ' --branch %s --yes\n' "$BRANCH"
-printf '3. verify: mise run homes:status %s --home %s --json --check\n' "$AGENT" "$HOME_PATH"
-printf '4. wake later: '
+printf '4. verify: mise run homes:status %s --home %s --json --check\n' "$AGENT" "$HOME_PATH"
+printf '5. wake later: '
 render_next_wake
 
 if [ "$YES" != "true" ]; then
   printf '\ndry-run: rerun with --yes to create/provision; no agent will be woken.\n'
   exit 0
 fi
+
+printf '\n== setup home auth ==\n'
+run_nested_mise run homes:auth:setup "$AGENT" --home "$HOME_PATH" --yes
 
 printf '\n== adopt home ==\n'
 adopt_args=(run homes:adopt-remote "$AGENT" --home "$HOME_PATH" --branch "$BRANCH" --yes)
