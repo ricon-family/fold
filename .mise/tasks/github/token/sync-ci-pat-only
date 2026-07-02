@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+#MISE description="Sync only agent GitHub PATs to GitHub Actions secrets"
+#USAGE flag "--dry-run" default=#false help="Show secret names that would be updated without reading or writing credentials"
+#USAGE flag "--operator <agent>" default="" help="Agent whose stored GitHub PAT has Actions-secret permission"
+#USAGE flag "--repo <repo>" default="ricon-family/fold" help="GitHub repo whose Actions secrets should be updated"
+#USAGE arg "[agents]" var=#true default="" help="Agent names to sync (default: CI-enabled fold agents)"
+#USAGE example "mise run github:token:sync-ci-pat-only --dry-run baby-joel x1f9" header="Preview PAT-only CI secret names"
+#USAGE example "mise run github:token:sync-ci-pat-only --operator quick rho zeke" header="Sync selected agents to ricon-family/fold"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+DRY_RUN="${usage_dry_run:-false}"
+OPERATOR="${usage_operator:-}"
+REPO="${usage_repo:-ricon-family/fold}"
+AGENTS_ARG="${usage_agents:-}"
+SECRETS_BIN="${SECRETS_BIN:-secrets}"
+GH_BIN="${GH_BIN:-gh}"
+XARGS_BIN="${XARGS_BIN:-xargs}"
+
+require_tool() {
+  local tool="$1"
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "ERROR: required tool not found: $tool" >&2
+    exit 1
+  fi
+}
+
+validate_agent() {
+  local agent="$1"
+  if [[ ! "$agent" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    echo "ERROR: invalid agent name: $agent" >&2
+    exit 1
+  fi
+}
+
+validate_repo() {
+  if [[ ! "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+    echo "ERROR: invalid repo: $REPO" >&2
+    exit 1
+  fi
+}
+
+secret_name_for_agent() {
+  local agent="$1"
+  validate_agent "$agent"
+  printf '%s_GITHUB_PAT\n' "$agent" | tr '[:lower:].-' '[:upper:]__'
+}
+
+parse_explicit_agents() {
+  printf '%s' "$AGENTS_ARG" | "$XARGS_BIN" printf '%s\n' | while IFS= read -r agent; do
+    [ -n "$agent" ] || continue
+    validate_agent "$agent"
+    printf '%s\n' "$agent"
+  done
+}
+
+list_default_agents() {
+  (cd "$ROOT" && mise run -q agent:list --ci)
+}
+
+load_operator_token() {
+  if [ -z "$OPERATOR" ]; then
+    echo "ERROR: --operator <agent> is required unless --dry-run is used" >&2
+    exit 1
+  fi
+  validate_agent "$OPERATOR"
+
+  if ! OPERATOR_TOKEN=$("$SECRETS_BIN" get "$OPERATOR/github-pat" 2>/dev/null); then
+    echo "ERROR: could not read $OPERATOR/github-pat for CI sync operator" >&2
+    exit 1
+  fi
+  if [ -z "$OPERATOR_TOKEN" ]; then
+    echo "ERROR: $OPERATOR/github-pat is empty" >&2
+    exit 1
+  fi
+  export OPERATOR_TOKEN
+}
+
+sync_one() {
+  local agent="$1"
+  local secret_name="$2"
+  local pat=""
+
+  if ! pat=$("$SECRETS_BIN" get "$agent/github-pat" 2>/dev/null); then
+    echo "  ✗ $agent -> $secret_name: missing $agent/github-pat"
+    return 1
+  fi
+  if [ -z "$pat" ]; then
+    echo "  ✗ $agent -> $secret_name: $agent/github-pat is empty"
+    return 1
+  fi
+
+  if printf '%s' "$pat" | GH_TOKEN="$OPERATOR_TOKEN" "$GH_BIN" secret set "$secret_name" --repo "$REPO" >/dev/null 2>&1; then
+    unset pat
+    echo "  ✓ $agent -> $secret_name"
+    return 0
+  fi
+
+  unset pat
+  echo "  ✗ $agent -> $secret_name: gh secret set failed"
+  return 1
+}
+
+require_tool "$XARGS_BIN"
+validate_repo
+
+TMP_AGENTS=$(mktemp)
+trap 'rm -f "$TMP_AGENTS"' EXIT
+
+if [ -n "$AGENTS_ARG" ]; then
+  parse_explicit_agents > "$TMP_AGENTS"
+  if ! grep -q '[^[:space:]]' "$TMP_AGENTS"; then
+    list_default_agents > "$TMP_AGENTS"
+  fi
+else
+  list_default_agents > "$TMP_AGENTS"
+fi
+
+if ! grep -q '[^[:space:]]' "$TMP_AGENTS"; then
+  echo "ERROR: no agents found" >&2
+  exit 1
+fi
+
+sort -u "$TMP_AGENTS" -o "$TMP_AGENTS"
+
+if [ "$DRY_RUN" = "true" ]; then
+  echo "Dry run: would sync only GitHub PAT Actions secrets for $REPO."
+  while IFS= read -r agent; do
+    [ -n "$agent" ] || continue
+    secret_name=$(secret_name_for_agent "$agent")
+    echo "  - $agent -> $secret_name"
+  done < "$TMP_AGENTS"
+  echo "No credentials were read and no GitHub writes were attempted."
+  exit 0
+fi
+
+require_tool "$SECRETS_BIN"
+require_tool "$GH_BIN"
+load_operator_token
+
+echo "Syncing GitHub PAT Actions secrets only for $REPO."
+echo "Operator: $OPERATOR/github-pat"
+
+failures=0
+while IFS= read -r agent; do
+  [ -n "$agent" ] || continue
+  secret_name=$(secret_name_for_agent "$agent")
+  if ! sync_one "$agent" "$secret_name"; then
+    failures=$((failures + 1))
+  fi
+done < "$TMP_AGENTS"
+
+if [ "$failures" -gt 0 ]; then
+  echo "PAT-only CI sync completed with $failures failure(s)." >&2
+  exit 1
+fi
+
+echo "PAT-only CI sync complete."
