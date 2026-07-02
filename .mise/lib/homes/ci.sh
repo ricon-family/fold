@@ -309,6 +309,14 @@ homes_ci_sync_agent_secrets() {
   while IFS=$'\t' read -r repo agent; do
     [ -n "$repo" ] || continue
 
+    if [ "$yes" != "true" ] && ! homes_ci_secret_names_file "$repo" "$agent" "$names_file" 2>"$err_file"; then
+      detail=$(homes_ci_sanitize_detail < "$err_file")
+      [ -n "$detail" ] || detail="gh secret list failed"
+      homes_ci_print_sync_row "$repo" "$agent" "-" "error" "$detail"
+      status=1
+      continue
+    fi
+
     while IFS=$'\t' read -r secret source_key; do
       [ -n "$secret" ] || continue
 
@@ -327,7 +335,7 @@ homes_ci_sync_agent_secrets() {
       normalized=$(homes_ci_normalize_secret_value "$source_key" "$value")
 
       if [ "$yes" != "true" ]; then
-        homes_ci_print_sync_row "$repo" "$agent" "$secret" "dry-run" "source present; no GitHub secret changed"
+        homes_ci_print_sync_row "$repo" "$agent" "$secret" "dry-run" "source present; target checked; no GitHub secret changed"
         unset value normalized
         continue
       fi
@@ -375,7 +383,14 @@ homes_ci_sync_pi_auth() {
     fi
 
     if [ "$yes" != "true" ]; then
-      homes_ci_print_sync_row "$repo" "$agent" "PI_AUTH_JSON" "dry-run" "source valid; no GitHub secret changed"
+      if homes_ci_secret_names_file "$repo" "$agent" "$names_file" 2>"$err_file"; then
+        homes_ci_print_sync_row "$repo" "$agent" "PI_AUTH_JSON" "dry-run" "source valid; target checked; no GitHub secret changed"
+      else
+        detail=$(homes_ci_sanitize_detail < "$err_file")
+        [ -n "$detail" ] || detail="gh secret list failed"
+        homes_ci_print_sync_row "$repo" "$agent" "PI_AUTH_JSON" "error" "$detail"
+        status=1
+      fi
       continue
     fi
 

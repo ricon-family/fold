@@ -182,12 +182,21 @@ SH
 
   [ "$status" -eq 0 ]
   [[ "$output" == *$'Mode\tdry-run'* ]]
-  [[ "$output" == *$'owner/full\talpha\tALPHA_GITHUB_PAT\tdry-run\tsource present; no GitHub secret changed'* ]]
+  [[ "$output" == *$'owner/full\talpha\tALPHA_GITHUB_PAT\tdry-run\tsource present; target checked; no GitHub secret changed'* ]]
   [[ "$output" == *$'owner/full\talpha\tALPHA_GPG_PRIVATE_KEY\tdry-run'* ]]
   [[ "$output" == *$'owner/full\talpha\tALPHA_EMAIL_PASSWORD\tdry-run'* ]]
   [[ "$output" != *"token-alpha"* ]]
   [[ "$output" != *"email-alpha"* ]]
   [[ "$output" != *"fake-alpha"* ]]
+  ! grep -q $'set\t' "$GH_LOG"
+}
+
+@test "homes:ci:secrets:sync dry-run fails when target repo cannot be checked" {
+  run fold_task homes:ci:secrets:sync --repo owner/absent:alpha
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *$'owner/absent\talpha\t-\terror'* ]]
+  [[ "$output" == *"unexpected gh invocation"* ]]
   ! grep -q $'set\t' "$GH_LOG"
 }
 
@@ -221,8 +230,17 @@ SH
   [ "$status" -eq 0 ]
   [[ "$output" == *$'Mode\tdry-run'* ]]
   [[ "$output" == *$''"$AUTH_SOURCE"$'\tpresent\tvalid JSON object'* ]]
-  [[ "$output" == *$'owner/full\talpha\tPI_AUTH_JSON\tdry-run\tsource valid; no GitHub secret changed'* ]]
+  [[ "$output" == *$'owner/full\talpha\tPI_AUTH_JSON\tdry-run\tsource valid; target checked; no GitHub secret changed'* ]]
   [[ "$output" != *"do-not-print"* ]]
+  ! grep -q $'set\t' "$GH_LOG"
+}
+
+@test "homes:ci:pi-auth:sync dry-run fails when target repo cannot be checked" {
+  run fold_task homes:ci:pi-auth:sync --source "$AUTH_SOURCE" --repo owner/absent:alpha
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *$'owner/absent\talpha\tPI_AUTH_JSON\terror'* ]]
+  [[ "$output" == *"unexpected gh invocation"* ]]
   ! grep -q $'set\t' "$GH_LOG"
 }
 
