@@ -26,24 +26,8 @@ trap cleanup EXIT
 homes_ci_require_tools
 homes_ci_targets_file "$REPO_TARGETS" "$TARGETS_FILE"
 
-source_status="present"
-source_detail="valid JSON object"
-if [ ! -f "$SOURCE" ]; then
-  source_status="missing"
-  source_detail="source file not found"
-  status=1
-elif [ ! -s "$SOURCE" ]; then
-  source_status="invalid"
-  source_detail="source file is empty"
-  status=1
-elif ! "$HOMES_CI_JQ_BIN" -e 'type == "object" and length > 0' "$SOURCE" >/dev/null 2>&1; then
-  source_status="invalid"
-  source_detail="source is not a non-empty JSON object"
-  status=1
-fi
-
-printf 'Source\tStatus\tDetail\n'
-printf '%s\t%s\t%s\n\n' "$SOURCE" "$source_status" "$source_detail"
+homes_ci_print_pi_auth_source_status "$SOURCE" || status=1
+printf '\n'
 homes_ci_print_secret_status "$TARGETS_FILE" pi-auth "$TMP_DIR" || status=1
 
 if [ "$CHECK" = "true" ]; then
