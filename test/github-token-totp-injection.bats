@@ -26,7 +26,12 @@ write_fake_websites() {
 set -euo pipefail
 printf '%s\n' "\$*" > "\$BATS_TEST_TMPDIR/websites-args"
 printf 'GITHUB_TOTP_CODE=%s\n' "\${GITHUB_TOTP_CODE:-}" > "\$BATS_TEST_TMPDIR/websites-env"
+printf 'GITHUB_TOTP_COMMAND=%s\n' "\${GITHUB_TOTP_COMMAND:-}" >> "\$BATS_TEST_TMPDIR/websites-env"
 printf 'GITHUB_USERNAME=%s\n' "\${GITHUB_USERNAME:-}" >> "\$BATS_TEST_TMPDIR/websites-env"
+if [ -n "\${GITHUB_TOTP_COMMAND:-}" ]; then
+  bash -lc "\$GITHUB_TOTP_COMMAND" >> "\$BATS_TEST_TMPDIR/websites-totp-output"
+  bash -lc "\$GITHUB_TOTP_COMMAND" >> "\$BATS_TEST_TMPDIR/websites-totp-output"
+fi
 if [ "\${1:-}" != "$expected_task" ]; then
   echo "unexpected websites task: \$*" >&2
   exit 1
@@ -62,65 +67,45 @@ EOF
   chmod +x "$TMPBIN/gh"
 }
 
-@test "github:token:create injects caller-generated TOTP code when stored seed exists" {
+@test "github:token:create passes command-backed TOTP resolver when stored seed exists" {
   write_fake_websites github:token:create
   write_fake_shimmer_and_gh
 
   run fold_task github:token:create --yes --no-sync-ci c0da
 
   [ "$status" -eq 0 ]
-  grep -q '^GITHUB_TOTP_CODE=123456$' "$BATS_TEST_TMPDIR/websites-env"
+  grep -q '^GITHUB_TOTP_CODE=$' "$BATS_TEST_TMPDIR/websites-env"
+  grep -q '^GITHUB_TOTP_COMMAND=.* totp c0da/github-totp$' "$BATS_TEST_TMPDIR/websites-env"
   grep -q '^GITHUB_USERNAME=c0da-ricon$' "$BATS_TEST_TMPDIR/websites-env"
+  [ "$(grep -c '^123456$' "$BATS_TEST_TMPDIR/websites-totp-output")" -eq 2 ]
   grep -q 'github:token:create c0da --login-id c0da' "$BATS_TEST_TMPDIR/websites-args"
   grep -q 'github:token:store c0da ghp_newtoken' "$BATS_TEST_TMPDIR/shimmer-log"
   [[ "$output" == *"✓ verified as c0da-ricon"* ]]
 }
 
-@test "github:token:rotate injects caller-generated TOTP code when stored seed exists" {
+@test "github:token:rotate passes command-backed TOTP resolver when stored seed exists" {
   write_fake_websites github:token:rotate
   write_fake_shimmer_and_gh
 
   run fold_task github:token:rotate --yes --no-sync-ci c0da
 
   [ "$status" -eq 0 ]
-  grep -q '^GITHUB_TOTP_CODE=123456$' "$BATS_TEST_TMPDIR/websites-env"
+  grep -q '^GITHUB_TOTP_CODE=$' "$BATS_TEST_TMPDIR/websites-env"
+  grep -q '^GITHUB_TOTP_COMMAND=.* totp c0da/github-totp$' "$BATS_TEST_TMPDIR/websites-env"
+  [ "$(grep -c '^123456$' "$BATS_TEST_TMPDIR/websites-totp-output")" -eq 2 ]
   grep -q 'github:token:rotate c0da --login-id c0da' "$BATS_TEST_TMPDIR/websites-args"
   grep -q 'github:token:store c0da ghp_newtoken' "$BATS_TEST_TMPDIR/shimmer-log"
   [[ "$output" == *"✓ verified as c0da-ricon"* ]]
-}
-
-@test "github:token:create fails before browser automation when TOTP generation fails" {
-  export FAKE_TOTP_FAIL=true
-  write_fake_websites github:token:create
-  write_fake_shimmer_and_gh
-
-  run fold_task github:token:create --yes --no-sync-ci c0da
-
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"totp failed intentionally"* ]]
-  [ ! -e "$BATS_TEST_TMPDIR/websites-args" ]
-  [ ! -e "$BATS_TEST_TMPDIR/shimmer-log" ]
-}
-
-@test "github:token:rotate fails before browser automation when TOTP generation fails" {
-  export FAKE_TOTP_FAIL=true
-  write_fake_websites github:token:rotate
-  write_fake_shimmer_and_gh
-
-  run fold_task github:token:rotate --yes --no-sync-ci c0da
-
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"totp failed intentionally"* ]]
-  [ ! -e "$BATS_TEST_TMPDIR/websites-args" ]
-  [ ! -e "$BATS_TEST_TMPDIR/shimmer-log" ]
 }
 
 @test "github:token:create redacts credential material from browser diagnostics" {
   cat > "$TMPBIN/websites" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-echo "diagnostic GITHUB_TOTP_CODE=${GITHUB_TOTP_CODE:-unset}" >&2
-echo "diagnostic bare totp ${GITHUB_TOTP_CODE:-unset}" >&2
+echo "diagnostic GITHUB_TOTP_COMMAND=${GITHUB_TOTP_COMMAND:-unset}" >&2
+if [ -n "${GITHUB_TOTP_COMMAND:-}" ]; then
+  echo "diagnostic bare totp $(bash -lc "$GITHUB_TOTP_COMMAND")" >&2
+fi
 echo "diagnostic password ${GITHUB_PASSWORD:-unset}" >&2
 echo "diagnostic seed JBSWY3DPEHPK3PXP" >&2
 echo "diagnostic recovery a1b2c-3d4e5" >&2
@@ -132,12 +117,12 @@ EOF
   run fold_task github:token:create --yes --no-sync-ci c0da
 
   [ "$status" -ne 0 ]
-  [[ "$output" == *"GITHUB_TOTP_CODE=[REDACTED_TOTP_CODE]"* ]]
+  [[ "$output" == *"GITHUB_TOTP_COMMAND=[REDACTED_TOTP_COMMAND]"* ]]
   [[ "$output" == *"bare totp [REDACTED_TOTP_CODE]"* ]]
   [[ "$output" == *"password [REDACTED_PASSWORD]"* ]]
   [[ "$output" == *"[REDACTED_BASE32]"* ]]
   [[ "$output" == *"[REDACTED_RECOVERY_CODE]"* ]]
-  [[ "$output" != *"GITHUB_TOTP_CODE=123456"* ]]
+  [[ "$output" != *"c0da/github-totp"* ]]
   [[ "$output" != *"bare totp 123456"* ]]
   [[ "$output" != *"password-for-c0da"* ]]
   [[ "$output" != *"JBSWY3DPEHPK3PXP"* ]]
@@ -148,8 +133,10 @@ EOF
   cat > "$TMPBIN/websites" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-echo "diagnostic GITHUB_TOTP_CODE=${GITHUB_TOTP_CODE:-unset}" >&2
-echo "diagnostic bare totp ${GITHUB_TOTP_CODE:-unset}" >&2
+echo "diagnostic GITHUB_TOTP_COMMAND=${GITHUB_TOTP_COMMAND:-unset}" >&2
+if [ -n "${GITHUB_TOTP_COMMAND:-}" ]; then
+  echo "diagnostic bare totp $(bash -lc "$GITHUB_TOTP_COMMAND")" >&2
+fi
 echo "diagnostic password ${GITHUB_PASSWORD:-unset}" >&2
 echo "diagnostic seed JBSWY3DPEHPK3PXP" >&2
 echo "diagnostic recovery a1b2c-3d4e5" >&2
@@ -161,12 +148,12 @@ EOF
   run fold_task github:token:rotate --yes --no-sync-ci c0da
 
   [ "$status" -ne 0 ]
-  [[ "$output" == *"GITHUB_TOTP_CODE=[REDACTED_TOTP_CODE]"* ]]
+  [[ "$output" == *"GITHUB_TOTP_COMMAND=[REDACTED_TOTP_COMMAND]"* ]]
   [[ "$output" == *"bare totp [REDACTED_TOTP_CODE]"* ]]
   [[ "$output" == *"password [REDACTED_PASSWORD]"* ]]
   [[ "$output" == *"[REDACTED_BASE32]"* ]]
   [[ "$output" == *"[REDACTED_RECOVERY_CODE]"* ]]
-  [[ "$output" != *"GITHUB_TOTP_CODE=123456"* ]]
+  [[ "$output" != *"c0da/github-totp"* ]]
   [[ "$output" != *"bare totp 123456"* ]]
   [[ "$output" != *"password-for-c0da"* ]]
   [[ "$output" != *"JBSWY3DPEHPK3PXP"* ]]

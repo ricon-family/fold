@@ -37,6 +37,8 @@ redact() {
     -e 's/(Password: ).*/\1[REDACTED]/g' \
     -e 's/(GITHUB_PASSWORD=)[^[:space:]]+/\1[REDACTED]/g' \
     -e 's/(GITHUB_TOTP_CODE=)[^[:space:]]+/\1[REDACTED_TOTP_CODE]/g' \
+    -e 's/(GITHUB_TOTP_COMMAND=).*/\1[REDACTED_TOTP_COMMAND]/g' \
+    -e 's#([^[:space:]]*/)?secrets[[:space:]]+totp[[:space:]]+[A-Za-z0-9._-]+/github-totp#[REDACTED_TOTP_COMMAND]#g' \
     -e 's/([Tt][Oo][Tt][Pp][^0-9]{0,32})[0-9]{6}/\1[REDACTED_TOTP_CODE]/g' \
     -e 's/(^|[^0-9])[0-9]{6}([^0-9]|$)/\1[REDACTED_TOTP_CODE]\2/g' \
     -e 's/^TOKEN:.*/TOKEN:[REDACTED_GITHUB_TOKEN]/'
@@ -142,20 +144,11 @@ run_websites_create() {
   local password="$3"
   local stdout="$4"
   local stderr="$5"
-  local totp_code=""
+  local totp_command=""
 
   if "$SECRETS_BIN" get "$agent/github-totp" >/dev/null 2>&1; then
-    if ! totp_code=$("$SECRETS_BIN" totp "$agent/github-totp" 2>>"$stderr"); then
-      return 1
-    fi
-    case "$totp_code" in
-      [0-9][0-9][0-9][0-9][0-9][0-9]) ;;
-      *)
-        echo "ERROR: generated TOTP code has unexpected shape" >>"$stderr"
-        return 1
-        ;;
-    esac
-    GITHUB_USERNAME="$username" GITHUB_PASSWORD="$password" GITHUB_TOTP_CODE="$totp_code" \
+    printf -v totp_command '%q totp %q' "$SECRETS_BIN" "$agent/github-totp"
+    GITHUB_USERNAME="$username" GITHUB_PASSWORD="$password" GITHUB_TOTP_COMMAND="$totp_command" \
       "$WEBSITES_BIN" github:token:create "$agent" --login-id "$agent" >"$stdout" 2>"$stderr"
   else
     GITHUB_USERNAME="$username" GITHUB_PASSWORD="$password" \
