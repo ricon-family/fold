@@ -9,6 +9,7 @@ setup() {
   mkdir -p "$TMPBIN"
   : > "$GH_LOG"
   export TMPBIN AUTH_SOURCE GH_LOG
+  export GH_TOKEN="ambient-token"
 
   cat > "$AUTH_SOURCE" <<'JSON'
 {"openai-codex":{"token":"do-not-print"}}
@@ -18,6 +19,7 @@ JSON
 #!/usr/bin/env bash
 set -euo pipefail
 if [ "${1:-}" = "get" ]; then
+  printf 'get\t%s\n' "${2:-}" >> "$BATS_TEST_TMPDIR/secrets-log"
   case "${2:-}" in
     alpha/github-pat) printf 'token-alpha\n' ;;
     alpha/gpg-private-key) printf '"-----BEGIN PGP PRIVATE KEY BLOCK-----\nfake-alpha\n-----END PGP PRIVATE KEY BLOCK-----"\n' ;;
@@ -69,6 +71,10 @@ if [ "${1:-}" = "secret" ] && [ "${2:-}" = "list" ]; then
       printf '%s\n' PI_AUTH_JSON
       exit 0
       ;;
+    owner/fold)
+      printf '%s\n' ALPHA_GITHUB_PAT
+      exit 0
+      ;;
     owner/error)
       echo 'bad credentials: ghp_should_be_redacted' >&2
       exit 42
@@ -104,8 +110,8 @@ SH
   export GH="$TMPBIN/gh"
 }
 
-@test "homes:ci:secrets:status reports required agent and PI secrets without values" {
-  run fold_task homes:ci:secrets:status \
+@test "github:ci:secrets:status reports required agent and PI secrets without values" {
+  run fold_task github:ci:secrets:status \
     --repo owner/full:alpha \
     --repo owner/partial:beta-bot
 
@@ -121,17 +127,18 @@ SH
   [[ "$output" != *"do-not-print"* ]]
   [[ "$output" != *"token-alpha"* ]]
   [[ "$output" != *"token-beta"* ]]
+  [ ! -e "$BATS_TEST_TMPDIR/secrets-log" ]
 }
 
-@test "homes:ci:secrets:status --check fails on missing secrets" {
-  run fold_task homes:ci:secrets:status --repo owner/partial:beta-bot --check
+@test "github:ci:secrets:status --check fails on missing secrets" {
+  run fold_task github:ci:secrets:status --repo owner/partial:beta-bot --check
 
   [ "$status" -eq 1 ]
   [[ "$output" == *$'BETA_BOT_GPG_PRIVATE_KEY\tmissing'* ]]
 }
 
-@test "homes:ci:secrets:status redacts gh errors" {
-  run fold_task homes:ci:secrets:status --repo owner/error:alpha
+@test "github:ci:secrets:status redacts gh errors" {
+  run fold_task github:ci:secrets:status --repo owner/error:alpha
 
   [ "$status" -eq 0 ]
   [[ "$output" == *$'owner/error\talpha\t-\terror'* ]]
@@ -139,15 +146,15 @@ SH
   [[ "$output" != *"ghp_should_be_redacted"* ]]
 }
 
-@test "homes:ci:secrets:status requires explicit agent in repo targets" {
-  run fold_task homes:ci:secrets:status --repo owner/full
+@test "github:ci:secrets:status requires explicit agent in repo targets" {
+  run fold_task github:ci:secrets:status --repo owner/full
 
   [ "$status" -ne 0 ]
   [[ "$output" == *"repo target must include :agent"* ]]
 }
 
-@test "homes:ci:pi-auth:status reports source validity and PI secret presence" {
-  run fold_task homes:ci:pi-auth:status \
+@test "github:ci:pi-auth:status reports source validity and PI secret presence" {
+  run fold_task github:ci:pi-auth:status \
     --source "$AUTH_SOURCE" \
     --repo owner/full:alpha \
     --repo owner/partial:beta-bot
@@ -162,11 +169,11 @@ SH
   [[ "$output" != *"token-beta"* ]]
 }
 
-@test "homes:ci:pi-auth:status --check fails on invalid source or missing repo secret" {
+@test "github:ci:pi-auth:status --check fails on invalid source or missing repo secret" {
   empty_source="$BATS_TEST_TMPDIR/empty-auth.json"
   : > "$empty_source"
 
-  run fold_task homes:ci:pi-auth:status \
+  run fold_task github:ci:pi-auth:status \
     --source "$empty_source" \
     --repo owner/partial:beta-bot \
     --check
@@ -177,8 +184,8 @@ SH
   [[ "$output" == *$'owner/partial\tbeta-bot\tPI_AUTH_JSON\tmissing'* ]]
 }
 
-@test "homes:ci:secrets:sync dry-runs by default and does not print values" {
-  run fold_task homes:ci:secrets:sync --repo owner/full:alpha
+@test "github:ci:secrets:sync dry-runs by default and does not print values" {
+  run fold_task github:ci:secrets:sync --repo owner/full:alpha
 
   [ "$status" -eq 0 ]
   [[ "$output" == *$'Mode\tdry-run'* ]]
@@ -191,8 +198,8 @@ SH
   ! grep -q $'set\t' "$GH_LOG"
 }
 
-@test "homes:ci:secrets:sync dry-run fails when target repo cannot be checked" {
-  run fold_task homes:ci:secrets:sync --repo owner/absent:alpha
+@test "github:ci:secrets:sync dry-run fails when target repo cannot be checked" {
+  run fold_task github:ci:secrets:sync --repo owner/absent:alpha
 
   [ "$status" -eq 1 ]
   [[ "$output" == *$'owner/absent\talpha\t-\terror'* ]]
@@ -200,8 +207,8 @@ SH
   ! grep -q $'set\t' "$GH_LOG"
 }
 
-@test "homes:ci:secrets:sync --yes sets and verifies required agent secrets" {
-  run fold_task homes:ci:secrets:sync --repo owner/full:alpha --yes
+@test "github:ci:secrets:sync --yes sets and verifies required agent secrets" {
+  run fold_task github:ci:secrets:sync --repo owner/full:alpha --yes
 
   [ "$status" -eq 0 ]
   [[ "$output" == *$'Mode\tmutating'* ]]
@@ -216,16 +223,48 @@ SH
   [[ "$output$(cat "$GH_LOG")" != *"fake-alpha"* ]]
 }
 
-@test "homes:ci:secrets:sync reports missing source secrets" {
-  run fold_task homes:ci:secrets:sync --repo owner/partial:beta-bot
+@test "github:ci:secrets:sync --pat dry-runs only GitHub PAT secret" {
+  run fold_task github:ci:secrets:sync --repo owner/fold:alpha --pat
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'Scope\tagent GitHub PAT only'* ]]
+  [[ "$output" == *$'Auth\tuses ambient gh auth / GH_TOKEN'* ]]
+  [[ "$output" == *$'owner/fold\talpha\tALPHA_GITHUB_PAT\tdry-run'* ]]
+  [[ "$output" != *"ALPHA_GPG_PRIVATE_KEY"* ]]
+  [[ "$output" != *"ALPHA_EMAIL_PASSWORD"* ]]
+  ! grep -q $'set\t' "$GH_LOG"
+  grep -q $'get\talpha/github-pat' "$BATS_TEST_TMPDIR/secrets-log"
+  ! grep -q $'get\talpha/gpg-private-key' "$BATS_TEST_TMPDIR/secrets-log"
+  ! grep -q $'get\talpha/email-password' "$BATS_TEST_TMPDIR/secrets-log"
+}
+
+@test "github:ci:secrets:sync --pat sets only GitHub PAT on explicit repo" {
+  run fold_task github:ci:secrets:sync --repo owner/fold:alpha --pat --yes
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'Mode\tmutating'* ]]
+  [[ "$output" == *$'owner/fold\talpha\tALPHA_GITHUB_PAT\tsynced\tverified present'* ]]
+  [[ "$output" != *"ALPHA_GPG_PRIVATE_KEY"* ]]
+  [[ "$output" != *"ALPHA_EMAIL_PASSWORD"* ]]
+  grep -q $'set\towner/fold\tALPHA_GITHUB_PAT' "$GH_LOG"
+  ! grep -q $'set\towner/fold\tALPHA_GPG_PRIVATE_KEY' "$GH_LOG"
+  ! grep -q $'set\towner/fold\tALPHA_EMAIL_PASSWORD' "$GH_LOG"
+  grep -q $'get\talpha/github-pat' "$BATS_TEST_TMPDIR/secrets-log"
+  ! grep -q $'get\talpha/gpg-private-key' "$BATS_TEST_TMPDIR/secrets-log"
+  ! grep -q $'get\talpha/email-password' "$BATS_TEST_TMPDIR/secrets-log"
+  [[ "$output" != *"token-alpha"* ]]
+}
+
+@test "github:ci:secrets:sync reports missing source secrets" {
+  run fold_task github:ci:secrets:sync --repo owner/partial:beta-bot
 
   [ "$status" -ne 0 ]
   [[ "$output" == *$'owner/partial\tbeta-bot\tBETA_BOT_GPG_PRIVATE_KEY\terror'* ]]
   [[ "$output" == *"source secret"* || "$output" == *"missing secret"* ]]
 }
 
-@test "homes:ci:pi-auth:sync dry-runs by default and does not print auth json" {
-  run fold_task homes:ci:pi-auth:sync --source "$AUTH_SOURCE" --repo owner/full:alpha
+@test "github:ci:pi-auth:sync dry-runs by default and does not print auth json" {
+  run fold_task github:ci:pi-auth:sync --source "$AUTH_SOURCE" --repo owner/full:alpha
 
   [ "$status" -eq 0 ]
   [[ "$output" == *$'Mode\tdry-run'* ]]
@@ -235,8 +274,8 @@ SH
   ! grep -q $'set\t' "$GH_LOG"
 }
 
-@test "homes:ci:pi-auth:sync dry-run fails when target repo cannot be checked" {
-  run fold_task homes:ci:pi-auth:sync --source "$AUTH_SOURCE" --repo owner/absent:alpha
+@test "github:ci:pi-auth:sync dry-run fails when target repo cannot be checked" {
+  run fold_task github:ci:pi-auth:sync --source "$AUTH_SOURCE" --repo owner/absent:alpha
 
   [ "$status" -eq 1 ]
   [[ "$output" == *$'owner/absent\talpha\tPI_AUTH_JSON\terror'* ]]
@@ -244,8 +283,8 @@ SH
   ! grep -q $'set\t' "$GH_LOG"
 }
 
-@test "homes:ci:pi-auth:sync --yes sets and verifies PI_AUTH_JSON" {
-  run fold_task homes:ci:pi-auth:sync --source "$AUTH_SOURCE" --repo owner/full:alpha --yes
+@test "github:ci:pi-auth:sync --yes sets and verifies PI_AUTH_JSON" {
+  run fold_task github:ci:pi-auth:sync --source "$AUTH_SOURCE" --repo owner/full:alpha --yes
 
   [ "$status" -eq 0 ]
   [[ "$output" == *$'Mode\tmutating'* ]]
@@ -254,11 +293,11 @@ SH
   [[ "$output$(cat "$GH_LOG")" != *"do-not-print"* ]]
 }
 
-@test "homes:ci:pi-auth:sync skips mutation when source is invalid" {
+@test "github:ci:pi-auth:sync skips mutation when source is invalid" {
   empty_source="$BATS_TEST_TMPDIR/empty-auth.json"
   : > "$empty_source"
 
-  run fold_task homes:ci:pi-auth:sync --source "$empty_source" --repo owner/full:alpha --yes
+  run fold_task github:ci:pi-auth:sync --source "$empty_source" --repo owner/full:alpha --yes
 
   [ "$status" -eq 1 ]
   [[ "$output" == *$''"$empty_source"$'\tinvalid\tsource file is empty'* ]]
