@@ -182,7 +182,7 @@ jobs:
 
       - name: Install pi
         working-directory: /home/runner/agents/${{ inputs.agent }}/home
-        run: mise use -g github:badlogic/pi-mono@0.73.0
+        run: mise use -g github:KnickKnackLabs/pi@v0.80.3-kkl.1
 
       - name: Setup GPG
         working-directory: /home/runner/agents/${{ inputs.agent }}/home
