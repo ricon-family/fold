@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-#MISE description="Sync local pi auth.json to home CI Actions secrets"
-#USAGE flag "--repo <repo>" var=#true default="" help="Home repo target (repeatable): OWNER/REPO:agent; default is all CI fold-agent homes"
+#MISE description="Sync local pi auth.json to CI Actions secrets"
+#USAGE flag "--repo <repo>" var=#true default="" help="CI repo target (repeatable): OWNER/REPO:agent; default is all CI fold-agent homes"
 #USAGE flag "--source <path>" default="" help="Path to pi auth.json (default: ~/.pi/agent/auth.json or $PI_CODING_AGENT_DIR/auth.json)"
 #USAGE flag "-y --yes" default=#false help="Mutate GitHub Actions secrets; default is dry-run"
-#USAGE example "mise run homes:ci:pi-auth:sync --repo c0da-ricon/home:c0da" header="Dry-run PI_AUTH_JSON sync for one home"
-#USAGE example "mise run homes:ci:pi-auth:sync --repo c0da-ricon/home:c0da --yes" header="Sync PI_AUTH_JSON for one home"
+#USAGE example "mise run github:ci:pi-auth:sync --repo c0da-ricon/home:c0da" header="Dry-run PI_AUTH_JSON sync for one home"
+#USAGE example "mise run github:ci:pi-auth:sync --repo c0da-ricon/home:c0da --yes" header="Sync PI_AUTH_JSON for one home"
 set -euo pipefail
 
 ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
-# shellcheck source=.mise/lib/homes/ci.sh
-source "$ROOT/.mise/lib/homes/ci.sh"
+# shellcheck source=.mise/lib/github/ci.sh
+source "$ROOT/.mise/lib/github/ci.sh"
 
 REPO_TARGETS="${usage_repo:-}"
 SOURCE="${usage_source:-${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/auth.json}"
@@ -23,23 +23,23 @@ cleanup() {
 }
 trap cleanup EXIT
 
-homes_ci_require_tools
-homes_ci_targets_file "$REPO_TARGETS" "$TARGETS_FILE"
+github_ci_require_tools
+github_ci_targets_file "$REPO_TARGETS" "$TARGETS_FILE"
 
 if [ "$YES" = "true" ]; then
   printf 'Mode\tmutating\n'
-  printf 'Effect\tsets GitHub Actions secret PI_AUTH_JSON on target home repos\n'
+  printf 'Effect\tsets GitHub Actions secret PI_AUTH_JSON on target repos\n'
 else
   printf 'Mode\tdry-run\n'
   printf 'Effect\tno GitHub Actions secrets changed; pass --yes to sync\n'
 fi
 printf '\n'
 
-homes_ci_print_pi_auth_source_status "$SOURCE" || status=1
+github_ci_print_pi_auth_source_status "$SOURCE" || status=1
 printf '\n'
 
 if [ "$status" -eq 0 ]; then
-  homes_ci_sync_pi_auth "$TARGETS_FILE" "$SOURCE" "$YES" "$TMP_DIR" || status=1
+  github_ci_sync_pi_auth "$TARGETS_FILE" "$SOURCE" "$YES" "$TMP_DIR" || status=1
 else
   printf 'Repo\tAgent\tSecret\tAction\tDetail\n'
   printf -- '-\t-\tPI_AUTH_JSON\tskipped\tinvalid source; no GitHub secrets changed\n'

@@ -14,9 +14,11 @@ setup() {
   write_fake_github_auth_secret_tools
   printf 'JBSWY3DPEHPK3PXP' > "$FAKE_SECRET_STORE/c0da_github-totp"
   export SECRETS_BIN="$TMPBIN/secrets"
+  export SECRETS="$TMPBIN/secrets"
   export WEBSITES_BIN="$TMPBIN/websites"
   export SHIMMER_BIN="$TMPBIN/shimmer"
   export GH_BIN="$TMPBIN/gh"
+  export GH="$TMPBIN/gh"
 }
 
 write_fake_websites() {
@@ -61,8 +63,36 @@ EOF
   cat > "$TMPBIN/gh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-printf '%s\n' "$*" >> "$BATS_TEST_TMPDIR/gh-log"
-printf 'c0da-ricon\n'
+printf 'ARGS=%s\n' "$*" >> "$BATS_TEST_TMPDIR/gh-log"
+case "${1:-}" in
+  api)
+    case "${2:-}" in
+      /user)
+        printf 'c0da-ricon\n'
+        exit 0
+        ;;
+      repos/ricon-family/fold/actions/secrets/public-key)
+        printf 'fake-public-key\n'
+        exit 0
+        ;;
+    esac
+    ;;
+  secret)
+    case "${2:-}" in
+      list)
+        printf 'C0DA_GITHUB_PAT\n'
+        exit 0
+        ;;
+      set)
+        payload=$(cat)
+        printf 'SECRET_SET=%s\tBYTES=%s\tGH_TOKEN=%s\n' "${3:-}" "${#payload}" "${GH_TOKEN:-}" >> "$BATS_TEST_TMPDIR/gh-log"
+        exit 0
+        ;;
+    esac
+    ;;
+esac
+echo "unexpected gh command: $*" >&2
+exit 2
 EOF
   chmod +x "$TMPBIN/gh"
 }
@@ -96,6 +126,38 @@ EOF
   grep -q 'github:token:rotate c0da --login-id c0da' "$BATS_TEST_TMPDIR/websites-args"
   grep -q 'github:token:store c0da ghp_newtoken' "$BATS_TEST_TMPDIR/shimmer-log"
   [[ "$output" == *"✓ verified as c0da-ricon"* ]]
+}
+
+@test "github:token:create syncs only fold GitHub PAT CI secret with caller GitHub auth" {
+  write_fake_websites github:token:create
+  write_fake_shimmer_and_gh
+
+  GH_TOKEN=caller-token run fold_task github:token:create --yes c0da
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"CI sync auth: ambient gh auth / GH_TOKEN"* ]]
+  [[ "$output" == *"✓ synced fold GitHub PAT CI secret"* ]]
+  grep -q 'ARGS=secret set C0DA_GITHUB_PAT --repo ricon-family/fold' "$BATS_TEST_TMPDIR/gh-log"
+  grep -q $'SECRET_SET=C0DA_GITHUB_PAT\tBYTES=12\tGH_TOKEN=caller-token' "$BATS_TEST_TMPDIR/gh-log"
+  ! grep -q 'GPG\|EMAIL\|B2\|PI_AUTH' "$BATS_TEST_TMPDIR/gh-log"
+  [[ "$output$(cat "$BATS_TEST_TMPDIR/gh-log")" != *"ghp_newtoken"* ]]
+  [[ "$output$(cat "$BATS_TEST_TMPDIR/gh-log")" != *"ghp_operator"* ]]
+}
+
+@test "github:token:rotate syncs only fold GitHub PAT CI secret with caller GitHub auth" {
+  write_fake_websites github:token:rotate
+  write_fake_shimmer_and_gh
+
+  GH_TOKEN=caller-token run fold_task github:token:rotate --yes c0da
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"CI sync auth: ambient gh auth / GH_TOKEN"* ]]
+  [[ "$output" == *"✓ synced fold GitHub PAT CI secret"* ]]
+  grep -q 'ARGS=secret set C0DA_GITHUB_PAT --repo ricon-family/fold' "$BATS_TEST_TMPDIR/gh-log"
+  grep -q $'SECRET_SET=C0DA_GITHUB_PAT\tBYTES=12\tGH_TOKEN=caller-token' "$BATS_TEST_TMPDIR/gh-log"
+  ! grep -q 'GPG\|EMAIL\|B2\|PI_AUTH' "$BATS_TEST_TMPDIR/gh-log"
+  [[ "$output$(cat "$BATS_TEST_TMPDIR/gh-log")" != *"ghp_newtoken"* ]]
+  [[ "$output$(cat "$BATS_TEST_TMPDIR/gh-log")" != *"ghp_operator"* ]]
 }
 
 @test "github:token:create redacts credential material from browser diagnostics" {

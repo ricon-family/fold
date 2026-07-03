@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+#MISE description="Show PI_AUTH_JSON source and CI Actions secret presence"
+#USAGE flag "--repo <repo>" var=#true default="" help="CI repo target (repeatable): OWNER/REPO:agent; default is all CI fold-agent homes"
+#USAGE flag "--source <path>" default="" help="Path to pi auth.json (default: ~/.pi/agent/auth.json or $PI_CODING_AGENT_DIR/auth.json)"
+#USAGE flag "--check" default=#false help="Exit nonzero when source is invalid or any target lacks PI_AUTH_JSON"
+#USAGE example "mise run github:ci:pi-auth:status" header="Check local PI auth source and PI_AUTH_JSON presence for all fold-agent homes"
+#USAGE example "mise run github:ci:pi-auth:status --repo c0da-ricon/home:c0da --check" header="Check one home and fail on missing auth"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck source=.mise/lib/github/ci.sh
+source "$ROOT/.mise/lib/github/ci.sh"
+
+REPO_TARGETS="${usage_repo:-}"
+SOURCE="${usage_source:-${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/auth.json}"
+CHECK="${usage_check:-false}"
+TMP_DIR=$(mktemp -d)
+TARGETS_FILE="$TMP_DIR/targets.tsv"
+status=0
+
+cleanup() {
+  rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
+
+github_ci_require_tools
+github_ci_targets_file "$REPO_TARGETS" "$TARGETS_FILE"
+
+github_ci_print_pi_auth_source_status "$SOURCE" || status=1
+printf '\n'
+github_ci_print_secret_status "$TARGETS_FILE" pi-auth "$TMP_DIR" || status=1
+
+if [ "$CHECK" = "true" ]; then
+  exit "$status"
+fi
