@@ -85,7 +85,7 @@ case "${1:-}" in
         ;;
       set)
         payload=$(cat)
-        printf 'SECRET_SET=%s\tBYTES=%s\tGH_TOKEN_PRESENT=%s\n' "${3:-}" "${#payload}" "$([ -n "${GH_TOKEN:-}" ] && printf yes || printf no)" >> "$BATS_TEST_TMPDIR/gh-log"
+        printf 'SECRET_SET=%s\tBYTES=%s\tGH_TOKEN=%s\n' "${3:-}" "${#payload}" "${GH_TOKEN:-}" >> "$BATS_TEST_TMPDIR/gh-log"
         exit 0
         ;;
     esac
@@ -128,31 +128,33 @@ EOF
   [[ "$output" == *"✓ verified as c0da-ricon"* ]]
 }
 
-@test "github:token:create syncs only fold GitHub PAT CI secret by default" {
+@test "github:token:create syncs only fold GitHub PAT CI secret with caller GitHub auth" {
   write_fake_websites github:token:create
   write_fake_shimmer_and_gh
 
-  run fold_task github:token:create --yes --operator brownie c0da
+  GH_TOKEN=caller-token run fold_task github:token:create --yes c0da
 
   [ "$status" -eq 0 ]
+  [[ "$output" == *"CI sync auth: ambient gh auth / GH_TOKEN"* ]]
   [[ "$output" == *"✓ synced fold GitHub PAT CI secret"* ]]
   grep -q 'ARGS=secret set C0DA_GITHUB_PAT --repo ricon-family/fold' "$BATS_TEST_TMPDIR/gh-log"
-  grep -q $'SECRET_SET=C0DA_GITHUB_PAT\tBYTES=12\tGH_TOKEN_PRESENT=yes' "$BATS_TEST_TMPDIR/gh-log"
+  grep -q $'SECRET_SET=C0DA_GITHUB_PAT\tBYTES=12\tGH_TOKEN=caller-token' "$BATS_TEST_TMPDIR/gh-log"
   ! grep -q 'GPG\|EMAIL\|B2\|PI_AUTH' "$BATS_TEST_TMPDIR/gh-log"
   [[ "$output$(cat "$BATS_TEST_TMPDIR/gh-log")" != *"ghp_newtoken"* ]]
   [[ "$output$(cat "$BATS_TEST_TMPDIR/gh-log")" != *"ghp_operator"* ]]
 }
 
-@test "github:token:rotate syncs only fold GitHub PAT CI secret by default" {
+@test "github:token:rotate syncs only fold GitHub PAT CI secret with caller GitHub auth" {
   write_fake_websites github:token:rotate
   write_fake_shimmer_and_gh
 
-  run fold_task github:token:rotate --yes --operator brownie c0da
+  GH_TOKEN=caller-token run fold_task github:token:rotate --yes c0da
 
   [ "$status" -eq 0 ]
+  [[ "$output" == *"CI sync auth: ambient gh auth / GH_TOKEN"* ]]
   [[ "$output" == *"✓ synced fold GitHub PAT CI secret"* ]]
   grep -q 'ARGS=secret set C0DA_GITHUB_PAT --repo ricon-family/fold' "$BATS_TEST_TMPDIR/gh-log"
-  grep -q $'SECRET_SET=C0DA_GITHUB_PAT\tBYTES=12\tGH_TOKEN_PRESENT=yes' "$BATS_TEST_TMPDIR/gh-log"
+  grep -q $'SECRET_SET=C0DA_GITHUB_PAT\tBYTES=12\tGH_TOKEN=caller-token' "$BATS_TEST_TMPDIR/gh-log"
   ! grep -q 'GPG\|EMAIL\|B2\|PI_AUTH' "$BATS_TEST_TMPDIR/gh-log"
   [[ "$output$(cat "$BATS_TEST_TMPDIR/gh-log")" != *"ghp_newtoken"* ]]
   [[ "$output$(cat "$BATS_TEST_TMPDIR/gh-log")" != *"ghp_operator"* ]]

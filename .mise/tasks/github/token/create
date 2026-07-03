@@ -2,7 +2,6 @@
 #MISE description="Create agent GitHub classic PATs, store them, and sync the fold PAT CI secret"
 #USAGE flag "-y --yes" default=#false help="Actually create tokens without prompting"
 #USAGE flag "--dry-run" default=#false help="Check prerequisites without creating, storing, or syncing"
-#USAGE flag "--operator <agent>" default="" help="Agent whose stored GitHub PAT has fold Actions-secret permission"
 #USAGE flag "--no-sync-ci" default=#false help="Create/store only; do not sync the fold PAT CI secret"
 #USAGE arg "[agents]" var=#true default="" help="Agent names to create tokens for (default: CI-enabled fold agents)"
 set -euo pipefail
@@ -10,7 +9,6 @@ set -euo pipefail
 ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
 YES="${usage_yes:-false}"
 DRY_RUN="${usage_dry_run:-false}"
-OPERATOR="${usage_operator:-${GIT_AUTHOR_NAME:-}}"
 NO_SYNC_CI="${usage_no_sync_ci:-false}"
 AGENTS_ARG="${usage_agents:-}"
 SECRETS_BIN="${SECRETS_BIN:-secrets}"
@@ -86,47 +84,6 @@ list_default_agents() {
   (cd "$ROOT" && mise run -q agent:list --ci)
 }
 
-load_operator_token() {
-  if [ "$NO_SYNC_CI" = "true" ]; then
-    return 0
-  fi
-
-  if [ -z "$OPERATOR" ]; then
-    echo "ERROR: CI sync requires --operator <agent> or GIT_AUTHOR_NAME identity" >&2
-    echo "       Use --no-sync-ci to create/store without syncing the fold PAT CI secret." >&2
-    exit 1
-  fi
-  validate_agent "$OPERATOR"
-
-  if ! OPERATOR_TOKEN=$("$SECRETS_BIN" get "$OPERATOR/github-pat" 2>/dev/null); then
-    echo "ERROR: could not read $OPERATOR/github-pat for CI sync operator" >&2
-    exit 1
-  fi
-  if [ -z "$OPERATOR_TOKEN" ]; then
-    echo "ERROR: $OPERATOR/github-pat is empty" >&2
-    exit 1
-  fi
-  export OPERATOR_TOKEN
-}
-
-verify_operator_access() {
-  if [ "$NO_SYNC_CI" = "true" ]; then
-    return 0
-  fi
-
-  local err
-  err=$(mktemp)
-  if GH_TOKEN="$OPERATOR_TOKEN" "$GH_BIN" api repos/ricon-family/fold/actions/secrets/public-key --jq .key >/dev/null 2>"$err"; then
-    rm -f "$err"
-    return 0
-  fi
-
-  echo "ERROR: $OPERATOR/github-pat cannot manage ricon-family/fold Actions secrets" >&2
-  sed 's/^/  /' "$err" >&2
-  rm -f "$err"
-  exit 1
-}
-
 sync_ci() {
   local agent="$1"
   if [ "$NO_SYNC_CI" = "true" ]; then
@@ -134,7 +91,7 @@ sync_ci() {
     return 0
   fi
 
-  (cd "$ROOT" && GH_TOKEN="$OPERATOR_TOKEN" mise run github:ci:secrets:sync --repo "ricon-family/fold:$agent" --pat --yes) >/dev/null
+  (cd "$ROOT" && mise run github:ci:secrets:sync --repo "ricon-family/fold:$agent" --pat --yes) >/dev/null
   echo "  ✓ synced fold GitHub PAT CI secret"
 }
 
@@ -184,9 +141,6 @@ fi
 
 sort -u "$TMP_AGENTS" -o "$TMP_AGENTS"
 
-load_operator_token
-verify_operator_access
-
 printf 'GitHub token creation for fold agents\n\n'
 printf 'Agents:\n'
 while IFS= read -r agent; do
@@ -197,7 +151,7 @@ done < "$TMP_AGENTS"
 printf '\n'
 
 if [ "$NO_SYNC_CI" != "true" ]; then
-  printf 'CI sync operator: %s/github-pat\n\n' "$OPERATOR"
+  printf 'CI sync auth: ambient gh auth / GH_TOKEN\n\n'
 fi
 
 printf 'Consent reminder: only create or replace another agent credential with that agent or Or approving. See fold notes/credential-rotation-consent.md.\n\n'
@@ -254,11 +208,6 @@ while IFS= read -r agent; do
 
   "$SHIMMER_BIN" github:token:store "$agent" "$new_token" >/dev/null
   printf '  ✓ stored\n'
-
-  if [ "$agent" = "$OPERATOR" ]; then
-    OPERATOR_TOKEN="$new_token"
-    export OPERATOR_TOKEN
-  fi
 
   sync_ci "$agent"
 
