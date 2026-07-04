@@ -1,18 +1,15 @@
 #!/usr/bin/env bash
-#MISE description="Run fold's hosted-agent CI entrypoint"
+#MISE description="Prepare fold's hosted-agent CI environment"
 set -euo pipefail
 
 AGENT="${AGENT:?AGENT is required}"
 AGENT_HOME="${AGENT_HOME:?AGENT_HOME is required}"
-INPUT_MESSAGE="${INPUT_MESSAGE:?INPUT_MESSAGE is required}"
-INPUT_MODEL="${INPUT_MODEL:?INPUT_MODEL is required}"
-RUN_TIMEOUT="${RUN_TIMEOUT:-900}"
 GH_BIN="${GH:-gh}"
 MISE_BIN="${MISE:-mise}"
 SECRETS_BIN="${SECRETS:-secrets}"
 
 log() {
-  printf '[ci] %s\n' "$*"
+  printf '[ci:env] %s\n' "$*"
 }
 
 fail() {
@@ -20,30 +17,11 @@ fail() {
   exit 1
 }
 
-backup_sessions() {
-  local status=$?
-  if [ ! -d "${AGENT_HOME:-}" ]; then
-    log "sessions backup skipped: agent home not available"
-    return "$status"
-  fi
-  if ! command -v shimmer >/dev/null 2>&1; then
-    log "sessions backup skipped: shimmer not available"
-    return "$status"
-  fi
-  (
-    cd "$AGENT_HOME"
-    shimmer sessions:backup --all
-  ) || log "sessions backup failed"
-  return "$status"
-}
-trap backup_sessions EXIT
-
-validate_model() {
-  if [ -z "$INPUT_MODEL" ]; then
-    fail "model input is required"
-  fi
-  if [[ "$INPUT_MODEL" != */* ]]; then
-    fail "model input must be provider-qualified (for example: openai-codex/gpt-5.5)"
+persist_env() {
+  local key="$1" value="$2"
+  export "$key=$value"
+  if [ -n "${GITHUB_ENV:-}" ]; then
+    printf '%s=%s\n' "$key" "$value" >> "$GITHUB_ENV"
   fi
 }
 
@@ -53,8 +31,8 @@ resolve_agent_github_login() {
   if [[ -z "$login" || ! "$login" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$ ]]; then
     fail "Could not resolve a valid GitHub login from the agent token"
   fi
-  export AGENT_GITHUB_LOGIN="$login"
-  export BROWSER_GITHUB_COM_USERNAME="$login"
+  persist_env AGENT_GITHUB_LOGIN "$login"
+  persist_env BROWSER_GITHUB_COM_USERNAME "$login"
   log "agent GitHub login: $login"
 }
 
@@ -151,22 +129,9 @@ setup_pi_auth() {
   chmod 700 "$PI_AGENT_DIR"
   printf '%s' "$PI_AUTH_JSON" > "$PI_AGENT_DIR/auth.json"
   chmod 600 "$PI_AGENT_DIR/auth.json"
-  export PI_CODING_AGENT_DIR="$PI_AGENT_DIR"
+  persist_env PI_CODING_AGENT_DIR "$PI_AGENT_DIR"
 }
 
-run_agent() {
-  log "starting headless agent"
-  (
-    cd "$AGENT_HOME"
-    eval "$(shimmer as "$AGENT")"
-    gh auth setup-git
-    CMD=(shimmer agent --headless --timeout "$RUN_TIMEOUT" --model "$INPUT_MODEL")
-    CMD+=("$INPUT_MESSAGE")
-    "${CMD[@]}"
-  )
-}
-
-validate_model
 resolve_agent_github_login
 clone_home_repo
 install_home_tools
@@ -176,4 +141,3 @@ setup_gpg
 setup_email
 prepare_home_repo
 setup_pi_auth
-run_agent

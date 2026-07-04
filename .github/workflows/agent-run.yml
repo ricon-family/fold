@@ -122,18 +122,42 @@ jobs:
 
           echo "SECRETS_PROVIDER=env" >> "$GITHUB_ENV"
 
-      - name: Run repo CI entrypoint
+      - name: Prepare repo CI environment
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
           PI_AUTH_JSON: ${{ secrets.PI_AUTH_JSON }}
-          BROWSER_GITHUB_COM_PASSWORD: ${{ secrets.AGENT_GITHUB_PASSWORD }}
-          DISPATCH_CONTEXT: ${{ github.triggering_actor }}
           MISE_JOBS: 1
         run: |
           mise trust
           mise install
-          mise ci
+          mise run ci:env
+
+      - name: Run agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          BROWSER_GITHUB_COM_PASSWORD: ${{ secrets.AGENT_GITHUB_PASSWORD }}
+          DISPATCH_CONTEXT: ${{ github.triggering_actor }}
+        run: |
+          echo "### AGENT SESSION START ###"
+          status=0
+          mise agent || status=$?
+          echo "### AGENT SESSION END ###"
+          exit "$status"
+
+      - name: Back up sessions
+        if: always()
+        run: |
+          if [ ! -d "$AGENT_HOME" ]; then
+            echo "Agent home not available; skipping session backup"
+            exit 0
+          fi
+
+          cd "$AGENT_HOME"
+          if ! command -v shimmer >/dev/null 2>&1; then
+            echo "shimmer not available; skipping session backup"
+            exit 0
+          fi
+          shimmer sessions:backup --all
 
       - name: Post-failure diagnostics
         if: failure()

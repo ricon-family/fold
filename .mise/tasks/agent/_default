@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+#MISE description="Run fold's prepared hosted agent"
+set -euo pipefail
+
+AGENT="${AGENT:?AGENT is required}"
+AGENT_HOME="${AGENT_HOME:?AGENT_HOME is required}"
+INPUT_MESSAGE="${INPUT_MESSAGE:?INPUT_MESSAGE is required}"
+INPUT_MODEL="${INPUT_MODEL:?INPUT_MODEL is required}"
+RUN_TIMEOUT="${RUN_TIMEOUT:-900}"
+
+fail() {
+  printf '::error::%s\n' "$*" >&2
+  exit 1
+}
+
+if [ -z "$INPUT_MODEL" ]; then
+  fail "model input is required"
+fi
+if [[ "$INPUT_MODEL" != */* ]]; then
+  fail "model input must be provider-qualified (for example: openai-codex/gpt-5.5)"
+fi
+
+cd "$AGENT_HOME"
+eval "$(shimmer as "$AGENT")"
+gh auth setup-git
+
+cmd=(shimmer agent --headless --timeout "$RUN_TIMEOUT" --model "$INPUT_MODEL")
+cmd+=("$INPUT_MESSAGE")
+"${cmd[@]}"
