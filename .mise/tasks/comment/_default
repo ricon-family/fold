@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+#MISE description="Send a directive message to the project comment channel"
+#USAGE arg "[message]" default="" help="Message to send; reads stdin when omitted"
+set -euo pipefail
+
+# Project default: delegate to the concrete chat helper. This lets inline
+# directives use the short form:
+#   <!-- ! "message" | mise comment -->
+if [ -n "${usage_message:-}" ]; then
+  exec mise run -q comment:chat "$usage_message"
+else
+  exec mise run -q comment:chat
+fi
