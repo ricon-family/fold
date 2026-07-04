@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Dispatch a hosted agent wake through this repo"
+set -euo pipefail
+
+repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+exec shimmer agent:dispatch --repo "$repo" "$@"

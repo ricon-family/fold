@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+#MISE description="Run fold's hosted-agent CI entrypoint"
+set -euo pipefail
+
+AGENT="${AGENT:?AGENT is required}"
+AGENT_HOME="${AGENT_HOME:?AGENT_HOME is required}"
+INPUT_MESSAGE="${INPUT_MESSAGE:?INPUT_MESSAGE is required}"
+INPUT_MODEL="${INPUT_MODEL:?INPUT_MODEL is required}"
+RUN_TIMEOUT="${RUN_TIMEOUT:-900}"
+GH_BIN="${GH:-gh}"
+MISE_BIN="${MISE:-mise}"
+SECRETS_BIN="${SECRETS:-secrets}"
+
+log() {
+  printf '[ci] %s\n' "$*"
+}
+
+fail() {
+  printf '::error::%s\n' "$*" >&2
+  exit 1
+}
+
+backup_sessions() {
+  local status=$?
+  if [ ! -d "${AGENT_HOME:-}" ]; then
+    log "sessions backup skipped: agent home not available"
+    return "$status"
+  fi
+  if ! command -v shimmer >/dev/null 2>&1; then
+    log "sessions backup skipped: shimmer not available"
+    return "$status"
+  fi
+  (
+    cd "$AGENT_HOME"
+    shimmer sessions:backup --all
+  ) || log "sessions backup failed"
+  return "$status"
+}
+trap backup_sessions EXIT
+
+validate_model() {
+  if [ -z "$INPUT_MODEL" ]; then
+    fail "model input is required"
+  fi
+  if [[ "$INPUT_MODEL" != */* ]]; then
+    fail "model input must be provider-qualified (for example: openai-codex/gpt-5.5)"
+  fi
+}
+
+resolve_agent_github_login() {
+  local login
+  login=$("$GH_BIN" api user --jq .login) || fail "Could not resolve GitHub login from the agent token"
+  if [[ -z "$login" || ! "$login" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$ ]]; then
+    fail "Could not resolve a valid GitHub login from the agent token"
+  fi
+  export AGENT_GITHUB_LOGIN="$login"
+  export BROWSER_GITHUB_COM_USERNAME="$login"
+  log "agent GitHub login: $login"
+}
+
+clone_home_repo() {
+  local home_repo="$AGENT_GITHUB_LOGIN/home"
+
+  if ! "$GH_BIN" repo view "$home_repo" --json name >/dev/null 2>&1; then
+    fail "No home repo found for $AGENT_GITHUB_LOGIN at $home_repo"
+  fi
+
+  if [ -d "$AGENT_HOME/.git" ]; then
+    log "home repo already available at $AGENT_HOME"
+    return 0
+  fi
+
+  log "cloning home repo from $home_repo"
+  mkdir -p "$(dirname "$AGENT_HOME")"
+  git clone "https://x-access-token:${GH_TOKEN:?GH_TOKEN is required}@github.com/${home_repo}.git" "$AGENT_HOME"
+}
+
+install_home_tools() {
+  log "installing home tools"
+  (
+    cd "$AGENT_HOME"
+    gh auth setup-git
+    "$MISE_BIN" trust
+    MISE_JOBS=1 "$MISE_BIN" install
+  )
+}
+
+trust_shiv_package_configs() {
+  log "trusting installed shiv package configs"
+  while IFS= read -r -d '' config; do
+    "$MISE_BIN" trust -q "$config"
+  done < <(find "$HOME/.local/share/mise/installs" -path '*/packages/*/mise.toml' -print0 2>/dev/null)
+}
+
+install_pi() {
+  log "installing pi harness"
+  (
+    cd "$AGENT_HOME"
+    "$MISE_BIN" use -g github:KnickKnackLabs/pi@v0.80.3-kkl.1
+  )
+}
+
+setup_gpg() {
+  log "setting up GPG"
+  (
+    cd "$AGENT_HOME"
+    shimmer gpg:setup "$AGENT"
+  )
+}
+
+setup_email() {
+  log "setting up email account"
+  (
+    cd "$AGENT_HOME"
+    "$SECRETS_BIN" get "$AGENT/email-password" |
+      emails account:setup "$AGENT" \
+        --address "$AGENT@ricon.family" \
+        --display-name "$AGENT" \
+        --imap-host mail.ricon.family \
+        --imap-port 993 \
+        --smtp-host mail.ricon.family \
+        --smtp-port 465 \
+        --password-stdin \
+        --set-default \
+        --gpg-local-user "$AGENT@ricon.family" >/dev/null
+  )
+}
+
+prepare_home_repo() {
+  log "preparing home repo"
+  (
+    cd "$AGENT_HOME"
+    gh auth setup-git
+    if "$MISE_BIN" tasks info agent:prepare >/dev/null 2>&1; then
+      MISE_JOBS=1 "$MISE_BIN" run agent:prepare
+    else
+      printf '::warning::No agent:prepare task found in home repo; skipping home-specific preparation. Add an agent:prepare task to silence this warning.\n'
+    fi
+  )
+}
+
+setup_pi_auth() {
+  if [ -z "${PI_AUTH_JSON:-}" ]; then
+    log "PI_AUTH_JSON not configured; pi will use provider env vars or existing auth"
+    return 0
+  fi
+
+  log "setting up pi auth"
+  PI_AGENT_DIR="${RUNNER_TEMP:-/tmp}/pi-agent"
+  mkdir -p "$PI_AGENT_DIR"
+  chmod 700 "$PI_AGENT_DIR"
+  printf '%s' "$PI_AUTH_JSON" > "$PI_AGENT_DIR/auth.json"
+  chmod 600 "$PI_AGENT_DIR/auth.json"
+  export PI_CODING_AGENT_DIR="$PI_AGENT_DIR"
+}
+
+run_agent() {
+  log "starting headless agent"
+  (
+    cd "$AGENT_HOME"
+    eval "$(shimmer as "$AGENT")"
+    gh auth setup-git
+    CMD=(shimmer agent --headless --timeout "$RUN_TIMEOUT" --model "$INPUT_MODEL")
+    CMD+=("$INPUT_MESSAGE")
+    "${CMD[@]}"
+  )
+}
+
+validate_model
+resolve_agent_github_login
+clone_home_repo
+install_home_tools
+trust_shiv_package_configs
+install_pi
+setup_gpg
+setup_email
+prepare_home_repo
+setup_pi_auth
+run_agent
