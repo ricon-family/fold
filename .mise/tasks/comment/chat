@@ -19,7 +19,7 @@ location="$(
     | jq -r '.file as $file | (.directive.range.start.line + 1) as $line | "\($file):\($line)"'
 )"
 
-channel="${COMMENT_CHAT_CHANNEL:-ikma}"
+channel="${COMMENT_CHAT_CHANNEL:-fold}"
 sender="${COMMENT_CHAT_AS:-${CHAT_IDENTITY:-or}}"
 
 {
