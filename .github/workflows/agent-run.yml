@@ -50,9 +50,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
+      AGENT: ${{ inputs.agent }}
       AGENT_HOME: /home/runner/agents/${{ inputs.agent }}/home
       DISPATCH_REPO: ${{ github.repository }}
       GH_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
+      INPUT_MESSAGE: ${{ inputs.message }}
+      INPUT_MODEL: ${{ inputs.model }}
+      RUN_TIMEOUT: 900
       # Nested shiv package installs run their own mise commands.
       MISE_EXPERIMENTAL: "1"
     steps:
@@ -75,6 +79,9 @@ jobs:
           install: false
         env:
           GITHUB_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
+
+      - name: Checkout workflow repo
+        uses: actions/checkout@v6
 
       - name: Setup secrets for env provider
         env:
@@ -115,156 +122,30 @@ jobs:
 
           echo "SECRETS_PROVIDER=env" >> "$GITHUB_ENV"
 
-      - name: Resolve agent GitHub login
-        run: |
-          set -euo pipefail
-          login=$(gh api user --jq .login)
-          if [[ -z "$login" || ! "$login" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?$ ]]; then
-            echo "::error::Could not resolve a valid GitHub login from the agent token"
-            exit 1
-          fi
-          echo "AGENT_GITHUB_LOGIN=$login" >> "$GITHUB_ENV"
-          echo "BROWSER_GITHUB_COM_USERNAME=$login" >> "$GITHUB_ENV"
-          echo "Agent GitHub login: $login"
-
-      - name: Clone home repo
-        run: |
-          HOME_DIR="$AGENT_HOME"
-          HOME_REPO="$AGENT_GITHUB_LOGIN/home"
-
-          if ! gh repo view "$HOME_REPO" --json name > /dev/null 2>&1; then
-            echo "::error::No home repo found for $AGENT_GITHUB_LOGIN at $HOME_REPO"
-            exit 1
-          fi
-
-          if [ -d "$HOME_DIR/.git" ]; then
-            echo "Home repo already available at $HOME_DIR"
-            exit 0
-          fi
-
-          echo "Cloning home repo from $HOME_REPO..."
-          mkdir -p "$(dirname "$HOME_DIR")"
-          git clone "https://x-access-token:${GH_TOKEN}@github.com/${HOME_REPO}.git" "$HOME_DIR"
-          echo "Home repo available at $HOME_DIR"
-
-      - name: Install home tools
-        working-directory: /home/runner/agents/${{ inputs.agent }}/home
-        env:
-          MISE_JOBS: 1  # Serialize — vfox-shiv bootstrap isn't parallel-safe yet
-        run: |
-          gh auth setup-git
-          mise trust
-          mise install
-
-      - name: Trust shiv package configs
-        working-directory: /home/runner/agents/${{ inputs.agent }}/home
-        run: |
-          while IFS= read -r -d '' config; do
-            mise trust -q "$config"
-          done < <(find "$HOME/.local/share/mise/installs" -path '*/packages/*/mise.toml' -print0)
-
-      - name: Compute sessions CLI cache key
-        id: sessions
-        working-directory: /home/runner/agents/${{ inputs.agent }}/home
-        run: |
-          SESSIONS_DIR="$(mise where shiv:sessions)/packages/sessions"
-          echo "mix-lock-hash=$(sha256sum "$SESSIONS_DIR/cli/mix.lock" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache sessions CLI build
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.local/share/mise/installs/shiv-sessions/*/packages/sessions/cli/_build
-            ~/.local/share/mise/installs/shiv-sessions/*/packages/sessions/cli/deps
-          key: ${{ runner.os }}-sessions-cli-${{ steps.sessions.outputs.mix-lock-hash }}
-          restore-keys: |
-            ${{ runner.os }}-sessions-cli-
-
-      - name: Install pi
-        working-directory: /home/runner/agents/${{ inputs.agent }}/home
-        run: mise use -g github:KnickKnackLabs/pi@v0.80.3-kkl.1
-
-      - name: Setup GPG
-        working-directory: /home/runner/agents/${{ inputs.agent }}/home
-        run: shimmer gpg:setup ${{ inputs.agent }}
-
-      - name: Prepare home repo
-        working-directory: /home/runner/agents/${{ inputs.agent }}/home
-        env:
-          MISE_JOBS: 1
-        run: |
-          set -euo pipefail
-
-          gh auth setup-git
-          if mise tasks info agent:prepare >/dev/null 2>&1; then
-            mise run agent:prepare
-          else
-            echo "::warning::No agent:prepare task found in home repo; skipping home-specific preparation. Add an agent:prepare task to silence this warning."
-          fi
-
-      - name: Setup pi auth
+      - name: Prepare repo CI environment
         env:
           PI_AUTH_JSON: ${{ secrets.PI_AUTH_JSON }}
+          MISE_JOBS: 1
         run: |
-          if [ -z "${PI_AUTH_JSON:-}" ]; then
-            echo "PI_AUTH_JSON not configured; pi will use provider env vars or existing auth."
-            exit 0
-          fi
-
-          # First-pass CI restoration: write auth.json for this run only.
-          # This intentionally does not sync refreshed OAuth tokens back to
-          # GitHub secrets yet; token freshness/concurrency is follow-up work.
-          PI_AGENT_DIR="$RUNNER_TEMP/pi-agent"
-          mkdir -p "$PI_AGENT_DIR"
-          chmod 700 "$PI_AGENT_DIR"
-          printf '%s' "$PI_AUTH_JSON" > "$PI_AGENT_DIR/auth.json"
-          chmod 600 "$PI_AGENT_DIR/auth.json"
-          echo "PI_CODING_AGENT_DIR=$PI_AGENT_DIR" >> "$GITHUB_ENV"
+          mise trust
+          mise install
+          mise run ci:env
 
       - name: Run agent
-        working-directory: /home/runner/agents/${{ inputs.agent }}/home
         env:
-          AGENT: ${{ inputs.agent }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           BROWSER_GITHUB_COM_PASSWORD: ${{ secrets.AGENT_GITHUB_PASSWORD }}
           DISPATCH_CONTEXT: ${{ github.triggering_actor }}
-          INPUT_MESSAGE: ${{ inputs.message }}
-          INPUT_MODEL: ${{ inputs.model }}
-          RUN_TIMEOUT: 900
         run: |
           echo "### AGENT SESSION START ###"
-
-          echo "Working directory: $(pwd)"
-
-          # shimmer as sets selected-agent env vars (GIT_AUTHOR_*, GH_TOKEN, etc.)
-          # shimmer agent --headless delegates to sessions wake for execution
-          eval "$(shimmer as "$AGENT")"
-
-          # Configure gh as git credential helper so shiv can clone private repos
-          gh auth setup-git
-
-          if [ -z "$INPUT_MODEL" ]; then
-            echo "::error::model input is required"
-            exit 1
-          fi
-
-          if [[ "$INPUT_MODEL" != */* ]]; then
-            echo "::error::model input must be provider-qualified (for example: openai-codex/gpt-5.5)"
-            exit 1
-          fi
-
-          CMD=(shimmer agent --headless --timeout "$RUN_TIMEOUT" --model "$INPUT_MODEL")
-          CMD+=("$INPUT_MESSAGE")
-
-          "${CMD[@]}"
-
+          status=0
+          mise agent || status=$?
           echo "### AGENT SESSION END ###"
+          exit "$status"
 
       - name: Back up sessions
         if: always()
-        env:
-          AGENT: ${{ inputs.agent }}
         run: |
           if [ ! -d "$AGENT_HOME" ]; then
             echo "Agent home not available; skipping session backup"
