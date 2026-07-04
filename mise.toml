@@ -27,6 +27,8 @@ gum = "0.17.0"                   # Human-readable task tables and welcome output
 "shiv:secrets" = "0.2"
 "shiv:emails" = "0.7"
 "shiv:codebase" = "0.3"
+"shiv:comments" = "0.2"
+"shiv:chat" = "0.1"
 
 [_.codebase]
 lint = ["mise-settings", "gum-table"]
