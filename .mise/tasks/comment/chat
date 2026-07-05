@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+#MISE description="Send a directive message to chat with comments context"
+#USAGE arg "[message]" default="" help="Message to send; reads stdin when omitted"
+set -euo pipefail
+
+message="${usage_message:-}"
+if [ -z "$message" ]; then
+  message="$(cat)"
+fi
+
+if [ -z "${message//[[:space:]]/}" ]; then
+  echo "comment:chat: message is required on stdin or as an argument" >&2
+  exit 1
+fi
+
+context_json="$(comments context --json)"
+location="$(
+  printf '%s' "$context_json" \
+    | jq -r '.file as $file | (.directive.range.start.line + 1) as $line | "\($file):\($line)"'
+)"
+
+channel="${COMMENT_CHAT_CHANNEL:-fold}"
+sender="${COMMENT_CHAT_AS:-${CHAT_IDENTITY:-or}}"
+
+{
+  printf 'From %s\n\n' "$location"
+  printf '%s\n' "$message"
+} | chat send --chat "$channel" --as "$sender" --force -
