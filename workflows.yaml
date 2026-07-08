@@ -15,13 +15,6 @@ workflows:
       - "0 14,18,22 * * 0,6"        # weekends every 4h, 9am-5pm EST
     message: "Use `gh repo clone` to clone ricon-family/grow-heal-love to your workspace and read .jobs/referral-check.txt for instructions."
 
-  - name: junior-daily-checkin
-    agent: junior
-    model: openai-codex/gpt-5.5
-    schedule:
-      - "0 15 * * *"  # 10am EST daily
-    message: "Check your home repo for job instructions at jobs/dc-checkin.txt and execute them."
-
   - name: rho-repo-audit
     agent: rho
     model: openai-codex/gpt-5.5
