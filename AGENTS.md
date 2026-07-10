@@ -28,11 +28,12 @@ If your identity isn't set, ask Or which agent you are.
 Common launch and wake paths:
 
 - **Interactive local:** `shimmer agent` from the target home after identity setup. Lean, long context life.
-- **Local async/headless fanout:** use `sessions new` + `sessions wake --background`, or `shimmer agent --headless` for a simple foreground headless run. Before spawning peers locally, read `notes/local-async-agent-wake.md`; for mechanics see `notes/sessions.md` and `notes/agent-spawning.md`.
-- **Interactive multi-session forks:** use attachable `shell run` desks when the human wants to collaborate in parallel lanes. Before launching more than one live child desk, read `notes/session-forking.md`; parent sessions own canonical home/fold integration and should harvest child work deliberately.
+- **Local worker/sibling fanout:** start with `notes/local-agent-wakes.md`; use an appropriate `sphincters` profile or `sessions wake` when identity/workspace boundaries are already correct.
+- **Named peer in a fresh attachable desk:** use fold `agent:desk:prepare` then `agent:desk:wake`, following `notes/fresh-agent-home-desk-guide.md`. Require home/fold orientation, a post-orientation anchor, scoped side effects, review ownership, substantial rewind handbacks, and completion/boop protocol.
+- **Interactive multi-session forks:** use the built-in sibling/agent-desk paths before custom `shell run` launchers. Before launching more than one live child desk, read `notes/session-forking.md`; parent sessions own canonical integration, post-rewind boops until continuation is automatic, and deliberate harvest/wind-down.
 - **GitHub CI:** headless sessions triggered by workflow dispatch or schedules. For peer dispatch, read `notes/agent-dispatching.md` and use `shimmer agent:dispatch`.
 
-Interactive and CI launches normally run `eval $(shimmer as <agent>)` and `eval $(fold agent:env)` before launch, so your identity is set. For `sessions wake` fanout, preserve or set target identity as described in `notes/local-async-agent-wake.md`. The startup procedure is otherwise the same regardless of launch path.
+Interactive and CI launches normally establish target identity before launch. `agent:desk:wake` renders this identity boundary for named peers. For direct `sessions wake` fanout, use it only when identity/workspace are already correct or follow the explicit fallback guidance in `notes/local-async-agent-wake.md`. The startup procedure is otherwise the same regardless of launch path.
 
 ### Home repo preparation hook
 
