@@ -50,6 +50,16 @@ setup() {
   mkdir -p "$STATE_DIR/clones"
   export STATE_DIR
 
+  MOCK_SECRETS="$TEST_TMPDIR/secrets"
+  cat > "$MOCK_SECRETS" <<'BASH'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'missing secret: %s\n' "${2:-}" >&2
+exit 1
+BASH
+  chmod +x "$MOCK_SECRETS"
+  export SECRETS="$MOCK_SECRETS"
+
   ONE=$(make_repo one)
   TWO=$(make_repo two)
   DIVERGED=$(make_diverged_repo diverged)
@@ -60,6 +70,8 @@ repo	auth	clone	branch	base
 owner/one	-	$ONE	campaign/test	main
 owner/two	-	$TWO	campaign/test	main
 owner/diverged	-	$DIVERGED	campaign/test	main
+owner/auth-fail	missing	$ONE	campaign/test	main
+owner/fetch-fail	-	$TWO	campaign/test	main
 TSV
 }
 
@@ -115,6 +127,57 @@ teardown() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"DIV owner/diverged"* ]]
   [[ "$output" == *"DRY owner/two"* ]]
+}
+
+@test "homes:campaign:merge fails closed on auth errors and keeps going" {
+  run fold_task homes:campaign:merge \
+    --work-dir "$STATE_DIR" \
+    --repo owner/auth-fail \
+    --repo owner/two \
+    --keep-going \
+    --dry-run
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"could not read missing/github-pat"* ]]
+  [[ "$output" != *"OK  owner/auth-fail"* ]]
+  [[ "$output" != *"DRY owner/auth-fail"* ]]
+  [[ "$output" != *"MER owner/auth-fail"* ]]
+  [[ "$output" == *"DRY owner/two"* ]]
+}
+
+@test "homes:campaign:merge fails closed on fetch errors and keeps going" {
+  rm -rf "$TEST_TMPDIR/two.git"
+
+  run fold_task homes:campaign:merge \
+    --work-dir "$STATE_DIR" \
+    --repo owner/fetch-fail \
+    --repo owner/one \
+    --keep-going \
+    --dry-run
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"ERROR: could not fetch owner/fetch-fail main"* ]]
+  [[ "$output" != *"OK  owner/fetch-fail"* ]]
+  [[ "$output" != *"DRY owner/fetch-fail"* ]]
+  [[ "$output" != *"MER owner/fetch-fail"* ]]
+  [[ "$output" == *"DRY owner/one"* ]]
+}
+
+@test "homes:campaign:merge fails closed when the remote rejects a push" {
+  cat > "$TEST_TMPDIR/two.git/hooks/pre-receive" <<'BASH'
+#!/usr/bin/env bash
+echo "push rejected intentionally" >&2
+exit 1
+BASH
+  chmod +x "$TEST_TMPDIR/two.git/hooks/pre-receive"
+
+  run fold_task homes:campaign:merge \
+    --work-dir "$STATE_DIR" \
+    --repo owner/two
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"ERROR: could not push owner/two main"* ]]
+  [[ "$output" != *"MER owner/two"* ]]
 }
 
 @test "homes:campaign:merge fails before init" {
