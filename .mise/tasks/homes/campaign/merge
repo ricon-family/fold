@@ -38,15 +38,26 @@ merge_one() {
     return 1
   fi
 
-  token=$(campaign_get_auth_token "$auth")
+  if ! token=$(campaign_get_auth_token "$auth"); then
+    return 1
+  fi
   target_ref="refs/remotes/origin/$TARGET_BRANCH"
   source_ref="$source_branch"
 
-  campaign_run_git "$token" -C "$clone" fetch origin \
-    "+refs/heads/$TARGET_BRANCH:$target_ref" >/dev/null
+  if ! campaign_run_git "$token" -C "$clone" fetch origin \
+    "+refs/heads/$TARGET_BRANCH:$target_ref" >/dev/null; then
+    printf 'ERROR: could not fetch %s %s\n' "$repo" "$TARGET_BRANCH" >&2
+    return 1
+  fi
 
-  target_sha=$(git -C "$clone" rev-parse --short=12 "$target_ref")
-  source_sha=$(git -C "$clone" rev-parse --short=12 "$source_ref")
+  if ! target_sha=$(git -C "$clone" rev-parse --short=12 "$target_ref"); then
+    printf 'ERROR: could not resolve %s %s\n' "$repo" "$target_ref" >&2
+    return 1
+  fi
+  if ! source_sha=$(git -C "$clone" rev-parse --short=12 "$source_ref"); then
+    printf 'ERROR: could not resolve %s %s\n' "$repo" "$source_ref" >&2
+    return 1
+  fi
 
   if ! git -C "$clone" merge-base --is-ancestor "$target_ref" "$source_ref"; then
     printf 'DIV %-28s %s %s is not ancestor of %s %s\n' \
@@ -64,7 +75,11 @@ merge_one() {
     return 0
   fi
 
-  campaign_run_git "$token" -C "$clone" push origin "$source_ref:refs/heads/$TARGET_BRANCH" >/dev/null
+  if ! campaign_run_git "$token" -C "$clone" push origin \
+    "$source_ref:refs/heads/$TARGET_BRANCH" >/dev/null; then
+    printf 'ERROR: could not push %s %s\n' "$repo" "$TARGET_BRANCH" >&2
+    return 1
+  fi
   printf 'MER %-28s %s %s -> %s\n' "$repo" "$TARGET_BRANCH" "$target_sha" "$source_sha"
 }
 
