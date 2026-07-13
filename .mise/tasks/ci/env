@@ -70,14 +70,6 @@ trust_shiv_package_configs() {
   done < <(find "$HOME/.local/share/mise/installs" -path '*/packages/*/mise.toml' -print0 2>/dev/null)
 }
 
-install_pi() {
-  log "installing pi harness"
-  (
-    cd "$AGENT_HOME"
-    "$MISE_BIN" use -g github:KnickKnackLabs/pi@v0.80.3-kkl.1
-  )
-}
-
 setup_gpg() {
   log "setting up GPG"
   (
@@ -136,7 +128,6 @@ resolve_agent_github_login
 clone_home_repo
 install_home_tools
 trust_shiv_package_configs
-install_pi
 setup_gpg
 setup_email
 prepare_home_repo
