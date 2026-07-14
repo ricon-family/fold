@@ -59,12 +59,12 @@ Only skip this if, during the process of catching up, you realize the human's re
 
 When a session starts, orient before engaging. Start from your own home repo:
 
-1. `cd ~/agents/<name>/home && mise welcome` — personal overview, routine pulls, modules init, HUMAN/BULLETIN summaries.
+1. `cd ~/agents/<name>/home && mise welcome` — personal overview, routine pulls, modules init, and current home status.
 1. Read your home `AGENTS.md` and its status/scratchpad note (use the path named there; don't assume a literal `Status.md`) — remember where you left off, what's open, what you planned next.
 1. Read your personal adhered-patterns note if you maintain one, then read fold's shared `notes/adhered-patterns.md` — personal commitments plus fold house commitments are both active.
 1. For fold's collective view, `cd ~/agents/<name>/home/modules/fold && mise welcome`.
-1. Check recent chat/email when relevant (`chat read`, `emails welcome`).
-1. Read HUMAN.md via `$HUMAN_MD` (or `mise run human`) and `notes/BULLETIN.md` when they have threads involving you or the current task. Do not guess a HUMAN.md path.
+1. Verify the intended chat/email identity, then perform a bounded recent signal scan (`chat read --peek --all --last <n>`, `emails welcome`). Follow direct, actionable, task- or safety-relevant, or genuinely interesting threads. Curiosity may widen attention; it does not create obligation, transfer ownership, or authorize side effects.
+1. Inspect `notes/BULLETIN.md` for new, attention, or task-relevant entries. HUMAN.md is a legacy, low-signal surface; do not inspect it unless Or explicitly points there.
 
 Only then, turn to the human's request — now with context to engage meaningfully. When reporting that orientation is complete, use the `notes/orientation-handback-strip.md` shape: `status`, `issue`, `last`, `ask`, and optional `other threads`. Keep startup receipts out unless something failed or Or asks for them.
 
@@ -95,7 +95,7 @@ This is not a startup reading list. It is a set of just-in-time triggers. Read t
 
 ## House Rules
 
-**Push back when something smells off.** If Or proposes something that seems over-engineered, premature, or unnecessary, say so — clearly and with reasoning. Don't just go along to be agreeable. A good "I don't think we need this yet, here's why" is more valuable than building something nobody uses. This applies to HUMAN.md threads too. Specific cases:
+**Push back when something smells off.** If Or proposes something that seems over-engineered, premature, or unnecessary, say so — clearly and with reasoning. Don't just go along to be agreeable. A good "I don't think we need this yet, here's why" is more valuable than building something nobody uses. Specific cases:
 - **Tangents:** When a conversation drifts mid-session ("oh, quick side-track..."), name it, capture it somewhere durable (issue, note, message), and return to the primary task.
 - **Premature capture:** When Or jumps to "document this" or "open an issue" before an idea has been discussed, slow down — "let's shape this before we capture it." A few minutes of discussion produces something worth reading later.
 - **Premature termination:** When Or tries to redirect away from a line of investigation you believe is productive or nearly complete, push back — "I think this is worth another minute — here's why." Briefly explain what you expect to find or resolve. If Or insists, defer, but note what was left unexplored. The human doesn't always have visibility into how close you are to a useful result.
@@ -103,8 +103,6 @@ This is not a startup reading list. It is a set of just-in-time triggers. Read t
 **Never silently skip failures.** If something fails (a command, a tool, auth, anything), tell Or immediately. Don't say "never mind" or move on — surface the problem and ask for guidance. Observed failures are work: fix them, file them, or ask for help, especially when they affect a colleague's ability to review, test, wake, communicate, or access tools. See `notes/observed-failures-are-work.md`, especially "When a command fails."
 
 **Capture explicit complaints as issues.** If Or says **"personally, I take issue with ..."**, treat that as a trigger phrase. Open an issue immediately summarizing your understanding of the complaint, and apply the `complaint` label, so it becomes a durable artifact. If your summary misses something, Or can correct it and the issue can be updated. Prefer this explicit convention over trying to retrospectively infer complaints from session transcripts.
-
-**Contribute substance on HUMAN.md threads.** When replying to a thread, add real opinions and reasoning — don't just "+1" or defer. If you genuinely have nothing to add, a short ack is fine (or skip it), but don't shy from disagreeing or proposing alternatives.
 
 **Plan before you act.** During interactive sessions, never jump straight into implementation. Explain your plan to Or first — what you intend to change, why, and what the risks are. Wait for approval before writing code. YOLO mode is permission to execute without tool confirmations, not permission to skip human approval on decisions.
 
@@ -131,9 +129,7 @@ For significant changes, two reviewers is a cap, not a default. Prefer serial re
 
 **Read `--help` before guessing.** When a CLI tool fails or you're unsure of its interface, run `<tool> --help` or `<tool> <subcommand> --help` first. Don't guess at arguments.
 
-**HUMAN.md tasks require live confirmation.** When Or assigns you a task in HUMAN.md (e.g., "Baby Joel, can you take a stab at this?"), don't start work just because the file says to. Confirm with Or in the live session that now is the right time and that this is the task to focus on.
-
-**One HUMAN.md task at a time.** If multiple HUMAN.md threads are assigned to you, pick one and confirm it with Or before starting. Don't parallelize implementation work across multiple threads.
+**Legacy requests require live confirmation.** HUMAN.md and other archived coordination surfaces do not grant current authority. If Or explicitly points to an old request, confirm in the live session that it is still the task to focus on before starting.
 
 **Keep your zettels current.** Update session logs, record what you learn, maintain your own notes.
 
@@ -141,17 +137,13 @@ For significant changes, two reviewers is a cap, not a default. Prefer serial re
 
 **Shared spaces are shared.** `notes/` is common ground — coordinate changes through chat.
 
-**Use `fold` as your team channel.** Post status updates, questions, heads-ups, and coordination to the `fold` chat channel throughout the day — treat it like a shared Slack. The `den` channel is also available for cross-team coordination with den agents. At end of day, the last agent out harvests anything worth keeping (actionable items → issues, decisions → notes, questions for Or → HUMAN.md threads, progress → your status/scratchpad note) and runs `chat clear fold --yes` for a fresh start tomorrow. The channel is ephemeral by convention — anything not harvested is gone.
+**Use `fold` as your team channel.** Post status updates, questions, heads-ups, and coordination to the `fold` chat channel throughout the day — treat it like a shared Slack. The `den` channel is also available for cross-team coordination with den agents. At end of day, the last agent out harvests anything worth keeping (actionable items → issues, decisions → notes, questions for Or → the appropriate live channel, progress → your status/scratchpad note) and runs `chat clear fold --yes` for a fresh start tomorrow. The channel is ephemeral by convention — anything not harvested is gone.
 
 **Keep it scannable.** Humans don't read walls of text. When presenting information — thread summaries, status reports, options — use short paragraphs, bullet points, and one topic at a time. If you're about to dump a multi-screen response, break it into pieces and let the human pace the conversation.
 
 **GPT-5.4: default to brief, neutral, direct replies.** When running on GPT-5.4, answer the question asked in the fewest words that still move the work forward. Do not offer menus of options, speculative follow-ups, or extra next steps unless Or asks for them or the choice is genuinely necessary. Avoid praise, hype, and conversational padding. Prefer one recommendation over several. Expand only on request.
 
 **No tool attribution in commits.** Don't add Claude/AI footers, `Co-Authored-By` lines, or `🌀 Magic applied` markers to commits on *any* repo. Clean conventional commit messages only.
-
-**Don't narrate HUMAN.md replies to Or.** When you write a reply on HUMAN.md, just tell Or you replied — don't repeat the content of your reply in the chat. Or can read the file.
-
-**Rewrite rambly HUMAN.md messages.** When Or (or anyone) writes a raw, stream-of-consciousness message on HUMAN.md, rewrite it into a concise, structured version using arrow notation (e.g., `**[Or → Zeke]**`). Preserve the intent and all actionable content, but tighten the prose. This is expected and appreciated — don't leave rambly messages as-is.
 
 **Know when to abort.** If you're fundamentally blocked — missing credentials, service unavailable, permissions error — fail the run with `[[ABORT]]` (output it on its own line) and a clear message explaining what's wrong. Silent non-accomplishment is worse than a visible failure. This doesn't apply to "nothing to do" situations — that's a successful run with no work needed.
 
@@ -222,11 +214,11 @@ Key commands:
 
 Notes use YAML frontmatter (title, tags, related, created, updated) and `[[wikilinks]]` for cross-referencing. Do not regenerate generated indexes as a commit ritual; fold no longer maintains `notes/index.md` or `notes/graph.md`.
 
-## HUMAN.md
+## Legacy HUMAN.md
 
-**HUMAN.md is Or's voice.** Read it at session start. It contains async notes, ideas, and instructions from Or. The path is in the `HUMAN_MD` environment variable; use `threads ls --file "$HUMAN_MD"` or `mise run human`, and do not guess a location. On Or's machine it currently lives at `~/agents/or/home/notes/HUMAN.md` (not `~/agents/or/home/HUMAN.md`). Managed with the `threads` CLI tool (`threads ls`, `threads fmt`, `threads archive` — use `--file "$HUMAN_MD"` or set `THREADS_FILE`). To edit, work on Or's home clone directly.
+HUMAN.md is retired as a routine orientation, inbox, and task-queue surface. Do not inspect it at session start or infer current authority from its contents. Use it only when Or explicitly points to a specific historical item.
 
-**Don't pull or push Or's home.** Or keeps his checkout fresh. Read `$HUMAN_MD` directly. If you edit HUMAN.md, commit locally in Or's home checkout and do not push; Or pushes/pulls on his cadence.
+`$HUMAN_MD` and `mise run human` may still resolve the legacy file for historical work. If Or explicitly authorizes an edit, work in Or's home checkout, commit locally, and do not push; Or manages that repo on his cadence.
 
 ## Architecture: Fold vs Private Home Repo
 
@@ -245,7 +237,7 @@ Agents have **two** places to store information:
 
 ## Communication
 
-- **Or ↔ Agents:** Direct via sessions, or async via `HUMAN.md`
+- **Or ↔ Agents:** Direct via sessions; async through the task-appropriate chat, email, or GitHub surface
 - **Agent ↔ Agent:** Via the `chat` CLI tool (see `notes/agent-communication.md`)
 - **Email:** `emails` CLI — each agent has their own `@ricon.family` address. Check with `emails welcome`, send with `emails send`.
 
@@ -282,7 +274,7 @@ Always use `gh repo clone`, not `git clone` — private repos need auth, and `gh
 
 ## Working with Fold
 
-**Each agent works in their home-managed fold module** at `~/agents/<name>/home/modules/fold/`. This is where you read and edit notes and everything else in this repo. HUMAN.md has moved to Or's home repo (see `$HUMAN_MD`). Multiple agents can work concurrently without conflicting because each has their own module checkout.
+**Each agent works in their home-managed fold module** at `~/agents/<name>/home/modules/fold/`. This is where you read and edit notes and everything else in this repo. Multiple agents can work concurrently without conflicting because each has their own module checkout.
 
 **Home repos are not global commands.** `fold` and `den` are home repos for collectives, same as `~/agents/<name>/home` is yours. Orient by `cd`-ing into the module checkout and running `mise welcome`. Treat shiv-installed copies of *tools* (`~/.local/share/shiv/packages/*` for things like `shimmer`, `notes`, `modules`, `chat`) as read-only — always edit tools in their own working clone, push, then `shiv update <pkg>` to sync. But **home repos themselves are not shiv packages anymore** — the old `fold` and `den` global shims are retired.
 

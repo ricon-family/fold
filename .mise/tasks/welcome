@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Fold overview — residents, threads, chat, notes, repo status"
+#MISE description="Fold overview — residents, chat, notes, repo status"
 set -eo pipefail
 
 FOLD_DIR="$MISE_CONFIG_ROOT"
@@ -99,20 +99,6 @@ if command -v fold &>/dev/null; then
   fi
 fi
 
-# ━━━ HUMAN.md ━━━
-HUMAN_FILE=""
-if HUMAN_FILE=$(cd "$FOLD_DIR" && mise run -q human 2>/dev/null); then
-  :
-fi
-if [ -n "$HUMAN_FILE" ] && [ -f "$HUMAN_FILE" ]; then
-  thread_summary=$(threads status --file "$HUMAN_FILE" 2>/dev/null || echo "")
-  section "📝 HUMAN.md  ($thread_summary)"
-  threads list --file "$HUMAN_FILE" 2>/dev/null || true
-else
-  section "📝 HUMAN.md"
-  gum style --faint "(HUMAN_MD not set — see: mise run human)"
-fi
-
 # ━━━ Chat ━━━
 section "💬 Chat"
 if command -v chat &>/dev/null; then
@@ -130,7 +116,7 @@ if command -v chat &>/dev/null; then
       printf 'Read as %s identity/cursor\tchat read --as %s <channel>\n' "$_agent_lower" "$_agent_lower"
       printf 'Send a message\tchat send --as %s <msg>\n' "$_agent_lower"
       printf 'Wait for any message from others\tchat wait --as %s <channel>\n' "$_agent_lower"
-      printf 'Peek without marking read\tchat read --peek <channel>\n'
+      printf 'Bounded Fold signal scan\tchat read fold --as %s --peek --all --last 20\n' "$_agent_lower"
       printf 'Send to specific channel\tchat send --as %s --chat <channel> <msg>\n' "$_agent_lower"
       printf 'List all channels\tchat list\n'
     ) | gum table --print --separator "	" --border rounded \
