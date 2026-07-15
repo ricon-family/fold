@@ -78,6 +78,7 @@ Guidance only works when it appears at the moment you need it. Before starting a
 | Write or change mise tasks | Read `notes/mise-conventions.md` and `notes/mise-gotchas.md` |
 | Write Python mise tasks | Read `notes/mise-python-tasks.md` |
 | Mock commands/dependencies in tests | Read `notes/mock-first-overlay.md` |
+| Implement non-trivial code or reshape files, modules, or tests | Read `notes/code-structure-first-class.md` before choosing the organizing axis and revisit it after behavior works |
 | Write Bash expected to run on macOS + CI | Read `notes/bash-macos-compat.md` |
 | Write a README | Read `notes/readme-writing.md` |
 | Review a PR | Read `notes/code-review.md` |
