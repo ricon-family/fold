@@ -184,7 +184,7 @@ make_repo() {
   [[ "$output" == *"repo:    quick-ricon/home"* ]]
   [[ "$output" == *"dry-run: rerun with --yes"* ]]
   [[ "$output" == *"setup auth: mise run homes:auth:setup quick --home $desk_path/home --yes"* ]]
-  [[ "$output" == *"mise run agent:desk:wake quick --desk $desk_path --shell quick-probe --packet /tmp/packet.md --yes"* ]]
+  [[ "$output" == *"mise run agent:desk:wake quick --desk $desk_path --shell quick-probe --packet /tmp/packet.md --model '<model>' --yes"* ]]
   [ ! -e "$desk/home" ]
 }
 
@@ -239,7 +239,7 @@ make_repo() {
   adopt_line=$(grep -nF "mise run homes:adopt-remote quick --home $desk/home --branch main --yes --repo quick-ricon/home" "$MISE_LOG" | cut -d: -f1)
   [ "$auth_line" -lt "$adopt_line" ]
   [[ "$output" == *"desk id: $desk_id"* ]]
-  [[ "$output" == *"mise run agent:desk:wake quick --desk $desk --shell $desk_id --packet /tmp/packet.md --yes"* ]]
+  [[ "$output" == *"mise run agent:desk:wake quick --desk $desk --shell $desk_id --packet /tmp/packet.md --model '<model>' --yes"* ]]
   [ -f "$desk/.desk/registry.json" ]
   [ -f "$desk/.gitconfig" ]
   [ -d "$desk/home/.git" ]
@@ -323,6 +323,18 @@ JSON
   [[ "$output" == *"line three"* ]]
 }
 
+@test "agent:desk:wake requires an explicit model before rendering" {
+  home="$BATS_TEST_TMPDIR/home"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  make_repo "$home" home
+  printf 'hello packet\n' > "$packet"
+
+  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet"
+
+  [ "$status" -eq 64 ]
+  [[ "${output}${stderr:-}" == *"ERROR: --model is required"* ]]
+}
+
 @test "agent:desk:wake dry-run renders launcher without shell run" {
   home="$BATS_TEST_TMPDIR/home"
   work_dir="$BATS_TEST_TMPDIR/wake"
@@ -330,7 +342,7 @@ JSON
   make_repo "$home" home
   printf 'hello packet\n' > "$packet"
 
-  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --work-dir "$work_dir"
+  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --work-dir "$work_dir"
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"dry-run"* ]]
@@ -339,6 +351,8 @@ JSON
     ! grep -q 'shell run' "$SHELL_LOG"
   fi
   grep -q 'shimmer as "$AGENT"' "$work_dir/start-quick-a.sh"
+  grep -q 'MODEL='"'"'openai-codex/gpt-5.6-sol'"'"'' "$work_dir/start-quick-a.sh"
+  grep -q 'shimmer agent --model "$MODEL"' "$work_dir/start-quick-a.sh"
 }
 
 @test "agent:desk:wake renders relative packet paths as absolute for the launcher" {
@@ -347,7 +361,7 @@ JSON
   make_repo "$home" home
   repo_real=$(cd "$REPO_DIR" && pwd -P)
 
-  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet AGENTS.md --work-dir "$work_dir"
+  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet AGENTS.md --model openai-codex/gpt-5.6-sol --work-dir "$work_dir"
 
   [ "$status" -eq 0 ]
   grep -q "PACKET_PATH='$repo_real/AGENTS.md'" "$work_dir/start-quick-a.sh"
@@ -363,7 +377,7 @@ JSON
   home_real=$(cd "$home" && pwd -P)
   work_real=$(cd "$work_dir" 2>/dev/null && pwd -P || printf '%s' "$work_dir")
 
-  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --work-dir "$work_dir" --yes
+  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --work-dir "$work_dir" --yes
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"launching shell quick-a"* ]]

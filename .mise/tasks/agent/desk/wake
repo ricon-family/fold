@@ -4,12 +4,13 @@
 #USAGE flag "--home <path>" default="" help="Home repo path for the agent process (default: <desk>/home)"
 #USAGE flag "--shell <name>" default="" help="Attachable shell name to launch"
 #USAGE flag "--packet <path>" default="" help="Wake packet file to pass to the agent"
+#USAGE flag "--model <model>" default="" help="Provider/model passed explicitly to shimmer agent"
 #USAGE flag "--title <title>" default="agent desk wake — root handoff" help="Title line prepended to the packet"
 #USAGE flag "--identity-source <path>" default="" help="Directory where 'shimmer as <agent>' should run (default: this fold checkout)"
 #USAGE flag "--work-dir <path>" default="" help="Directory for generated launcher (default: temporary directory)"
 #USAGE flag "-y --yes" default=#false help="Actually call shell run; without this, render and print the plan only"
 #USAGE arg "<agent>" help="Agent identity to launch"
-#USAGE example "mise run agent:desk:wake quick --desk ~/desks/q --shell quick-q --packet /tmp/wake.md --yes" header="Launch Quick in a desk"
+#USAGE example "mise run agent:desk:wake quick --desk ~/desks/q --shell quick-q --packet /tmp/wake.md --model '<model>' --yes" header="Launch Quick in a desk"
 set -euo pipefail
 
 ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
@@ -21,6 +22,7 @@ DESK_PATH=$(agent_desk_resolve_desk "${usage_desk:-}")
 HOME_PATH=$(agent_desk_resolve_home "${usage_home:-}" "$DESK_PATH" || true)
 SHELL_NAME="${usage_shell:-}"
 PACKET_PATH="${usage_packet:-}"
+MODEL="${usage_model:-}"
 TITLE="${usage_title:-agent desk wake — root handoff}"
 IDENTITY_SOURCE="${usage_identity_source:-$ROOT}"
 WORK_DIR="${usage_work_dir:-}"
@@ -38,6 +40,10 @@ fi
 agent_desk_validate_name shell "$SHELL_NAME"
 if [ -z "$PACKET_PATH" ]; then
   echo "ERROR: --packet is required" >&2
+  exit 64
+fi
+if [ -z "$MODEL" ]; then
+  echo "ERROR: --model is required" >&2
   exit 64
 fi
 if [ ! -f "$PACKET_PATH" ]; then
@@ -62,13 +68,14 @@ AGENT=$(agent_desk_single_quote "$AGENT")
 HOME_PATH=$(agent_desk_single_quote "$HOME_PATH")
 IDENTITY_SOURCE=$(agent_desk_single_quote "$IDENTITY_SOURCE")
 PACKET_PATH=$(agent_desk_single_quote "$PACKET_PATH")
+MODEL=$(agent_desk_single_quote "$MODEL")
 TITLE=$(agent_desk_single_quote "$TITLE")
 
 cd "\$HOME_PATH"
 eval "\$(cd "\$IDENTITY_SOURCE" && shimmer as "\$AGENT")"
 export CHAT_IDENTITY="\$AGENT"
 message=\$(cat "\$PACKET_PATH")
-exec shimmer agent "[\$TITLE]
+exec shimmer agent --model "\$MODEL" "[\$TITLE]
 \${message}"
 LAUNCHER
 chmod +x "$LAUNCHER"
@@ -79,6 +86,7 @@ printf 'desk:            %s\n' "${DESK_PATH:-'(not resolved)'}"
 printf 'home:            %s\n' "$HOME_PATH"
 printf 'shell:           %s\n' "$SHELL_NAME"
 printf 'packet:          %s\n' "$PACKET_PATH"
+printf 'model:           %s\n' "$MODEL"
 printf 'identity-source: %s\n' "$IDENTITY_SOURCE"
 printf 'launcher:        %s\n' "$LAUNCHER"
 
