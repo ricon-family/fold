@@ -51,3 +51,25 @@ teardown() {
   [[ "$output" == *"at recorded origin/main"* ]]
   [[ "$output" == *"missing → notes install-hooks"* ]]
 }
+
+@test "welcome does not cross chat or GitHub capability boundaries" {
+  CAPABILITY_LOG="$BATS_TEST_TMPDIR/capabilities.log"
+  export CAPABILITY_LOG
+  : > "$CAPABILITY_LOG"
+
+  chat() {
+    printf 'chat %s\n' "$*" >> "$CAPABILITY_LOG"
+    return 97
+  }
+  gh() {
+    printf 'gh %s\n' "$*" >> "$CAPABILITY_LOG"
+    return 98
+  }
+  export -f chat gh
+
+  run fold_task welcome
+  [ "$status" -eq 0 ]
+  [ ! -s "$CAPABILITY_LOG" ]
+  [[ "$output" == *"Chat commands"* ]]
+  [[ "$output" != *"Issues,"* ]]
+}
