@@ -61,13 +61,13 @@ jobs:
       MISE_DATA_DIR: /home/runner/.local/share/mise
       # Nested shiv package installs run their own mise commands.
       MISE_EXPERIMENTAL: "1"
-      MISE_JOBS: 1
-      # Keep pipx interpreters inside mise-action's cache boundary.
-      UV_PYTHON_INSTALL_DIR: /home/runner/.local/share/mise/uv-python
-      UV_MANAGED_PYTHON: "1"
     steps:
       - name: Checkout workflow repo
         uses: actions/checkout@v6
+
+      - name: Resolve mise cache epoch
+        id: mise-cache-epoch
+        run: echo "value=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
 
       - name: Resolve mise version
         id: mise-version
@@ -87,11 +87,15 @@ jobs:
           version: ${{ steps.mise-version.outputs.version }}
           install: true
           cache: true
-          # Preserve workflow-host tools across mise releases. The explicit
-          # version above still updates the mise binary when a cache is restored.
-          cache_key: agent-mise-v1-{{platform}}-{{file_hash}}
+          # Preserve workflow-host tools across mise releases while refreshing
+          # floating tool streams and plugin code at least once per UTC day.
+          cache_key: agent-mise-v2-${{ steps.mise-cache-epoch.outputs.value }}-{{platform}}-{{file_hash}}
         env:
           GITHUB_TOKEN: ${{ secrets.AGENT_GITHUB_PAT }}
+          MISE_JOBS: 1
+          # Keep pipx interpreters inside mise-action's cache boundary.
+          UV_PYTHON_INSTALL_DIR: /home/runner/.local/share/mise/uv-python
+          UV_MANAGED_PYTHON: "1"
 
       - name: Setup secrets for env provider
         env:
@@ -135,6 +139,7 @@ jobs:
       - name: Prepare repo CI environment
         env:
           PI_AUTH_JSON: ${{ secrets.PI_AUTH_JSON }}
+          MISE_JOBS: 1
         run: mise run ci:env
 
       - name: Run agent
