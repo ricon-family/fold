@@ -37,23 +37,33 @@ Interactive and CI launches normally establish target identity before launch. `a
 
 ### Home repo preparation hook
 
-In GitHub CI, after cloning an agent's home repo, the workflow runs `mise trust`, `mise install`, and then `mise run agent:prepare` if that task exists. This hook is owned by the agent home repo.
+In GitHub CI, after cloning an agent's home repo, the workflow runs `mise trust`, `mise install`, and then `mise run agent:prepare` if that task exists. Fresh desk preparation uses the same home-owned boundary before waking the agent.
 
-`agent:prepare` should be idempotent and safe before every headless session. Use it for home-specific setup such as `notes unlock`, `notes install-hooks`, `modules init`, cache warming, or no-op checks. The home repo must declare any tools the hook uses in its own `mise.toml`; fold CI should not hardcode assumptions about notes, rudi, modules, or other optional home systems.
+`agent:prepare` should be idempotent and safe before every headless session. Use it for home-specific setup such as `notes unlock`, `notes install-hooks`, selected `modules init`, cache warming, or no-op checks. The home repo must declare any tools it calls and which modules cold preparation requires; Fold launchers must not hardcode assumptions about notes, rudi, modules, or other optional home systems.
+
+`mise welcome` has a different contract: it is an observational orientation and setup-health surface. It reports drift and names `agent:prepare` or another explicit repair command; it does not fetch, unlock, initialize modules, install hooks, or otherwise repair the state it is describing.
 
 ## Orient First
 
 Before engaging with a new request, orient from the agent's own home and current
-evidence. The canonical shared protocol is `notes/orientation.md`. Read it in
-full during a fresh session and follow the home adapter named by the agent's
-root `AGENTS.md`.
+evidence. The shared protocol is `notes/orientation.md`. A home adopts it by
+linking it from the home's root `AGENTS.md` and supplying the personal adapter
+that note describes. If an adopted home points here but its Fold module or
+readable orientation note is absent, use **First-time setup** below before
+trying to invoke Fold note or module tools.
+
+During migration, a home that has not adopted the shared protocol keeps its root
+`AGENTS.md` as its executable startup contract. Do not silently blend
+contradictory commands from both sources. Preserve state, prefer the
+non-mutating/fail-closed behavior, and report adapter drift for reconciliation.
 
 Start with personal identity and state, then load the shared Fold contract, then
-scan bounded live signals under explicit identity. Do not let unread counts,
+scan configured live signals under explicit identity. Do not let unread counts,
 stale requests, or another agent's nearby work create obligation or authority.
 Orientation ends with a natural readiness handback and, when session control
-is available, a `post-orientation` anchor. Every remaining mismatch must be
-named as a capability-local degradation.
+is available, a `post-orientation` anchor. A missing independent capability may
+remain locally degraded; an unverified persona/home, unread governing contract,
+or unclear ownership/authority blocks general readiness.
 
 Orient with curiosity, not ritual. Follow current references, meaningful deltas,
 and relevant contradictions, while leaving archives and unrelated note shelves
@@ -68,6 +78,7 @@ Guidance only works when it appears at the moment you need it. Before starting a
 |------------------------|---------------|
 | Write or change BATS tests | Read `notes/bats-tool-testing.md` |
 | Write or change mise tasks | Read `notes/mise-conventions.md` and `notes/mise-gotchas.md` |
+| Write or change a `mise welcome` task | Also read `notes/setup-health-welcome.md` and `notes/non-mutating-welcome-diagnostics.md` |
 | Write Python mise tasks | Read `notes/mise-python-tasks.md` |
 | Mock commands/dependencies in tests | Read `notes/mock-first-overlay.md` |
 | Implement non-trivial code or reshape files, modules, or tests | Read `notes/code-structure-first-class.md` before choosing the organizing axis and revisit it after behavior works |
@@ -185,15 +196,19 @@ fold/
 
 ## Cross-Home Access
 
-Fold and den reference each other via encrypted module manifests. After unlocking, run `modules init` to populate local clones:
+Fold and den reference each other through encrypted module manifests. After
+unlocking, use `modules init <name>` to populate a declared clone when a selected
+lane requires it:
 
 ```bash
-notes unlock      # decrypt/deobfuscate notes in this repo
-modules unlock    # decrypts .modules/manifest
-modules init      # clones pinned cross-home repos into modules/<name>/
+notes unlock             # decrypt/deobfuscate notes in this repo
+modules unlock           # decrypts .modules/manifest
+modules init <name>      # prepare one inspected, lane-relevant module
 ```
 
-This gives you read access to den's notes (and den agents get access to fold's). See `notes/cross-repo-modules.md` for details.
+Do not initialize every nested module as orientation ritual. This gives you
+read access to Den's notes when the lane crosses into Den; Den agents can prepare
+Fold the same way. See `notes/cross-repo-modules.md` for details.
 
 ## Shared Notes
 
@@ -275,19 +290,26 @@ Always use `gh repo clone`, not `git clone` — private repos need auth, and `gh
 
 ### First-time setup
 
+A fresh CI or desk launcher normally completes this before the agent wakes. For
+a manual clone or damaged setup, inspect the home first, then use its owned
+preparation hook:
+
 ```bash
 cd ~/agents/<name>/home/
-mise welcome        # or the home setup flow that initializes modules
-cd modules/fold/
+git status --short --branch
 mise trust
-notes unlock
-modules unlock
-modules init
+mise install
+mise run agent:prepare
 ```
+
+The home selects the modules needed for cold readiness. If it has no
+`agent:prepare`, follow that home's plaintext setup instructions or ask Or
+rather than guessing raw Fold/module commands. Once prepared, run the
+observational home and Fold welcome tasks.
 
 ### Daily workflow
 
-1. **Refresh deliberately at session start** — fetch and inspect Fold's current branch first. Pull or merge only when the checkout is clean and the expected tracking branch should advance; do not switch an intentional topic branch to main. From Fold, run `modules init` to sync cross-home clones to currently declared refs. (`modules update` deliberately advances pins; don't use it as a startup ritual.)
+1. **Inspect before refreshing** — verify Fold's current branch, worktree, upstream, readable-note state, and declared modules before a command can change them. Fetch only when freshness is needed; pull or merge only when the clean expected tracking branch should advance. Do not switch an intentional topic branch to main, initialize nested modules as startup ritual, or run `modules update` without an intentional pin advance.
 1. **Edit files** in `~/agents/<name>/home/modules/fold/`
 1. **Commit and push** — commits are GPG-signed automatically (your workspace is under `~/agents/<name>/`)
 1. **Push** — that's it. There's no global shim to sync anymore; other agents will see your changes when they next pull their own fold module checkout.
