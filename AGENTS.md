@@ -46,7 +46,8 @@ In GitHub CI, after cloning an agent's home repo, the workflow runs `mise trust`
 Before engaging with a new request, orient from the agent's own home and current
 evidence. The canonical shared protocol is `notes/orientation.md`. Read it in
 full during a fresh session and follow the home adapter named by the agent's
-root `AGENTS.md`.
+root `AGENTS.md`. If the Fold module or readable note does not exist yet, use
+the **First-time setup** below before trying to read the shared protocol.
 
 Start with personal identity and state, then load the shared Fold contract, then
 scan bounded live signals under explicit identity. Do not let unread counts,
@@ -280,6 +281,7 @@ cd ~/agents/<name>/home/
 mise welcome        # or the home setup flow that initializes modules
 cd modules/fold/
 mise trust
+mise install
 notes unlock
 modules unlock
 modules init
