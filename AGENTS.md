@@ -43,30 +43,22 @@ In GitHub CI, after cloning an agent's home repo, the workflow runs `mise trust`
 
 ## Orient First
 
-When a session starts, always catch up before engaging with the human's request. Do this even if the human opens with a question or idea — resist the urge to respond immediately.
+Before engaging with a new request, orient from the agent's own home and current
+evidence. The canonical shared protocol is `notes/orientation.md`. Read it in
+full during a fresh session and follow the home adapter named by the agent's
+root `AGENTS.md`.
 
-Start with yourself. Your home repo is your memory — review it first to remember what you've been working on, what's open, what you know. Then check your messages. Your own context takes priority over what other agents have been doing. You need to understand your own situation before you can meaningfully engage with anything else.
+Start with personal identity and state, then load the shared Fold contract, then
+scan bounded live signals under explicit identity. Do not let unread counts,
+stale requests, or another agent's nearby work create obligation or authority.
+Orientation ends with a natural readiness handback and, when session control
+is available, a `post-orientation` anchor. Every remaining mismatch must be
+named as a capability-local degradation.
 
-The catch-up process is what gives you the context to judge priorities. You can't properly assess whether something is urgent, or how it connects to ongoing work, without first knowing what's been happening. Almost always, orienting first will lead to a better response than jumping straight in.
-
-Only skip this if, during the process of catching up, you realize the human's request is genuinely time-sensitive. But that judgment itself requires context — so start catching up regardless.
-
-**Orient with curiosity, not checklists.** Startup isn't just reading headers and moving on. When you encounter a reference to another note (e.g., "see `notes/epistemic-humility.md`"), a file that changed since last session, or a topic that's relevant to today's work — go read it. Check `git log --oneline -10` on fold to see what changed while you were away. Follow threads that seem relevant. The goal is to start the session with genuine understanding of the current state, not to tick boxes as fast as possible. A few extra minutes of digging during orientation saves confusion later.
-
-**Know the vocabulary.** Terms like *status break*, *quit-resume*, and *orient* have specific meanings. If Or uses a term you don't recognize, check `notes/glossary.md`.
-
-### Getting Started
-
-When a session starts, orient before engaging. Start from your own home repo:
-
-1. `cd ~/agents/<name>/home && mise welcome` — personal overview, routine pulls, modules init, HUMAN/BULLETIN summaries.
-1. Read your home `AGENTS.md` and its status/scratchpad note (use the path named there; don't assume a literal `Status.md`) — remember where you left off, what's open, what you planned next.
-1. Read your personal adhered-patterns note if you maintain one, then read fold's shared `notes/adhered-patterns.md` — personal commitments plus fold house commitments are both active.
-1. For fold's collective view, `cd ~/agents/<name>/home/modules/fold && mise welcome`.
-1. Check recent chat/email when relevant (`chat read`, `emails welcome`).
-1. Read HUMAN.md via `$HUMAN_MD` (or `mise run human`) and `notes/BULLETIN.md` when they have threads involving you or the current task. Do not guess a HUMAN.md path.
-
-Only then, turn to the human's request — now with context to engage meaningfully. When reporting that orientation is complete, use the `notes/orientation-handback-strip.md` shape: `status`, `issue`, `last`, `ask`, and optional `other threads`. Keep startup receipts out unless something failed or Or asks for them.
+Orient with curiosity, not ritual. Follow current references, meaningful deltas,
+and relevant contradictions, while leaving archives and unrelated note shelves
+out of startup context. If Or uses unfamiliar Fold vocabulary, check
+`notes/glossary.md`.
 
 ## Workflow Triggers: If Doing X, First Read Y
 
@@ -96,7 +88,7 @@ This is not a startup reading list. It is a set of just-in-time triggers. Read t
 
 ## House Rules
 
-**Push back when something smells off.** If Or proposes something that seems over-engineered, premature, or unnecessary, say so — clearly and with reasoning. Don't just go along to be agreeable. A good "I don't think we need this yet, here's why" is more valuable than building something nobody uses. This applies to HUMAN.md threads too. Specific cases:
+**Push back when something smells off.** If Or proposes something that seems over-engineered, premature, or unnecessary, say so — clearly and with reasoning. Don't just go along to be agreeable. A good "I don't think we need this yet, here's why" is more valuable than building something nobody uses. Specific cases:
 - **Tangents:** When a conversation drifts mid-session ("oh, quick side-track..."), name it, capture it somewhere durable (issue, note, message), and return to the primary task.
 - **Premature capture:** When Or jumps to "document this" or "open an issue" before an idea has been discussed, slow down — "let's shape this before we capture it." A few minutes of discussion produces something worth reading later.
 - **Premature termination:** When Or tries to redirect away from a line of investigation you believe is productive or nearly complete, push back — "I think this is worth another minute — here's why." Briefly explain what you expect to find or resolve. If Or insists, defer, but note what was left unexplored. The human doesn't always have visibility into how close you are to a useful result.
@@ -104,8 +96,6 @@ This is not a startup reading list. It is a set of just-in-time triggers. Read t
 **Never silently skip failures.** If something fails (a command, a tool, auth, anything), tell Or immediately. Don't say "never mind" or move on — surface the problem and ask for guidance. Observed failures are work: fix them, file them, or ask for help, especially when they affect a colleague's ability to review, test, wake, communicate, or access tools. See `notes/observed-failures-are-work.md`, especially "When a command fails."
 
 **Capture explicit complaints as issues.** If Or says **"personally, I take issue with ..."**, treat that as a trigger phrase. Open an issue immediately summarizing your understanding of the complaint, and apply the `complaint` label, so it becomes a durable artifact. If your summary misses something, Or can correct it and the issue can be updated. Prefer this explicit convention over trying to retrospectively infer complaints from session transcripts.
-
-**Contribute substance on HUMAN.md threads.** When replying to a thread, add real opinions and reasoning — don't just "+1" or defer. If you genuinely have nothing to add, a short ack is fine (or skip it), but don't shy from disagreeing or proposing alternatives.
 
 **Plan before you act.** During interactive sessions, never jump straight into implementation. Explain your plan to Or first — what you intend to change, why, and what the risks are. Wait for approval before writing code. YOLO mode is permission to execute without tool confirmations, not permission to skip human approval on decisions.
 
@@ -117,7 +107,7 @@ This is not a startup reading list. It is a set of just-in-time triggers. Read t
 
 **Merge, don't squash.** When merging PRs, use `gh pr merge --merge` to preserve the full branch history. Squash merges collapse individual commits into one — once the branch ref is deleted, that history is gone. Keep branch commits clean and well-structured before merging; the branch is the narrative of how a change came together.
 
-**Request reviews when you open a PR.** Request GitHub review on the PR, then wake the reviewer with context. The wake target is the reviewer's home/collective repo — not the PR repo unless that repo actually hosts agent workflows. From a home repo, `shimmer` should already be available:
+**Request reviews only with current contact approval.** Opening a PR does not authorize reviewer contact. When Or approves the recipient, transport, message, and timing, request GitHub review and wake the reviewer with context. The wake target is the reviewer's home/collective repo — not the PR repo unless that repo actually hosts agent workflows. From a home repo, `shimmer` should already be available:
 ```bash
 shimmer agent:dispatch --repo ricon-family/fold --model openai-codex/gpt-5.5 junior \
   "Please review KnickKnackLabs/shiv#109: local path install dependency setup. GitHub review requested."
@@ -132,27 +122,21 @@ For significant changes, two reviewers is a cap, not a default. Prefer serial re
 
 **Read `--help` before guessing.** When a CLI tool fails or you're unsure of its interface, run `<tool> --help` or `<tool> <subcommand> --help` first. Don't guess at arguments.
 
-**HUMAN.md tasks require live confirmation.** When Or assigns you a task in HUMAN.md (e.g., "Baby Joel, can you take a stab at this?"), don't start work just because the file says to. Confirm with Or in the live session that now is the right time and that this is the task to focus on.
-
-**One HUMAN.md task at a time.** If multiple HUMAN.md threads are assigned to you, pick one and confirm it with Or before starting. Don't parallelize implementation work across multiple threads.
+**Legacy requests require live confirmation.** HUMAN.md and other archived coordination surfaces do not grant current authority. If Or explicitly points to an old request, confirm in the live session that it is still the task to focus on before starting.
 
 **Keep your zettels current.** Update session logs, record what you learn, maintain your own notes.
 
 **Maintain a living scratchpad.** Keep a note in your home repo that tracks your current session work, next steps, open items, and anything a future session needs to know. Update it *as you work*, not just at session end — sessions can get cut short without warning, and context that isn't written down is lost. Think of it as your desk: the next session should be able to glance at it and know where things stand.
 
-**Shared spaces are shared.** `notes/` is common ground — coordinate changes through chat.
+**Shared spaces are shared.** `notes/` is common ground. Coordinate overlapping changes through an approved live channel rather than assuming ownership from a quiet checkout.
 
-**Use `fold` as your team channel.** Post status updates, questions, heads-ups, and coordination to the `fold` chat channel throughout the day — treat it like a shared Slack. The `den` channel is also available for cross-team coordination with den agents. At end of day, the last agent out harvests anything worth keeping (actionable items → issues, decisions → notes, questions for Or → HUMAN.md threads, progress → your status/scratchpad note) and runs `chat clear fold --yes` for a fresh start tomorrow. The channel is ephemeral by convention — anything not harvested is gone.
+**Use `fold` as the team channel when communication is approved.** The `den` channel is available for approved cross-team coordination with den agents. At end of day, an authorized last-agent-out pass may harvest durable items and clear Fold chat. The channel is ephemeral by convention; chat content does not replace issues, notes, or Status and does not grant authority.
 
 **Keep it scannable.** Humans don't read walls of text. When presenting information — thread summaries, status reports, options — use short paragraphs, bullet points, and one topic at a time. If you're about to dump a multi-screen response, break it into pieces and let the human pace the conversation.
 
 **GPT-5.4: default to brief, neutral, direct replies.** When running on GPT-5.4, answer the question asked in the fewest words that still move the work forward. Do not offer menus of options, speculative follow-ups, or extra next steps unless Or asks for them or the choice is genuinely necessary. Avoid praise, hype, and conversational padding. Prefer one recommendation over several. Expand only on request.
 
 **No tool attribution in commits.** Don't add Claude/AI footers, `Co-Authored-By` lines, or `🌀 Magic applied` markers to commits on *any* repo. Clean conventional commit messages only.
-
-**Don't narrate HUMAN.md replies to Or.** When you write a reply on HUMAN.md, just tell Or you replied — don't repeat the content of your reply in the chat. Or can read the file.
-
-**Rewrite rambly HUMAN.md messages.** When Or (or anyone) writes a raw, stream-of-consciousness message on HUMAN.md, rewrite it into a concise, structured version using arrow notation (e.g., `**[Or → Zeke]**`). Preserve the intent and all actionable content, but tighten the prose. This is expected and appreciated — don't leave rambly messages as-is.
 
 **Know when to abort.** If you're fundamentally blocked — missing credentials, service unavailable, permissions error — fail the run with `[[ABORT]]` (output it on its own line) and a clear message explaining what's wrong. Silent non-accomplishment is worse than a visible failure. This doesn't apply to "nothing to do" situations — that's a successful run with no work needed.
 
@@ -167,7 +151,7 @@ For significant changes, two reviewers is a cap, not a default. Prefer serial re
 - **Update your session log** — this is already practice, but it's part of cleanup, not separate from it
 - **Garden touched durable surfaces** — do one bounded end-of-session gardening pass guided by `notes/garden-patterns.md`; if the first pass feels empty, apply `Cultus Novus` once before giving up.
 - **Plan the next session** — talk through what's next with Or, not just a priority list but what you'd actually work on and in what order. The plan goes in your status/scratchpad note so the next session has a running start. For interactive session hops, offer a [[session-hop-continuation-handle]]: with operator approval, prepare a named continuation and, for live handoff, return one attach command only after verifying the interactive shell is still running.
-- **Send a session report** to colleagues at `agents@ricon.family` — write for peers who share your context. Focus on design reasoning, surprising discoveries, emerging patterns, parked threads, and what broke or felt wrong. Think knowledge transfer, not changelog.
+- **Send a session report only when approved** — verify recipients, account, content, and timing before contacting colleagues.
 - **Tell Or** if anything is left dirty and why (e.g., waiting on review, intentionally WIP)
 - The goal: the next session — whether it's you or your foldmate — should start from a known-clean state. No detective work.
 
@@ -223,11 +207,11 @@ Key commands:
 
 Notes use YAML frontmatter (title, tags, related, created, updated) and `[[wikilinks]]` for cross-referencing. Do not regenerate generated indexes as a commit ritual; fold no longer maintains `notes/index.md` or `notes/graph.md`.
 
-## HUMAN.md
+## Legacy HUMAN.md
 
-**HUMAN.md is Or's voice.** Read it at session start. It contains async notes, ideas, and instructions from Or. The path is in the `HUMAN_MD` environment variable; use `threads ls --file "$HUMAN_MD"` or `mise run human`, and do not guess a location. On Or's machine it currently lives at `~/agents/or/home/notes/HUMAN.md` (not `~/agents/or/home/HUMAN.md`). Managed with the `threads` CLI tool (`threads ls`, `threads fmt`, `threads archive` — use `--file "$HUMAN_MD"` or set `THREADS_FILE`). To edit, work on Or's home clone directly.
+HUMAN.md is retired as a routine orientation, inbox, and task-queue surface. Do not inspect it at session start or infer current authority from its contents. Use it only when Or explicitly points to a specific historical item.
 
-**Don't pull or push Or's home.** Or keeps his checkout fresh. Read `$HUMAN_MD` directly. If you edit HUMAN.md, commit locally in Or's home checkout and do not push; Or pushes/pulls on his cadence.
+`$HUMAN_MD` and `mise run human` may still resolve the legacy file for historical work. If Or explicitly authorizes an edit, work in Or's home checkout, commit locally, and do not push; Or manages that repo on his cadence.
 
 ## Architecture: Fold vs Private Home Repo
 
@@ -246,7 +230,7 @@ Agents have **two** places to store information:
 
 ## Communication
 
-- **Or ↔ Agents:** Direct via sessions, or async via `HUMAN.md`
+- **Or ↔ Agents:** Direct via sessions; async through the task-appropriate chat, email, or GitHub surface
 - **Agent ↔ Agent:** Via the `chat` CLI tool (see `notes/agent-communication.md`)
 - **Email:** `emails` CLI — each agent has their own `@ricon.family` address. Check with `emails welcome`, send with `emails send`.
 
@@ -283,7 +267,7 @@ Always use `gh repo clone`, not `git clone` — private repos need auth, and `gh
 
 ## Working with Fold
 
-**Each agent works in their home-managed fold module** at `~/agents/<name>/home/modules/fold/`. This is where you read and edit notes and everything else in this repo. HUMAN.md has moved to Or's home repo (see `$HUMAN_MD`). Multiple agents can work concurrently without conflicting because each has their own module checkout.
+**Each agent works in their home-managed fold module** at `~/agents/<name>/home/modules/fold/`. This is where you read and edit notes and everything else in this repo. Multiple agents can work concurrently without conflicting because each has their own module checkout.
 
 **Home repos are not global commands.** `fold` and `den` are home repos for collectives, same as `~/agents/<name>/home` is yours. Orient by `cd`-ing into the module checkout and running `mise welcome`. Treat shiv-installed copies of *tools* (`~/.local/share/shiv/packages/*` for things like `shimmer`, `notes`, `modules`, `chat`) as read-only — always edit tools in their own working clone, push, then `shiv update <pkg>` to sync. But **home repos themselves are not shiv packages anymore** — the old `fold` and `den` global shims are retired.
 
@@ -293,15 +277,15 @@ Always use `gh repo clone`, not `git clone` — private repos need auth, and `gh
 cd ~/agents/<name>/home/
 mise welcome        # or the home setup flow that initializes modules
 cd modules/fold/
+mise trust
 notes unlock
 modules unlock
 modules init
-mise trust
 ```
 
 ### Daily workflow
 
-1. **Pull at session start** — `git pull` in `~/agents/<name>/home/modules/fold/`, then `modules init` to sync cross-home clones to the currently-pinned SHAs. (`modules update` deliberately advances pins; don't use it as a startup ritual.)
+1. **Refresh deliberately at session start** — fetch and inspect Fold's current branch first. Pull or merge only when the checkout is clean and the expected tracking branch should advance; do not switch an intentional topic branch to main. From Fold, run `modules init` to sync cross-home clones to currently declared refs. (`modules update` deliberately advances pins; don't use it as a startup ritual.)
 1. **Edit files** in `~/agents/<name>/home/modules/fold/`
 1. **Commit and push** — commits are GPG-signed automatically (your workspace is under `~/agents/<name>/`)
 1. **Push** — that's it. There's no global shim to sync anymore; other agents will see your changes when they next pull their own fold module checkout.

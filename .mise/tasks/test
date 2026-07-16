@@ -63,6 +63,10 @@ if [ "$run_codebase" = "true" ]; then
 fi
 
 if [ "$run_welcome" = "true" ]; then
-  printf '\n== welcome smoke (no HUMAN_MD) ==\n'
-  env -u HUMAN_MD mise run -q welcome >/dev/null
+  printf '\n== welcome smoke ==\n'
+  welcome_output=$(env -u HUMAN_MD mise run -q welcome)
+  if printf '%s\n' "$welcome_output" | grep -q 'HUMAN.md'; then
+    echo "ERROR: welcome still presents legacy HUMAN.md as an orientation surface" >&2
+    exit 1
+  fi
 fi
