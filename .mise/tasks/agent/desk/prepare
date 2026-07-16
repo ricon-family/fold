@@ -101,7 +101,7 @@ render_next_wake() {
   local shell_arg packet_arg
   shell_arg="${SHELL_NAME:-${DESK_ID:-$(basename "$DESK_PATH")}}"
   packet_arg="${PACKET_PATH:-<packet.md>}"
-  printf 'mise run agent:desk:wake %s --desk %s --shell %s --packet %s --yes\n' \
+  printf "mise run agent:desk:wake %s --desk %s --shell %s --packet %s --model '<model>' --yes\n" \
     "$AGENT" "$DESK_PATH" "$shell_arg" "$packet_arg"
 }
 
