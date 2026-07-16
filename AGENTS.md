@@ -109,9 +109,11 @@ This is not a startup reading list. It is a set of just-in-time triggers. Read t
 
 **Request reviews only with current contact approval.** Opening a PR does not authorize reviewer contact. When Or approves the recipient, transport, message, and timing, request GitHub review and wake the reviewer with context. The wake target is the reviewer's home/collective repo — not the PR repo unless that repo actually hosts agent workflows. From a home repo, `shimmer` should already be available:
 ```bash
-shimmer agent:dispatch --repo ricon-family/fold --model openai-codex/gpt-5.5 junior \
+shimmer agent:dispatch --repo ricon-family/fold --model '<model>' junior \
   "Please review KnickKnackLabs/shiv#109: local path install dependency setup. GitHub review requested."
 ```
+
+Resolve `<model>` from `notes/agent-dispatching.md`; do not bake versioned model names into shared command examples.
 For significant changes, two reviewers is a cap, not a default. Prefer serial review: wake one reviewer, absorb their feedback, then request a second reviewer only if the updated head still warrants another pass. Use parallel reviewers only when independent first impressions are the explicit goal or the reviewers bring deliberately different specialties. Pick reviewers who have context on the area — not at random.
 
 **Mean it when you review.**
