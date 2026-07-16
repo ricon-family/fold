@@ -145,12 +145,11 @@ section "🧰 Tasks"
 # fi
 
 # ━━━ Modules ━━━
-# Hygiene checks for nested module clones:
-#   - Pin freshness: warn when clone is behind origin/<default-branch>; user
-#     decides whether to `modules update <name>` to bump.
-#   - Notes hooks: ensure pre-commit hook is installed in notes-tracked
-#     clones, since `modules init` does not install them and missing hooks
-#     risk leaking plaintext on commit.
+# Read-only hygiene checks for nested module clones:
+#   - Recorded pin freshness: compare with the existing origin ref without
+#     fetching; the user decides whether a network refresh is appropriate.
+#   - Notes hooks: report whether the pre-commit hook is installed. Preparation
+#     is explicit because welcome must preserve the state it is diagnosing.
 if [ -d "$FOLD_DIR/modules" ]; then
   section "🧩 Modules"
   module_rows=""
@@ -158,25 +157,29 @@ if [ -d "$FOLD_DIR/modules" ]; then
     [ -d "$mod_path/.git" ] || continue
     name=$(basename "$mod_path")
 
-    # Pin freshness
-    git -C "$mod_path" fetch -q 2>/dev/null || true
-    default_branch=$(git -C "$mod_path" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+    # Recorded pin freshness. Do not fetch during orientation.
+    if ! default_branch=$(git -C "$mod_path" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'); then
+      default_branch=""
+    fi
     default_branch=${default_branch:-main}
-    behind=$(git -C "$mod_path" rev-list --count "HEAD..origin/${default_branch}" 2>/dev/null || echo 0)
-    if [ "${behind:-0}" -gt 0 ]; then
-      pin_status="⚠ ${behind} behind origin/${default_branch} → modules update ${name}"
+    if git -C "$mod_path" show-ref --verify --quiet "refs/remotes/origin/${default_branch}"; then
+      behind=$(git -C "$mod_path" rev-list --count "HEAD..origin/${default_branch}" 2>/dev/null || echo 0)
+      if [ "${behind:-0}" -gt 0 ]; then
+        pin_status="⚠ ${behind} behind recorded origin/${default_branch} → inspect before update"
+      else
+        pin_status="✓ at recorded origin/${default_branch}"
+      fi
     else
-      pin_status="✓ at tip of ${default_branch}"
+      pin_status="⚠ no recorded origin/${default_branch} → inspect remote state"
     fi
 
-    # Notes hooks
+    # Notes hooks. Report missing preparation without repairing it.
     if [ ! -f "$mod_path/notes/.manifest" ]; then
       hook_status="n/a"
     elif [ -f "$mod_path/.git/hooks/pre-commit" ]; then
       hook_status="✓ installed"
     else
-      (cd "$mod_path" && notes install-hooks >/dev/null 2>&1) || true
-      hook_status="⚠ installed (was missing)"
+      hook_status="⚠ missing → notes install-hooks"
     fi
 
     module_rows+="${name},${pin_status},${hook_status}"$'\n'
