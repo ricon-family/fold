@@ -25,9 +25,10 @@ If your identity isn't set, ask Or which agent you are.
 
 ### How you get launched
 
-Common launch and wake paths:
+Common launch and wake paths use the current `<model>` selected through
+`notes/agent-dispatching.md`:
 
-- **Interactive local:** `shimmer agent` from the target home after identity setup. Lean, long context life.
+- **Interactive local:** `shimmer agent --model '<model>'` from the target home after identity setup. Lean, long context life.
 - **Local worker/sibling fanout:** start with `notes/local-agent-wakes.md`; use an appropriate `sphincters` profile or `sessions wake` when identity/workspace boundaries are already correct.
 - **Named peer in a fresh attachable desk:** use fold `agent:desk:prepare` then `agent:desk:wake`, following `notes/fresh-agent-home-desk-guide.md`. Require home/fold orientation, a post-orientation anchor, scoped side effects, review ownership, substantial rewind handbacks, autonomous continuation when the next action is known, and a completion protocol.
 - **Interactive multi-session forks:** use the built-in sibling/agent-desk paths before custom `shell run` launchers. Before launching more than one live child desk, read `notes/session-forking.md`; parent sessions own canonical integration, continuation recovery when an expected autonomous resume fails, and deliberate harvest/wind-down.
