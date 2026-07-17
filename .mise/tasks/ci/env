@@ -5,6 +5,7 @@ set -euo pipefail
 AGENT="${AGENT:?AGENT is required}"
 AGENT_HOME="${AGENT_HOME:?AGENT_HOME is required}"
 GH_BIN="${GH:-gh}"
+GIT_BIN="${GIT:-git}"
 MISE_BIN="${MISE:-mise}"
 SECRETS_BIN="${SECRETS:-secrets}"
 
@@ -36,6 +37,19 @@ resolve_agent_github_login() {
   log "agent GitHub login: $login"
 }
 
+sanitize_home_remote() {
+  local home_repo="$1"
+  local clean_remote="https://github.com/${home_repo}.git"
+  local configured_remote
+
+  "$GIT_BIN" -C "$AGENT_HOME" remote set-url origin "$clean_remote"
+  configured_remote=$("$GIT_BIN" -C "$AGENT_HOME" remote get-url origin) ||
+    fail "Could not verify the hosted home origin"
+  if [ "$configured_remote" != "$clean_remote" ]; then
+    fail "Hosted home origin is not credential-free"
+  fi
+}
+
 clone_home_repo() {
   local home_repo="$AGENT_GITHUB_LOGIN/home"
 
@@ -45,12 +59,16 @@ clone_home_repo() {
 
   if [ -d "$AGENT_HOME/.git" ]; then
     log "home repo already available at $AGENT_HOME"
+    sanitize_home_remote "$home_repo"
     return 0
   fi
 
   log "cloning home repo from $home_repo"
   mkdir -p "$(dirname "$AGENT_HOME")"
-  git clone "https://x-access-token:${GH_TOKEN:?GH_TOKEN is required}@github.com/${home_repo}.git" "$AGENT_HOME"
+  # Authenticate through gh without placing GH_TOKEN in Git configuration.
+  # Normalize afterward so later diagnostics can print the remote safely.
+  "$GH_BIN" repo clone "$home_repo" "$AGENT_HOME"
+  sanitize_home_remote "$home_repo"
 }
 
 install_home_tools() {
