@@ -1,14 +1,103 @@
 #!/usr/bin/env bash
 #MISE description="Run fold tests, lint, and welcome smoke"
-#USAGE arg "[args]" var=#true default="" help="Test files, suite names, BATS flags, or 'codebase'"
-#USAGE example "mise run test" header="Run all tests"
-#USAGE example "mise run test github_repo_invitations" header="Run one suite by bare name"
+#USAGE arg "[args]" var=#true default="" help="Test files, suite names, BATS flags, or 'bats'/'codebase'"
+#USAGE example "mise run test" header="Run all tests and gates"
+#USAGE example "mise run test bats github_repo_invitations" header="Run one BATS suite without other gates"
 #USAGE example "mise run test codebase" header="Run only codebase lint"
 #USAGE example "mise run test --filter accept" header="Filter tests by name"
+#USAGE example "mise run test --jobs 1" header="Run serially for debugging"
 set -euo pipefail
 
 TEST_DIR="$MISE_CONFIG_ROOT/test"
+BATS_COMMAND="${BATS_COMMAND:-}"
+RUSH_COMMAND="${RUSH_COMMAND:-rush}"
 CODEBASE_BIN="${CODEBASE_BIN:-codebase}"
+DEFAULT_PARALLEL_JOBS=4
+
+command_available() {
+  case "$1" in
+    */*) [ -x "$1" ] ;;
+    *) command -v "$1" >/dev/null 2>&1 ;;
+  esac
+}
+
+run_bats_suite() {
+  local cli_jobs=""
+  local cli_parallel_binary=""
+  local has_within_file_override=false
+  local index arg next
+
+  for ((index = 0; index < ${#bats_args[@]}; index++)); do
+    arg="${bats_args[$index]}"
+    case "$arg" in
+      -j|--jobs)
+        next=$((index + 1))
+        cli_jobs="${bats_args[$next]-}"
+        ;;
+      --parallel-binary-name)
+        next=$((index + 1))
+        cli_parallel_binary="${bats_args[$next]-}"
+        ;;
+      --no-parallelize-within-files)
+        has_within_file_override=true
+        ;;
+    esac
+  done
+
+  local effective_jobs
+  if [ -n "$cli_jobs" ]; then
+    effective_jobs="$cli_jobs"
+  elif [ -n "${BATS_NUMBER_OF_PARALLEL_JOBS:-}" ]; then
+    effective_jobs="$BATS_NUMBER_OF_PARALLEL_JOBS"
+  else
+    effective_jobs="$DEFAULT_PARALLEL_JOBS"
+    export BATS_NUMBER_OF_PARALLEL_JOBS="$effective_jobs"
+  fi
+
+  if ! [[ "$effective_jobs" =~ ^[1-9][0-9]*$ ]]; then
+    echo "Error: BATS parallel jobs must be a positive integer, got '$effective_jobs'." >&2
+    return 2
+  fi
+
+  local effective_parallel_binary
+  if [ -n "$cli_parallel_binary" ]; then
+    effective_parallel_binary="$cli_parallel_binary"
+  elif [ -n "${BATS_PARALLEL_BINARY_NAME:-}" ]; then
+    effective_parallel_binary="$BATS_PARALLEL_BINARY_NAME"
+  else
+    effective_parallel_binary="$RUSH_COMMAND"
+    export BATS_PARALLEL_BINARY_NAME="$effective_parallel_binary"
+  fi
+
+  local effective_bats_command="${BATS_COMMAND:-bats}"
+  if ! command_available "$effective_bats_command"; then
+    echo "Error: BATS executable '$effective_bats_command' is unavailable; run 'mise install'." >&2
+    return 127
+  fi
+
+  local command_args=()
+  if [ "$effective_jobs" -gt 1 ]; then
+    if ! command_available "$effective_parallel_binary"; then
+      echo "Error: BATS parallel runner '$effective_parallel_binary' is unavailable for $effective_jobs jobs; run 'mise install' or use --jobs 1." >&2
+      return 127
+    fi
+    if ! $has_within_file_override; then
+      # BATS 1.13 polls its within-file semaphore once per second. Keep each file
+      # serial and let Rush schedule independent files without that delay.
+      command_args+=(--no-parallelize-within-files)
+    fi
+    printf 'BATS parallelism: %s jobs across files via %s\n' "$effective_jobs" "$effective_parallel_binary"
+  else
+    printf 'BATS parallelism: serial\n'
+  fi
+
+  command_args+=("${bats_args[@]}")
+  if [ -n "$BATS_COMMAND" ]; then
+    "$BATS_COMMAND" "${command_args[@]}"
+  else
+    bats "${command_args[@]}"
+  fi
+}
 
 args=()
 if [ -n "${usage_args:-}" ]; then
@@ -21,8 +110,13 @@ fi
 run_bats=false
 run_codebase=false
 run_welcome=false
+bats_only=false
 bats_args=()
 has_target=false
+
+for arg in ${args[@]+"${args[@]}"}; do
+  [ "$arg" != "bats" ] || bats_only=true
+done
 
 if [ "${#args[@]}" -eq 0 ]; then
   run_bats=true
@@ -30,14 +124,20 @@ if [ "${#args[@]}" -eq 0 ]; then
   run_welcome=true
 else
   for arg in ${args[@]+"${args[@]}"}; do
+    if [ "$arg" = "bats" ]; then
+      run_bats=true
+      continue
+    fi
     if [ "$arg" = "codebase" ]; then
       run_codebase=true
       continue
     fi
 
     run_bats=true
-    run_codebase=true
-    run_welcome=true
+    if ! $bats_only; then
+      run_codebase=true
+      run_welcome=true
+    fi
     if [[ "$arg" != -* && "$arg" != *.bats && -f "$TEST_DIR/$arg.bats" ]]; then
       bats_args+=("$TEST_DIR/$arg.bats")
       has_target=true
@@ -54,7 +154,7 @@ if [ "$run_bats" = "true" ]; then
   fi
 
   printf '\n== bats ==\n'
-  bats "${bats_args[@]}"
+  run_bats_suite
 fi
 
 if [ "$run_codebase" = "true" ]; then
