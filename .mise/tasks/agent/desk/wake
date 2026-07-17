@@ -4,12 +4,14 @@
 #USAGE flag "--home <path>" default="" help="Home repo path for the agent process (default: <desk>/home)"
 #USAGE flag "--shell <name>" default="" help="Attachable shell name to launch"
 #USAGE flag "--packet <path>" default="" help="Wake packet file to pass to the agent"
+#USAGE flag "--model <model>" default="" help="Provider/model passed explicitly to shimmer agent"
 #USAGE flag "--title <title>" default="agent desk wake — root handoff" help="Title line prepended to the packet"
-#USAGE flag "--identity-source <path>" default="" help="Directory where 'shimmer as <agent>' should run (default: this fold checkout)"
+#USAGE flag "--identity-source <path>" default="" help="Directory where 'shimmer as <agent>' runs (default: resolved desk home)"
+#USAGE flag "--startup-timeout <seconds>" default="30" help="Seconds to wait before one final Pi readiness observation"
 #USAGE flag "--work-dir <path>" default="" help="Directory for generated launcher (default: temporary directory)"
 #USAGE flag "-y --yes" default=#false help="Actually call shell run; without this, render and print the plan only"
 #USAGE arg "<agent>" help="Agent identity to launch"
-#USAGE example "mise run agent:desk:wake quick --desk ~/desks/q --shell quick-q --packet /tmp/wake.md --yes" header="Launch Quick in a desk"
+#USAGE example "mise run agent:desk:wake quick --desk ~/desks/q --shell quick-q --packet /tmp/wake.md --model '<model>' --yes" header="Launch Quick in a desk"
 set -euo pipefail
 
 ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
@@ -21,10 +23,14 @@ DESK_PATH=$(agent_desk_resolve_desk "${usage_desk:-}")
 HOME_PATH=$(agent_desk_resolve_home "${usage_home:-}" "$DESK_PATH" || true)
 SHELL_NAME="${usage_shell:-}"
 PACKET_PATH="${usage_packet:-}"
+MODEL="${usage_model:-}"
 TITLE="${usage_title:-agent desk wake — root handoff}"
-IDENTITY_SOURCE="${usage_identity_source:-$ROOT}"
+IDENTITY_SOURCE="${usage_identity_source:-$HOME_PATH}"
+STARTUP_TIMEOUT="${usage_startup_timeout:-30}"
 WORK_DIR="${usage_work_dir:-}"
 YES="${usage_yes:-false}"
+SESSIONS_BIN="${SESSIONS_BIN:-sessions}"
+JQ_BIN="${JQ:-jq}"
 
 validate_agent "$AGENT"
 if [ -z "$HOME_PATH" ]; then
@@ -38,6 +44,14 @@ fi
 agent_desk_validate_name shell "$SHELL_NAME"
 if [ -z "$PACKET_PATH" ]; then
   echo "ERROR: --packet is required" >&2
+  exit 64
+fi
+if [ -z "$MODEL" ]; then
+  echo "ERROR: --model is required" >&2
+  exit 64
+fi
+if ! [[ "$STARTUP_TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
+  echo "ERROR: --startup-timeout must be a positive integer" >&2
   exit 64
 fi
 if [ ! -f "$PACKET_PATH" ]; then
@@ -62,13 +76,25 @@ AGENT=$(agent_desk_single_quote "$AGENT")
 HOME_PATH=$(agent_desk_single_quote "$HOME_PATH")
 IDENTITY_SOURCE=$(agent_desk_single_quote "$IDENTITY_SOURCE")
 PACKET_PATH=$(agent_desk_single_quote "$PACKET_PATH")
+MODEL=$(agent_desk_single_quote "$MODEL")
 TITLE=$(agent_desk_single_quote "$TITLE")
 
 cd "\$HOME_PATH"
 eval "\$(cd "\$IDENTITY_SOURCE" && shimmer as "\$AGENT")"
+if [ -z "\${AGENT_HOME:-}" ]; then
+  echo "ERROR: shimmer identity did not set AGENT_HOME" >&2
+  exit 1
+fi
+AUTHENTICATED_HOME=\$(cd "\$AGENT_HOME" && pwd -P)
+if [ "\$AUTHENTICATED_HOME" != "\$HOME_PATH" ]; then
+  echo "ERROR: authenticated agent home does not match desk home" >&2
+  echo "  authenticated home: \$AUTHENTICATED_HOME" >&2
+  echo "  desk home:          \$HOME_PATH" >&2
+  exit 1
+fi
 export CHAT_IDENTITY="\$AGENT"
 message=\$(cat "\$PACKET_PATH")
-exec shimmer agent "[\$TITLE]
+exec shimmer agent --model "\$MODEL" "[\$TITLE]
 \${message}"
 LAUNCHER
 chmod +x "$LAUNCHER"
@@ -79,7 +105,9 @@ printf 'desk:            %s\n' "${DESK_PATH:-'(not resolved)'}"
 printf 'home:            %s\n' "$HOME_PATH"
 printf 'shell:           %s\n' "$SHELL_NAME"
 printf 'packet:          %s\n' "$PACKET_PATH"
+printf 'model:           %s\n' "$MODEL"
 printf 'identity-source: %s\n' "$IDENTITY_SOURCE"
+printf 'startup window:  %ss plus one final observation\n' "$STARTUP_TIMEOUT"
 printf 'launcher:        %s\n' "$LAUNCHER"
 
 if [ "$YES" != "true" ]; then
@@ -87,7 +115,83 @@ if [ "$YES" != "true" ]; then
   exit 0
 fi
 
+if ! command -v "$SESSIONS_BIN" >/dev/null 2>&1; then
+  echo "ERROR: sessions command not found: $SESSIONS_BIN" >&2
+  exit 1
+fi
+if ! command -v "$JQ_BIN" >/dev/null 2>&1; then
+  echo "ERROR: jq command not found: $JQ_BIN" >&2
+  exit 1
+fi
+
+BASELINE_IDS="$WORK_DIR/baseline-session-ids.txt"
+if ! session_processes=$("$SESSIONS_BIN" ps --all --json); then
+  echo "ERROR: could not inspect Sessions processes before wake" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$session_processes" | "$JQ_BIN" -e 'type == "array"' >/dev/null; then
+  echo "ERROR: Sessions process output is not a JSON array" >&2
+  exit 1
+fi
+printf '%s\n' "$session_processes" |
+  "$JQ_BIN" -r --arg cwd "$HOME_PATH" '.[] | select(.cwd == $cwd) | .session_id' > "$BASELINE_IDS"
+
 printf '\nlaunching shell %s from %s\n' "$SHELL_NAME" "$HOME_PATH"
 "$AGENT_DESK_SHELL_BIN" run --cwd "$HOME_PATH" "$SHELL_NAME" "$LAUNCHER"
-printf '\nsmoke:\n'
-mise run -q agent:desk:smoke --shell "$SHELL_NAME" --check
+
+printf '\nwaiting %ss plus one final observation for a new live Pi process\n' "$STARTUP_TIMEOUT"
+started_at=$SECONDS
+while :; do
+  final_observation=false
+  if [ $((SECONDS - started_at)) -ge "$STARTUP_TIMEOUT" ]; then
+    final_observation=true
+  fi
+  if ! agent_desk_shell_status "$SHELL_NAME" >/dev/null 2>&1; then
+    echo "ERROR: agent shell exited before Pi became ready" >&2
+    if ! mise run -q agent:desk:smoke --shell "$SHELL_NAME"; then
+      : # Preserve the primary startup failure if diagnostics also fail.
+    fi
+    exit 1
+  fi
+
+  if ! session_processes=$("$SESSIONS_BIN" ps --all --json); then
+    echo "ERROR: could not inspect Sessions processes while waiting for Pi" >&2
+    exit 1
+  fi
+  if ! printf '%s\n' "$session_processes" | "$JQ_BIN" -e 'type == "array"' >/dev/null; then
+    echo "ERROR: Sessions process output is not a JSON array" >&2
+    exit 1
+  fi
+  ready_id=$(
+    printf '%s\n' "$session_processes" |
+      "$JQ_BIN" -r --arg cwd "$HOME_PATH" \
+        '.[] | select(.cwd == $cwd and .status == "live" and .harness == "pi") | .session_id' |
+      while IFS= read -r session_id; do
+        [ -n "$session_id" ] || continue
+        if ! grep -Fqx "$session_id" "$BASELINE_IDS"; then
+          printf '%s\n' "$session_id"
+          break
+        fi
+      done
+  )
+  if [ -n "$ready_id" ]; then
+    printf 'Agent runtime ready\n\n'
+    printf 'session: %s\n' "$ready_id"
+    printf 'cwd:     %s\n' "$HOME_PATH"
+    printf 'attach:  shell attach %s\n' "$SHELL_NAME"
+    exit 0
+  fi
+
+  if [ "$final_observation" = true ]; then
+    break
+  fi
+  if [ $((SECONDS - started_at)) -lt "$STARTUP_TIMEOUT" ]; then
+    sleep 1
+  fi
+done
+
+echo "ERROR: no new live Pi process appeared during the ${STARTUP_TIMEOUT}s window or final observation" >&2
+if ! mise run -q agent:desk:smoke --shell "$SHELL_NAME"; then
+  : # Preserve the primary startup timeout if diagnostics also fail.
+fi
+exit 1

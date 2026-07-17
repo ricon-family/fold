@@ -9,7 +9,14 @@ setup() {
   export PATH="$TMPBIN:$PATH"
   export SHELL_LOG="$BATS_TEST_TMPDIR/shell.log"
   export SHELL_STATUS_MODE="ok"
+  export SHELL_RUN_MARKER="$BATS_TEST_TMPDIR/shell-ran"
+  export SHELL_EXITED_MARKER="$BATS_TEST_TMPDIR/shell-exited"
+  export SESSIONS_LOG="$BATS_TEST_TMPDIR/sessions.log"
+  export SESSIONS_CALLS="$BATS_TEST_TMPDIR/sessions-calls"
+  printf '0\n' > "$SESSIONS_CALLS"
+  export FAKE_SESSIONS_MODE="ready"
   write_fake_shell
+  write_fake_sessions
 }
 
 write_fake_shell() {
@@ -23,13 +30,21 @@ case "${1:-}" in
       echo "not found"
       exit 1
     fi
+    if [ -f "${SHELL_EXITED_MARKER:?}" ]; then
+      echo "exited (1)"
+      exit 1
+    fi
     echo "running"
     ;;
   history)
     printf 'line one\nline two\nline three\n'
     ;;
   run)
-    echo "${4:-}"
+    : > "${SHELL_RUN_MARKER:?}"
+    if [ "${SHELL_STATUS_MODE:-ok}" = fail-after-run ]; then
+      : > "${SHELL_EXITED_MARKER:?}"
+    fi
+    echo "${5:-}"
     ;;
   *)
     echo "unexpected shell command: $*" >&2
@@ -39,6 +54,50 @@ esac
 SH
   chmod +x "$TMPBIN/shell"
   export SHELL_BIN="$TMPBIN/shell"
+}
+
+write_fake_sessions() {
+  cat > "$TMPBIN/sessions" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'sessions %s\n' "$*" >> "${SESSIONS_LOG:?}"
+call_count=$(($(cat "${SESSIONS_CALLS:?}") + 1))
+printf '%s\n' "$call_count" > "$SESSIONS_CALLS"
+if [ "${1:-}" != ps ] || [ "${2:-}" != --all ] || [ "${3:-}" != --json ]; then
+  echo "unexpected sessions command: $*" >&2
+  exit 2
+fi
+if [ "${FAKE_SESSIONS_MODE:-ready}" = invalid ]; then
+  printf '{not-json}\n'
+  exit 0
+fi
+if [ "${FAKE_SESSIONS_MODE:-ready}" = fail ]; then
+  echo "sessions failed intentionally" >&2
+  exit 42
+fi
+mode="${FAKE_SESSIONS_MODE:-ready}"
+if [ "$mode" = deadline-edge ] && [ "$call_count" -eq 2 ]; then
+  sleep "${FAKE_SESSIONS_DELAY:-1.1}"
+fi
+session_ready=false
+if [ -f "${SHELL_RUN_MARKER:?}" ]; then
+  case "$mode" in
+    ready) session_ready=true ;;
+    deadline-edge) [ "$call_count" -ge 3 ] && session_ready=true ;;
+  esac
+fi
+if [ -z "${FAKE_SESSION_CWD:-}" ]; then
+  printf '[]\n'
+elif [ "$session_ready" = true ]; then
+  jq -n --arg cwd "$FAKE_SESSION_CWD" \
+    '[{session_id:"old-pi-session",status:"live",cwd:$cwd,harness:"pi"},{session_id:"new-pi-session",status:"live",cwd:$cwd,harness:"pi"}]'
+else
+  jq -n --arg cwd "$FAKE_SESSION_CWD" \
+    '[{session_id:"old-pi-session",status:"live",cwd:$cwd,harness:"pi"}]'
+fi
+SH
+  chmod +x "$TMPBIN/sessions"
+  export SESSIONS_BIN="$TMPBIN/sessions"
 }
 
 write_fake_mise_for_prepare() {
@@ -184,7 +243,7 @@ make_repo() {
   [[ "$output" == *"repo:    quick-ricon/home"* ]]
   [[ "$output" == *"dry-run: rerun with --yes"* ]]
   [[ "$output" == *"setup auth: mise run homes:auth:setup quick --home $desk_path/home --yes"* ]]
-  [[ "$output" == *"mise run agent:desk:wake quick --desk $desk_path --shell quick-probe --packet /tmp/packet.md --yes"* ]]
+  [[ "$output" == *"mise run agent:desk:wake quick --desk $desk_path --shell quick-probe --packet /tmp/packet.md --model '<model>' --yes"* ]]
   [ ! -e "$desk/home" ]
 }
 
@@ -239,7 +298,7 @@ make_repo() {
   adopt_line=$(grep -nF "mise run homes:adopt-remote quick --home $desk/home --branch main --yes --repo quick-ricon/home" "$MISE_LOG" | cut -d: -f1)
   [ "$auth_line" -lt "$adopt_line" ]
   [[ "$output" == *"desk id: $desk_id"* ]]
-  [[ "$output" == *"mise run agent:desk:wake quick --desk $desk --shell $desk_id --packet /tmp/packet.md --yes"* ]]
+  [[ "$output" == *"mise run agent:desk:wake quick --desk $desk --shell $desk_id --packet /tmp/packet.md --model '<model>' --yes"* ]]
   [ -f "$desk/.desk/registry.json" ]
   [ -f "$desk/.gitconfig" ]
   [ -d "$desk/home/.git" ]
@@ -323,22 +382,74 @@ JSON
   [[ "$output" == *"line three"* ]]
 }
 
-@test "agent:desk:wake dry-run renders launcher without shell run" {
+@test "agent:desk:wake requires an explicit model before rendering" {
+  home="$BATS_TEST_TMPDIR/home"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  make_repo "$home" home
+  printf 'hello packet\n' > "$packet"
+
+  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet"
+
+  [ "$status" -eq 64 ]
+  [[ "${output}${stderr:-}" == *"ERROR: --model is required"* ]]
+}
+
+@test "agent:desk:wake defaults identity to the desk home" {
   home="$BATS_TEST_TMPDIR/home"
   work_dir="$BATS_TEST_TMPDIR/wake"
   packet="$BATS_TEST_TMPDIR/packet.md"
   make_repo "$home" home
   printf 'hello packet\n' > "$packet"
+  home_real=$(cd "$home" && pwd -P)
 
-  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --work-dir "$work_dir"
+  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --work-dir "$work_dir"
 
   [ "$status" -eq 0 ]
+  [[ "$output" == *"identity-source: $home_real"* ]]
   [[ "$output" == *"dry-run"* ]]
   [ -x "$work_dir/start-quick-a.sh" ]
   if [ -f "$SHELL_LOG" ]; then
     ! grep -q 'shell run' "$SHELL_LOG"
   fi
+  grep -q "IDENTITY_SOURCE='$home_real'" "$work_dir/start-quick-a.sh"
   grep -q 'shimmer as "$AGENT"' "$work_dir/start-quick-a.sh"
+  grep -q 'MODEL='"'"'openai-codex/gpt-5.6-sol'"'"'' "$work_dir/start-quick-a.sh"
+  grep -q 'shimmer agent --model "$MODEL"' "$work_dir/start-quick-a.sh"
+}
+
+@test "agent:desk:wake launcher rejects identity from another home" {
+  home="$BATS_TEST_TMPDIR/home"
+  wrong_home="$BATS_TEST_TMPDIR/wrong-home"
+  work_dir="$BATS_TEST_TMPDIR/wake"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  agent_log="$BATS_TEST_TMPDIR/agent.log"
+  make_repo "$home" home
+  make_repo "$wrong_home" wrong
+  printf 'hello packet\n' > "$packet"
+  export WRONG_HOME="$wrong_home"
+  export AGENT_LOG="$agent_log"
+  cat > "$TMPBIN/shimmer" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  as)
+    printf 'export AGENT_HOME=%q\n' "${WRONG_HOME:?}"
+    printf 'export GIT_AUTHOR_NAME=quick\n'
+    ;;
+  agent)
+    printf 'agent started\n' >> "${AGENT_LOG:?}"
+    ;;
+  *) exit 2 ;;
+esac
+SH
+  chmod +x "$TMPBIN/shimmer"
+
+  fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --work-dir "$work_dir" >/dev/null
+  run "$work_dir/start-quick-a.sh"
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"authenticated agent home does not match desk home"* ]]
+  [ ! -e "$agent_log" ]
 }
 
 @test "agent:desk:wake renders relative packet paths as absolute for the launcher" {
@@ -347,13 +458,13 @@ JSON
   make_repo "$home" home
   repo_real=$(cd "$REPO_DIR" && pwd -P)
 
-  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet AGENTS.md --work-dir "$work_dir"
+  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet AGENTS.md --model openai-codex/gpt-5.6-sol --work-dir "$work_dir"
 
   [ "$status" -eq 0 ]
   grep -q "PACKET_PATH='$repo_real/AGENTS.md'" "$work_dir/start-quick-a.sh"
 }
 
-@test "agent:desk:wake --yes launches shell and smokes it" {
+@test "agent:desk:wake --yes waits for a new live Pi process" {
   home="$BATS_TEST_TMPDIR/home"
   work_dir="$BATS_TEST_TMPDIR/wake"
   packet="$BATS_TEST_TMPDIR/packet.md"
@@ -361,15 +472,67 @@ JSON
   printf 'hello packet\n' > "$packet"
 
   home_real=$(cd "$home" && pwd -P)
-  work_real=$(cd "$work_dir" 2>/dev/null && pwd -P || printf '%s' "$work_dir")
+  export FAKE_SESSION_CWD="$home_real"
 
-  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --work-dir "$work_dir" --yes
+  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --work-dir "$work_dir" --yes
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"launching shell quick-a"* ]]
-  [[ "$output" == *"smoke:"* ]]
+  [[ "$output" == *"Agent runtime ready"* ]]
+  [[ "$output" == *"session: new-pi-session"* ]]
+  [[ "$output" == *"attach:  shell attach quick-a"* ]]
   work_real=$(cd "$work_dir" && pwd -P)
   grep -q "shell run --cwd $home_real quick-a $work_real/start-quick-a.sh" "$SHELL_LOG"
-  grep -q "shell status quick-a" "$SHELL_LOG"
-  grep -q "shell history quick-a" "$SHELL_LOG"
+  grep -q "sessions ps --all --json" "$SESSIONS_LOG"
+}
+
+@test "agent:desk:wake makes a final observation after a slow deadline-edge probe" {
+  home="$BATS_TEST_TMPDIR/home"
+  work_dir="$BATS_TEST_TMPDIR/wake"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  make_repo "$home" home
+  printf 'hello packet\n' > "$packet"
+  export FAKE_SESSION_CWD="$(cd "$home" && pwd -P)"
+  export FAKE_SESSIONS_MODE=deadline-edge
+  export FAKE_SESSIONS_DELAY=1.1
+
+  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --startup-timeout 1 --work-dir "$work_dir" --yes
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Agent runtime ready"* ]]
+  [[ "$output" == *"session: new-pi-session"* ]]
+  [ "$(cat "$SESSIONS_CALLS")" -ge 3 ]
+}
+
+@test "agent:desk:wake rejects a running shell without a new Pi process" {
+  home="$BATS_TEST_TMPDIR/home"
+  work_dir="$BATS_TEST_TMPDIR/wake"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  make_repo "$home" home
+  printf 'hello packet\n' > "$packet"
+  export FAKE_SESSION_CWD="$(cd "$home" && pwd -P)"
+  export FAKE_SESSIONS_MODE=never
+
+  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --startup-timeout 1 --work-dir "$work_dir" --yes
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"no new live Pi process appeared during the 1s window or final observation"* ]]
+  [[ "$output" == *"line one"* ]]
+}
+
+@test "agent:desk:wake surfaces a shell that exits before Pi starts" {
+  home="$BATS_TEST_TMPDIR/home"
+  work_dir="$BATS_TEST_TMPDIR/wake"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  make_repo "$home" home
+  printf 'hello packet\n' > "$packet"
+  export FAKE_SESSION_CWD="$(cd "$home" && pwd -P)"
+  export FAKE_SESSIONS_MODE=never
+  export SHELL_STATUS_MODE=fail-after-run
+
+  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --startup-timeout 5 --work-dir "$work_dir" --yes
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"agent shell exited before Pi became ready"* ]]
+  [[ "$output" == *"exited (1)"* ]]
 }

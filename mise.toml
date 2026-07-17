@@ -10,6 +10,7 @@ header = '''printf '\n== %s ==\n''''
 shiv = "https://github.com/KnickKnackLabs/vfox-shiv"
 
 [tools]
+"aqua:shenwei356/rush" = "0.9.0" # Cross-file BATS parallel runner
 usage = "3.2.1"                   # CLI arg parsing for tasks
 yq = "4.50.1"                     # YAML processing
 jq = "1.8.1"                     # JSON processing for task composition
