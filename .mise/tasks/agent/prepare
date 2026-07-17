@@ -53,8 +53,8 @@ trust_shiv_package_config shiv:modules
 if [ -f notes/.manifest ]; then
   ensure_git_crypt
 
-  log "notes: setup/unlock"
-  notes setup --yes --unlock
+  log "notes: unlocking"
+  notes unlock
 
   log "notes: installing hooks"
   notes install-hooks --yes
