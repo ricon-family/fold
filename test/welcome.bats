@@ -6,6 +6,17 @@ setup() {
   MODULE_DIR="$REPO_DIR/modules/welcome-observational-$BATS_TEST_NUMBER-$$"
   REMOTE_DIR="$BATS_TEST_TMPDIR/welcome-module.git"
   WRITER_DIR="$BATS_TEST_TMPDIR/welcome-writer"
+  FOLD_WELCOME_IDENTITY_DIR="$BATS_TEST_TMPDIR/identities"
+  export FOLD_WELCOME_IDENTITY_DIR
+
+  mkdir -p "$FOLD_WELCOME_IDENTITY_DIR"
+  cat > "$FOLD_WELCOME_IDENTITY_DIR/junior.md" <<'MD'
+---
+title: junior
+type: agent
+github_login: junior-ricon
+---
+MD
 
   mkdir -p "$REPO_DIR/modules"
   git init -q --bare "$REMOTE_DIR"
@@ -66,7 +77,8 @@ teardown() {
   [ "$status" -eq 0 ]
   [ ! -s "$CAPABILITY_LOG" ]
   [[ "$output" == *"Recent Fold note changes"* ]]
-  [[ "$output" == *"edits checked by: notes status"* ]]
+  [[ "$output" == *"Authoritative notes state"* ]]
+  [[ "$output" == *"notes status"* ]]
 }
 
 @test "resident welcome uses explicit bounded Fold chat and verified KKL GitHub attention" {

@@ -5,12 +5,12 @@ fold_welcome_normalize_identity() {
 }
 
 fold_welcome_resident_metadata() {
-  local repo_dir="$1"
+  local identity_dir="$1"
   local hint="$2"
   local normalized note_path note_type github_login
 
   normalized=$(fold_welcome_normalize_identity "$hint")
-  note_path="$repo_dir/notes/${normalized}.md"
+  note_path="$identity_dir/${normalized}.md"
   [ -n "$normalized" ] && [ -f "$note_path" ] || return 1
 
   note_type=$(awk -F ': *' '$1 == "type" { print $2; exit }' "$note_path")

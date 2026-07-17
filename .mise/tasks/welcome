@@ -64,7 +64,7 @@ resident_record=""
 for candidate in "${CHAT_IDENTITY:-}" "${GIT_AUTHOR_NAME:-}" "${AGENT_NAME:-}"; do
   [ -n "$candidate" ] || continue
   [ -n "$identity_hint" ] || identity_hint="$candidate"
-  resident_record=$(fold_welcome_resident_metadata "$FOLD_DIR" "$candidate" 2>/dev/null || true)
+  resident_record=$(fold_welcome_resident_metadata "${FOLD_WELCOME_IDENTITY_DIR:-$FOLD_DIR/notes}" "$candidate" 2>/dev/null || true)
   [ -n "$resident_record" ] && break
 done
 if [ -n "$resident_record" ]; then
