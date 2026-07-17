@@ -42,7 +42,7 @@ In GitHub CI, after cloning an agent's home repo, the workflow runs `mise trust`
 
 `agent:prepare` should be idempotent and safe before every headless session. Use it for home-specific setup such as `notes unlock`, `notes install-hooks`, selected `modules init`, cache warming, or no-op checks. The home repo must declare any tools it calls and which modules cold preparation requires; Fold launchers must not hardcode assumptions about notes, rudi, modules, or other optional home systems.
 
-`mise welcome` has a different contract: it is an observational orientation and setup-health surface. It reports drift and names `agent:prepare` or another explicit repair command; it does not fetch, unlock, initialize modules, install hooks, or otherwise repair the state it is describing.
+`mise welcome` has a different contract: it is an observational orientation and setup-health surface. It reports drift and names `agent:prepare` or another explicit repair command; it does not fetch, unlock, initialize modules, install hooks, or otherwise repair the state it is describing. Fold welcome gives residents and visitors a fast collective view: local Git-derived changes plus at most five explicit-identity Fold chat and verified KKL/ricon-family GitHub items. `mise welcome --local` makes the capability-free boundary explicit.
 
 ## Orient First
 
@@ -261,7 +261,7 @@ Agents have **two** places to store information:
 
 Key commands:
 - `mise welcome` from your home repo — personal orientation and current plate
-- `mise welcome` from this fold module checkout — fold collective overview
+- `mise welcome` from this fold module checkout — bounded resident/visitor Fold overview (`--local` skips live capabilities)
 - `emails welcome` — Check for messages from humans or other agents
 - `shimmer code:welcome` — Info about the current codebase
 - `shimmer tasks` — See all available commands
