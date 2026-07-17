@@ -12,6 +12,8 @@ setup() {
   export SHELL_RUN_MARKER="$BATS_TEST_TMPDIR/shell-ran"
   export SHELL_EXITED_MARKER="$BATS_TEST_TMPDIR/shell-exited"
   export SESSIONS_LOG="$BATS_TEST_TMPDIR/sessions.log"
+  export SESSIONS_CALLS="$BATS_TEST_TMPDIR/sessions-calls"
+  printf '0\n' > "$SESSIONS_CALLS"
   export FAKE_SESSIONS_MODE="ready"
   write_fake_shell
   write_fake_sessions
@@ -59,6 +61,8 @@ write_fake_sessions() {
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'sessions %s\n' "$*" >> "${SESSIONS_LOG:?}"
+call_count=$(($(cat "${SESSIONS_CALLS:?}") + 1))
+printf '%s\n' "$call_count" > "$SESSIONS_CALLS"
 if [ "${1:-}" != ps ] || [ "${2:-}" != --all ] || [ "${3:-}" != --json ]; then
   echo "unexpected sessions command: $*" >&2
   exit 2
@@ -71,9 +75,20 @@ if [ "${FAKE_SESSIONS_MODE:-ready}" = fail ]; then
   echo "sessions failed intentionally" >&2
   exit 42
 fi
+mode="${FAKE_SESSIONS_MODE:-ready}"
+if [ "$mode" = deadline-edge ] && [ "$call_count" -eq 2 ]; then
+  sleep "${FAKE_SESSIONS_DELAY:-1.1}"
+fi
+session_ready=false
+if [ -f "${SHELL_RUN_MARKER:?}" ]; then
+  case "$mode" in
+    ready) session_ready=true ;;
+    deadline-edge) [ "$call_count" -ge 3 ] && session_ready=true ;;
+  esac
+fi
 if [ -z "${FAKE_SESSION_CWD:-}" ]; then
   printf '[]\n'
-elif [ "${FAKE_SESSIONS_MODE:-ready}" = ready ] && [ -f "${SHELL_RUN_MARKER:?}" ]; then
+elif [ "$session_ready" = true ]; then
   jq -n --arg cwd "$FAKE_SESSION_CWD" \
     '[{session_id:"old-pi-session",status:"live",cwd:$cwd,harness:"pi"},{session_id:"new-pi-session",status:"live",cwd:$cwd,harness:"pi"}]'
 else
@@ -471,6 +486,24 @@ SH
   grep -q "sessions ps --all --json" "$SESSIONS_LOG"
 }
 
+@test "agent:desk:wake makes a final observation after a slow deadline-edge probe" {
+  home="$BATS_TEST_TMPDIR/home"
+  work_dir="$BATS_TEST_TMPDIR/wake"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  make_repo "$home" home
+  printf 'hello packet\n' > "$packet"
+  export FAKE_SESSION_CWD="$(cd "$home" && pwd -P)"
+  export FAKE_SESSIONS_MODE=deadline-edge
+  export FAKE_SESSIONS_DELAY=1.1
+
+  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --startup-timeout 1 --work-dir "$work_dir" --yes
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Agent runtime ready"* ]]
+  [[ "$output" == *"session: new-pi-session"* ]]
+  [ "$(cat "$SESSIONS_CALLS")" -ge 3 ]
+}
+
 @test "agent:desk:wake rejects a running shell without a new Pi process" {
   home="$BATS_TEST_TMPDIR/home"
   work_dir="$BATS_TEST_TMPDIR/wake"
@@ -483,7 +516,7 @@ SH
   run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --startup-timeout 1 --work-dir "$work_dir" --yes
 
   [ "$status" -ne 0 ]
-  [[ "$output" == *"no new live Pi process appeared within 1s"* ]]
+  [[ "$output" == *"no new live Pi process appeared during the 1s window or final observation"* ]]
   [[ "$output" == *"line one"* ]]
 }
 
