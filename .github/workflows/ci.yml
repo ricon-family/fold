@@ -12,23 +12,30 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
+      # Share the exact workflow-host tool boundary with hosted agent wakes.
+      MISE_DATA_DIR: /home/runner/.local/share/mise
       MISE_EXPERIMENTAL: "1"
       GITHUB_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Resolve mise cache epoch
+        id: mise-cache-epoch
+        run: echo "value=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
       - name: Set up mise
         uses: jdx/mise-action@v4
         with:
-          install: false
-
-      - name: Install tools
+          install: true
+          cache: true
+          # Share the repository-scoped daily cache with hosted agent wakes.
+          cache_key: agent-mise-v2-${{ steps.mise-cache-epoch.outputs.value }}-{{platform}}-{{file_hash}}
         env:
           MISE_JOBS: 1
-        run: |
-          mise trust
-          mise install
+          # Keep pipx interpreters inside mise-action's cache boundary.
+          UV_PYTHON_INSTALL_DIR: /home/runner/.local/share/mise/uv-python
+          UV_MANAGED_PYTHON: "1"
 
       - name: Run tests
         run: mise run test
