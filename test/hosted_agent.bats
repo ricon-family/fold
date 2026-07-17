@@ -12,6 +12,16 @@ load test_helper
   grep -Eq '^"shiv:sessions"[[:space:]]*=' "$REPO_DIR/mise.toml"
 }
 
+@test "hosted home clone keeps credentials out of the persisted origin" {
+  ci_env="$REPO_DIR/.mise/tasks/ci/env"
+
+  grep -Fq '"$GH_BIN" repo clone "$home_repo" "$AGENT_HOME"' "$ci_env"
+  grep -Fq 'remote set-url origin "$clean_remote"' "$ci_env"
+  grep -Fq 'remote get-url origin' "$ci_env"
+  ! grep -Fq 'x-access-token' "$ci_env"
+  ! grep -Eq 'git clone.*(GH_TOKEN|github-pat)' "$ci_env"
+}
+
 @test "fold does not provision the sessions-owned Pi runtime" {
   workflow="$REPO_DIR/.github/workflows/agent-run.yml"
   ci_env="$REPO_DIR/.mise/tasks/ci/env"
