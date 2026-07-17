@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
-#MISE description="Fold overview — residents, threads, chat, notes, repo status"
+#MISE description="Fast Fold-local orientation with bounded resident/visitor signals"
+#USAGE flag "--local" default=#false help="Skip chat and GitHub; show only local Fold state"
 set -eo pipefail
 
 FOLD_DIR="$MISE_CONFIG_ROOT"
+LOCAL_ONLY="${usage_local:-false}"
+MAX_ITEMS=5
 
-# Colors
-HEADING=212   # pink
-SUBHEAD=81    # blue
-DIM=240       # gray
+# shellcheck source=.mise/lib/welcome.sh
+. "$FOLD_DIR/.mise/lib/welcome.sh"
 
-# Section heading helper
+HEADING=212
+SUBHEAD=81
+DIM=240
+
 section() {
   echo ""
   gum style --bold --foreground "$HEADING" "$1"
@@ -17,6 +21,7 @@ section() {
 
 notes_repo_status() {
   local repo_dir="$1"
+  local first_name git_common_dir
   enc_status="n/a"
   notes_status="n/a"
 
@@ -25,14 +30,15 @@ notes_repo_status() {
     return
   fi
 
-  if [ ! -d "$repo_dir/.git/git-crypt" ]; then
-    enc_status="⚠ not set up → notes setup"
-  elif ! command -v git-crypt &>/dev/null; then
-    enc_status="⚠ git-crypt not installed"
-  elif git -C "$repo_dir" crypt status -e &>/dev/null; then
-    enc_status="✓ unlocked"
+  git_common_dir=$(git -C "$repo_dir" rev-parse --git-common-dir 2>/dev/null || true)
+  if [ -n "$git_common_dir" ] && [ "${git_common_dir#/}" = "$git_common_dir" ]; then
+    git_common_dir="$repo_dir/$git_common_dir"
+  fi
+
+  if [ -z "$git_common_dir" ] || [ ! -d "$git_common_dir/git-crypt" ]; then
+    enc_status="⚠ key metadata missing → notes status"
   else
-    enc_status="⚠ locked → notes unlock"
+    enc_status="✓ key metadata present"
   fi
 
   if [ ! -f "$repo_dir/notes/.manifest" ]; then
@@ -40,176 +46,113 @@ notes_repo_status() {
     return
   fi
 
-  local first_name
-  first_name=$(awk -F'\t' 'NF >= 2 { print $2; exit }' "$repo_dir/notes/.manifest")
+  first_name=$(awk -F '\t' 'NF >= 2 { print $2; exit }' "$repo_dir/notes/.manifest")
   if [ -z "$first_name" ]; then
     notes_status="manifest empty"
-    return
-  fi
-
-  if [ ! -f "$repo_dir/notes/$first_name" ]; then
-    notes_status="⚠ obfuscated → notes unlock"
-    return
-  fi
-
-  if ! command -v notes &>/dev/null; then
-    notes_status="⚠ notes CLI missing"
-    return
-  fi
-
-  local changes_output change_count
-  if ! changes_output=$(cd "$repo_dir" && notes changes --summary 2>&1); then
-    notes_status="⚠ check failed → notes changes --summary"
-    return
-  fi
-
-  if printf '%s\n' "$changes_output" | grep -q '^No changes\.$'; then
-    notes_status="✓ readable; no note edits"
-    return
-  fi
-
-  change_count=$(printf '%s\n' "$changes_output" | awk '/ change\(s\):/ { print $1; exit }')
-  if [ -n "$change_count" ]; then
-    notes_status="⚠ readable; ${change_count} note change(s) → notes changes --summary"
+  elif [ ! -f "$repo_dir/notes/$first_name" ]; then
+    notes_status="⚠ obfuscated or locked → notes status"
   else
-    notes_status="⚠ readable; changes possible → notes changes --summary"
+    notes_status="✓ readable; edits checked by: notes status"
+    enc_status="✓ unlocked"
   fi
 }
 
-# ━━━ Header ━━━
-echo ""
+identity_hint=""
+resident_name=""
+expected_github=""
+resident_record=""
+for candidate in "${CHAT_IDENTITY:-}" "${GIT_AUTHOR_NAME:-}" "${AGENT_NAME:-}"; do
+  [ -n "$candidate" ] || continue
+  [ -n "$identity_hint" ] || identity_hint="$candidate"
+  resident_record=$(fold_welcome_resident_metadata "${FOLD_WELCOME_IDENTITY_DIR:-$FOLD_DIR/notes}" "$candidate" 2>/dev/null || true)
+  [ -n "$resident_record" ] && break
+done
+if [ -n "$resident_record" ]; then
+  resident_name=${resident_record%%$'\t'*}
+  expected_github=${resident_record#*$'\t'}
+fi
+
+printf '\n'
 gum style --bold --foreground "$HEADING" --border double --border-foreground "$DIM" \
   --padding "0 2" "🏠 The Fold"
 gum style --faint "$(date '+%A, %B %-d, %Y · %-I:%M %p')"
 
-# ━━━ Residents ━━━
-section "Residents"
-if command -v fold &>/dev/null; then
-  agents=$(cd "$FOLD_DIR" && mise run -q agent:list 2>/dev/null || true)
-  if [ -n "$agents" ]; then
-    agent_rows=""
-    while IFS= read -r name; do
-      [ -z "$name" ] && continue
-      last_activity=$(cd "$FOLD_DIR" && git log -1 --format='%ar' --author="$name" 2>/dev/null || echo "unknown")
-      agent_rows+="${name},${last_activity}"$'\n'
-    done <<< "$agents"
-    printf "Agent,Last Active\n%s" "$agent_rows" \
-      | gum table --print --separator "," --border rounded \
-          --border.foreground "$DIM" --header.foreground "$SUBHEAD"
-  fi
-fi
-
-# ━━━ HUMAN.md ━━━
-HUMAN_FILE=""
-if HUMAN_FILE=$(cd "$FOLD_DIR" && mise run -q human 2>/dev/null); then
-  :
-fi
-if [ -n "$HUMAN_FILE" ] && [ -f "$HUMAN_FILE" ]; then
-  thread_summary=$(threads status --file "$HUMAN_FILE" 2>/dev/null || echo "")
-  section "📝 HUMAN.md  ($thread_summary)"
-  threads list --file "$HUMAN_FILE" 2>/dev/null || true
+section "Identity"
+if [ -n "$resident_name" ]; then
+  gum style "Resident: $resident_name"
+elif [ -n "$identity_hint" ]; then
+  gum style "Visitor: $identity_hint"
 else
-  section "📝 HUMAN.md"
-  gum style --faint "(HUMAN_MD not set — see: mise run human)"
+  gum style "Visitor: identity not supplied"
 fi
 
-# ━━━ Chat ━━━
-section "💬 Chat"
-if command -v chat &>/dev/null; then
-  chat list 2>/dev/null || gum style --faint "(no chat channels)"
-
-  # Quick reference — detect agent name from env (set by shimmer)
-  _agent="${AGENT_NAME:-${GIT_AUTHOR_NAME:-}}"
-  if [ -n "$_agent" ]; then
-    _agent_lower=$(echo "$_agent" | tr '[:upper:]' '[:lower:]')
-    echo ""
-    (
-      printf 'Action\tCommand\n'
-      printf 'Read new messages (default channel)\tchat read\n'
-      printf 'Read a specific channel\tchat read <channel>\n'
-      printf 'Read as %s identity/cursor\tchat read --as %s <channel>\n' "$_agent_lower" "$_agent_lower"
-      printf 'Send a message\tchat send --as %s <msg>\n' "$_agent_lower"
-      printf 'Wait for any message from others\tchat wait --as %s <channel>\n' "$_agent_lower"
-      printf 'Peek without marking read\tchat read --peek <channel>\n'
-      printf 'Send to specific channel\tchat send --as %s --chat <channel> <msg>\n' "$_agent_lower"
-      printf 'List all channels\tchat list\n'
-    ) | gum table --print --separator "	" --border rounded \
-          --border.foreground "$DIM" --header.foreground "$DIM"
-  fi
+section "Recent Fold note changes"
+recent_rows=$(fold_welcome_recent_note_changes "$FOLD_DIR" "$MAX_ITEMS" || true)
+if [ -n "$recent_rows" ]; then
+  printf 'Note\tLatest local change\n%s\n' "$recent_rows" \
+    | gum table --print --separator $'\t' --border rounded \
+        --border.foreground "$DIM" --header.foreground "$SUBHEAD"
 else
-  gum style --faint "(chat not installed — run: shiv install chat)"
+  gum style --faint "(no recent local note changes)"
 fi
 
-# ━━━ Task discovery ━━━
-section "🧰 Tasks"
+section "🧰 Fold commands"
 (
   printf 'Need\tCommand\n'
+  printf 'Authoritative notes state\tnotes status\n'
+  if [ -n "$resident_name" ]; then
+    printf 'Bounded Fold chat\tchat read fold --as %s --peek --all --last 5\n' "$resident_name"
+  fi
+  printf 'Deterministic local welcome\tmise welcome --local\n'
   printf 'Browse GitHub tasks\tmise tasks ls | grep ^github:\n'
-  printf 'Repo invitations guide\tnotes show github-repo-invitations\n'
-) | gum table --print --separator "	" --border rounded \
+) | gum table --print --separator $'\t' --border rounded \
       --border.foreground "$DIM" --header.foreground "$SUBHEAD"
 
-# ━━━ Notes ━━━
-# Disabled: notes list is too slow (~18s due to per-file farts calls). See den#10.
-# NOTES_DIR="$FOLD_DIR/notes"
-# if [ -d "$NOTES_DIR" ]; then
-#   note_count=$(cd "$FOLD_DIR" && notes list -- --json 2>/dev/null | python3 -c "import sys, json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "?")
-#   section "📓 Notes  (${note_count} notes)"
-#   (cd "$FOLD_DIR" && notes list -- --recent 5 2>/dev/null || true)
-# fi
-
-# ━━━ Modules ━━━
-# Hygiene checks for nested module clones:
-#   - Pin freshness: warn when clone is behind origin/<default-branch>; user
-#     decides whether to `modules update <name>` to bump.
-#   - Notes hooks: ensure pre-commit hook is installed in notes-tracked
-#     clones, since `modules init` does not install them and missing hooks
-#     risk leaking plaintext on commit.
 if [ -d "$FOLD_DIR/modules" ]; then
   section "🧩 Modules"
   module_rows=""
-  for mod_path in "$FOLD_DIR/modules"/*/; do
+  for mod_path in "$FOLD_DIR"/modules/*/; do
     [ -d "$mod_path/.git" ] || continue
     name=$(basename "$mod_path")
 
-    # Pin freshness
-    git -C "$mod_path" fetch -q 2>/dev/null || true
-    default_branch=$(git -C "$mod_path" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+    if ! default_branch=$(git -C "$mod_path" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'); then
+      default_branch=""
+    fi
     default_branch=${default_branch:-main}
-    behind=$(git -C "$mod_path" rev-list --count "HEAD..origin/${default_branch}" 2>/dev/null || echo 0)
-    if [ "${behind:-0}" -gt 0 ]; then
-      pin_status="⚠ ${behind} behind origin/${default_branch} → modules update ${name}"
+    if git -C "$mod_path" show-ref --verify --quiet "refs/remotes/origin/${default_branch}"; then
+      behind=$(git -C "$mod_path" rev-list --count "HEAD..origin/${default_branch}" 2>/dev/null || echo 0)
+      if [ "${behind:-0}" -gt 0 ]; then
+        pin_status="⚠ ${behind} behind recorded origin/${default_branch} → inspect before update"
+      else
+        pin_status="✓ at recorded origin/${default_branch}"
+      fi
     else
-      pin_status="✓ at tip of ${default_branch}"
+      pin_status="⚠ no recorded origin/${default_branch} → inspect remote state"
     fi
 
-    # Notes hooks
     if [ ! -f "$mod_path/notes/.manifest" ]; then
       hook_status="n/a"
     elif [ -f "$mod_path/.git/hooks/pre-commit" ]; then
       hook_status="✓ installed"
     else
-      (cd "$mod_path" && notes install-hooks >/dev/null 2>&1) || true
-      hook_status="⚠ installed (was missing)"
+      hook_status="⚠ missing → notes install-hooks"
     fi
 
     module_rows+="${name},${pin_status},${hook_status}"$'\n'
   done
   if [ -n "$module_rows" ]; then
-    printf "Module,Pin,Hooks\n%s" "$module_rows" \
-      | gum table --print --separator "," --border rounded \
+    printf 'Module,Pin,Hooks\n%s' "$module_rows" \
+      | gum table --print --separator ',' --border rounded \
           --border.foreground "$DIM" --header.foreground "$SUBHEAD"
   else
-    gum style --faint "(no nested modules initialized — run: modules init)"
+    gum style --faint "(no nested modules initialized; prepare one with: modules init <name>)"
   fi
 fi
 
-# ━━━ Repo & Status ━━━
-section "📦 Repo"
+section "📦 Fold repository"
 cd "$FOLD_DIR"
 branch=$(git branch --show-current 2>/dev/null)
 dirty=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
-
 if [ "$dirty" -gt 0 ]; then
   branch_status="$branch ($dirty uncommitted)"
 else
@@ -219,8 +162,8 @@ fi
 tracking=$(git rev-parse --abbrev-ref '@{upstream}' 2>/dev/null || echo "")
 sync_status=""
 if [ -n "$tracking" ]; then
-  ahead=$(git rev-list "$tracking..HEAD" --count 2>/dev/null || echo "0")
-  behind=$(git rev-list "HEAD..$tracking" --count 2>/dev/null || echo "0")
+  ahead=$(git rev-list "$tracking..HEAD" --count 2>/dev/null || echo 0)
+  behind=$(git rev-list "HEAD..$tracking" --count 2>/dev/null || echo 0)
   [ "$ahead" -gt 0 ] && sync_status+="↑${ahead} ahead "
   [ "$behind" -gt 0 ] && sync_status+="↓${behind} behind "
   [ -z "$sync_status" ] && sync_status="up to date"
@@ -228,17 +171,70 @@ fi
 
 repo_rows="Branch,${branch_status}"$'\n'
 [ -n "$sync_status" ] && repo_rows+="Remote,${sync_status}"$'\n'
-
-# Open issues
-issue_count=$(GH_HOST=github.com gh issue list --repo ricon-family/fold --state open --json number --jq 'length' 2>/dev/null || echo "?")
-repo_rows+="Issues,${issue_count} open"$'\n'
-
 notes_repo_status "$FOLD_DIR"
 repo_rows+="Encryption,${enc_status}"$'\n'
 repo_rows+="Notes,${notes_status}"
-
-printf "Property,Status\n%s\n" "$repo_rows" \
-  | gum table --print --separator "," --border rounded \
+printf 'Property,Status\n%s\n' "$repo_rows" \
+  | gum table --print --separator ',' --border rounded \
       --border.foreground "$DIM" --header.foreground "$SUBHEAD"
 
-echo ""
+if [ "$LOCAL_ONLY" != true ]; then
+  live_dir=$(mktemp -d "${TMPDIR:-/tmp}/fold-welcome-live.XXXXXX")
+  trap 'rm -rf "$live_dir"' EXIT
+  chat_started=false
+  github_started=false
+  chat_status=1
+  github_status=1
+
+  if [ -n "$resident_name" ] && command -v chat &>/dev/null && command -v jq &>/dev/null; then
+    fold_welcome_chat_rows "$resident_name" "$MAX_ITEMS" > "$live_dir/chat.tsv" &
+    chat_pid=$!
+    chat_started=true
+  fi
+  if command -v gh &>/dev/null && command -v jq &>/dev/null; then
+    fold_welcome_github_attention "$expected_github" "$MAX_ITEMS" > "$live_dir/github.tsv" &
+    github_pid=$!
+    github_started=true
+  fi
+
+  if [ "$chat_started" = true ]; then
+    if wait "$chat_pid"; then chat_status=0; else chat_status=$?; fi
+    section "💬 Recent Fold chat"
+    if [ "$chat_status" -eq 0 ] && [ -s "$live_dir/chat.tsv" ]; then
+      printf 'Sender\tTime\tPreview\n' > "$live_dir/chat-table.tsv"
+      cat "$live_dir/chat.tsv" >> "$live_dir/chat-table.tsv"
+      gum table --print --separator $'\t' --border rounded \
+        --border.foreground "$DIM" --header.foreground "$SUBHEAD" < "$live_dir/chat-table.tsv"
+    else
+      gum style --faint "(Fold chat unavailable; local welcome remains valid)"
+    fi
+  fi
+
+  if [ "$github_started" = true ]; then
+    if wait "$github_pid"; then github_status=0; else github_status=$?; fi
+    section "GitHub attention"
+    if [ "$github_status" -eq 0 ]; then
+      viewer=$(awk -F '\t' '$1 == "META" { print $2; exit }' "$live_dir/github.tsv")
+      github_rows=$(awk -F '\t' '$1 != "META"' "$live_dir/github.tsv")
+      gum style --faint "Verified account: $viewer"
+      if [ -n "$github_rows" ]; then
+        printf 'Why\tRepository\tItem\tTitle\tURL\n%s\n' "$github_rows" \
+          | gum table --print --separator $'\t' --border rounded \
+              --border.foreground "$DIM" --header.foreground "$SUBHEAD"
+      else
+        gum style --faint "(no current KKL/ricon-family attention items)"
+      fi
+    elif [ "$github_status" -eq 2 ]; then
+      actual=$(awk -F '\t' '$1 == "MISMATCH" { print $2; exit }' "$live_dir/github.tsv")
+      expected=$(awk -F '\t' '$1 == "MISMATCH" { print $3; exit }' "$live_dir/github.tsv")
+      gum style --faint "(active GitHub account $actual does not match resident $expected; skipped)"
+    else
+      gum style --faint "(GitHub identity or KKL attention unavailable; local welcome remains valid)"
+    fi
+  fi
+
+  rm -rf "$live_dir"
+  trap - EXIT
+fi
+
+printf '\n'
