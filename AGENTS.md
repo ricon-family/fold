@@ -84,6 +84,7 @@ Guidance only works when it appears at the moment you need it. Before starting a
 | Mock commands/dependencies in tests | Read `notes/mock-first-overlay.md` |
 | Implement non-trivial code or reshape files, modules, or tests | Read `notes/code-structure-first-class.md` before choosing the organizing axis and revisit it after behavior works |
 | Write Bash expected to run on macOS + CI | Read `notes/bash-macos-compat.md` |
+| Run a non-trivial ad hoc shell sequence | Read `notes/legible-command-blocks.md`; keep one conceptual step per source line, label output phases, and move repeated or stateful work into a file/workbench |
 | Write a README | Read `notes/readme-writing.md` |
 | Review a PR | Read `notes/code-review.md` |
 | Wake or spawn a local worker/agent, continue a session, or dispatch a hosted wake | Read `notes/local-agent-wakes.md`; for several live attachable child desks, also read `notes/session-forking.md` |
