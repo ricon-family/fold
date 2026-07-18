@@ -7,7 +7,7 @@
 #USAGE flag "--model <model>" default="" help="Provider/model passed explicitly to shimmer agent"
 #USAGE flag "--title <title>" default="agent desk wake — root handoff" help="Title line prepended to the packet"
 #USAGE flag "--identity-source <path>" default="" help="Directory where 'shimmer as <agent>' runs (default: resolved desk home)"
-#USAGE flag "--startup-timeout <seconds>" default="30" help="Seconds to wait for a new live Pi process in the desk home"
+#USAGE flag "--startup-timeout <seconds>" default="30" help="Seconds to wait before one final Pi readiness observation"
 #USAGE flag "--work-dir <path>" default="" help="Directory for generated launcher (default: temporary directory)"
 #USAGE flag "-y --yes" default=#false help="Actually call shell run; without this, render and print the plan only"
 #USAGE arg "<agent>" help="Agent identity to launch"
@@ -107,7 +107,7 @@ printf 'shell:           %s\n' "$SHELL_NAME"
 printf 'packet:          %s\n' "$PACKET_PATH"
 printf 'model:           %s\n' "$MODEL"
 printf 'identity-source: %s\n' "$IDENTITY_SOURCE"
-printf 'startup timeout: %ss\n' "$STARTUP_TIMEOUT"
+printf 'startup window:  %ss plus one final observation\n' "$STARTUP_TIMEOUT"
 printf 'launcher:        %s\n' "$LAUNCHER"
 
 if [ "$YES" != "true" ]; then
@@ -139,9 +139,13 @@ printf '%s\n' "$session_processes" |
 printf '\nlaunching shell %s from %s\n' "$SHELL_NAME" "$HOME_PATH"
 "$AGENT_DESK_SHELL_BIN" run --cwd "$HOME_PATH" "$SHELL_NAME" "$LAUNCHER"
 
-printf '\nwaiting up to %ss for a new live Pi process\n' "$STARTUP_TIMEOUT"
+printf '\nwaiting %ss plus one final observation for a new live Pi process\n' "$STARTUP_TIMEOUT"
 started_at=$SECONDS
-while [ $((SECONDS - started_at)) -lt "$STARTUP_TIMEOUT" ]; do
+while :; do
+  final_observation=false
+  if [ $((SECONDS - started_at)) -ge "$STARTUP_TIMEOUT" ]; then
+    final_observation=true
+  fi
   if ! agent_desk_shell_status "$SHELL_NAME" >/dev/null 2>&1; then
     echo "ERROR: agent shell exited before Pi became ready" >&2
     if ! mise run -q agent:desk:smoke --shell "$SHELL_NAME"; then
@@ -178,10 +182,15 @@ while [ $((SECONDS - started_at)) -lt "$STARTUP_TIMEOUT" ]; do
     exit 0
   fi
 
-  sleep 1
+  if [ "$final_observation" = true ]; then
+    break
+  fi
+  if [ $((SECONDS - started_at)) -lt "$STARTUP_TIMEOUT" ]; then
+    sleep 1
+  fi
 done
 
-echo "ERROR: no new live Pi process appeared within ${STARTUP_TIMEOUT}s" >&2
+echo "ERROR: no new live Pi process appeared during the ${STARTUP_TIMEOUT}s window or final observation" >&2
 if ! mise run -q agent:desk:smoke --shell "$SHELL_NAME"; then
   : # Preserve the primary startup timeout if diagnostics also fail.
 fi
