@@ -13,16 +13,29 @@ if [ -z "${message//[[:space:]]/}" ]; then
   exit 1
 fi
 
-context_json="$(comments context --json)"
-location="$(
+context_json="${COMMENTS_CONTEXT_JSON:-}"
+if [ -z "${context_json//[[:space:]]/}" ]; then
+  echo "comment:chat: COMMENTS_CONTEXT_JSON is required; run through comments dispatch" >&2
+  exit 1
+fi
+
+if ! location="$(
   printf '%s' "$context_json" \
-    | jq -r '.file as $file | (.directive.range.start.line + 1) as $line | "\($file):\($line)"'
-)"
+    | jq -er '
+        select((.file | type) == "string")
+        | select((.directive.range.start.line | type) == "number")
+        | "\(.file):\(.directive.range.start.line + 1)"
+      ' 2>/dev/null
+)"; then
+  echo "comment:chat: COMMENTS_CONTEXT_JSON is invalid or missing file/line context" >&2
+  exit 1
+fi
 
 channel="${COMMENT_CHAT_CHANNEL:-fold}"
 sender="${COMMENT_CHAT_AS:-${CHAT_IDENTITY:-or}}"
+chat_bin="${CHAT:-chat}"
 
 {
   printf 'From %s\n\n' "$location"
   printf '%s\n' "$message"
-} | chat send --chat "$channel" --as "$sender" --force -
+} | "$chat_bin" send --chat "$channel" --as "$sender" --force
