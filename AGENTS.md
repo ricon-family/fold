@@ -90,6 +90,7 @@ Guidance only works when it appears at the moment you need it. Before starting a
 | Wake or spawn a local worker/agent, continue a session, or dispatch a hosted wake | Read `notes/local-agent-wakes.md`; for several live attachable child desks, also read `notes/session-forking.md` |
 | Change GitHub Actions / CI auth | Read `notes/github-actions-ci.md` and `notes/ci-auth-debugging.md` |
 | Check or repair agent GitHub 2FA/PATs | Read `notes/github-2fa-pat-runbook.md` and `notes/credential-rotation-consent.md` |
+| Enable a feature that permanently or publicly publishes identifiers or metadata | Read `notes/irreversible-publication-preflight.md`; inspect exact values, audience, permanence, and contextual leakage before the first write |
 | Create or revive a codebase | Read `notes/creating-a-codebase.md` and, for stale work, `notes/revival-pattern.md` |
 | Hit any command/tool/auth/CI failure | Stop and read `notes/observed-failures-are-work.md`, especially "When a command fails" |
 | Edit, stage, or commit readable notes in a notes-managed repo | Read `notes/notes-managed-repo-workflow.md`; use `notes changes`, then `notes commit` for note-only commits or `notes stage` for mixed/manual staging — not raw `git add notes/...` |
