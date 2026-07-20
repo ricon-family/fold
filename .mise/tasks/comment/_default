@@ -3,11 +3,8 @@
 #USAGE arg "[message]" default="" help="Message to send; reads stdin when omitted"
 set -euo pipefail
 
-# Project default: delegate to the concrete chat helper. This lets inline
-# directives use the short form:
+# Project default: execute the concrete helper without starting a second mise
+# process. The parent task already parsed and exported usage_message.
+# This lets inline directives use the short form:
 #   <!-- ! "message" | mise comment -->
-if [ -n "${usage_message:-}" ]; then
-  exec mise run -q comment:chat "$usage_message"
-else
-  exec mise run -q comment:chat
-fi
+exec "$MISE_CONFIG_ROOT/.mise/tasks/comment/chat"
