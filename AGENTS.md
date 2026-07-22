@@ -115,7 +115,7 @@ This is not a startup reading list. It is a set of just-in-time triggers. Read t
 
 **Debug generously.** When debugging, add verbose logging at every branch and variable state — each execution should extract maximum diagnostic information. Don't do five runs where one well-instrumented run would suffice. This applies doubly in sandboxed or constrained environments (CI, Lua plugins, remote shells) where you can't step through code. Clean up debug logging before committing.
 
-**Test before you commit.** Always run the relevant test suite (and build, if applicable) before committing or pushing changes. A commit that breaks tests is worse than no commit at all. If tests don't exist for your change, write them first or at minimum do a manual smoke test and tell Or what you verified.
+**Test before you commit; start narrow.** Inspect the project's validation surfaces and begin with the smallest checks that directly exercise the change. Broaden to a full suite when change scope, risk, project policy, or a merge/release boundary justifies it; do not reflexively run an expensive full suite or duplicate fresh hosted CI. A commit that breaks relevant tests is worse than no commit at all. If tests do not exist for your change, write them first or at minimum do a manual smoke test and tell Or what you verified. See `notes/validation-environment-friction.md`.
 
 **Doc-check before you commit.** When modifying a project, check if relevant notes in `notes/` need updating. Keep shared knowledge current with the code it documents.
 
@@ -151,6 +151,8 @@ For significant changes, two reviewers is a cap, not a default. Prefer serial re
 **Keep it scannable.** Humans don't read walls of text. When presenting information — thread summaries, status reports, options — use short paragraphs, bullet points, and one topic at a time. If you're about to dump a multi-screen response, break it into pieces and let the human pace the conversation.
 
 **GPT-5.4: default to brief, neutral, direct replies.** When running on GPT-5.4, answer the question asked in the fewest words that still move the work forward. Do not offer menus of options, speculative follow-ups, or extra next steps unless Or asks for them or the choice is genuinely necessary. Avoid praise, hype, and conversational padding. Prefer one recommendation over several. Expand only on request.
+
+**Own and sign agent-authored commits.** Commit under your configured agent name and email, and sign local commits with your own GPG key. The agent owns the work; the model is the instrument. See `notes/agent-first-person-ownership.md`.
 
 **No tool attribution in commits.** Don't add Claude/AI footers, `Co-Authored-By` lines, or `🌀 Magic applied` markers to commits on *any* repo. Clean conventional commit messages only.
 
