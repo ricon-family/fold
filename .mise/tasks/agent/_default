@@ -21,7 +21,9 @@ if [[ "$INPUT_MODEL" != */* ]]; then
 fi
 
 cd "$AGENT_HOME"
-eval "$(shimmer as "$AGENT")"
+identity_shell=$(shimmer as "$AGENT")
+eval "$identity_shell"
+unset identity_shell
 gh auth setup-git
 
 cmd=(shimmer agent --headless --timeout "$RUN_TIMEOUT" --model "$INPUT_MODEL")

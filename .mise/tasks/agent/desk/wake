@@ -80,7 +80,9 @@ MODEL=$(agent_desk_single_quote "$MODEL")
 TITLE=$(agent_desk_single_quote "$TITLE")
 
 cd "\$HOME_PATH"
-eval "\$(cd "\$IDENTITY_SOURCE" && shimmer as "\$AGENT")"
+identity_shell=\$(cd "\$IDENTITY_SOURCE" && shimmer as "\$AGENT")
+eval "\$identity_shell"
+unset identity_shell
 if [ -z "\${AGENT_HOME:-}" ]; then
   echo "ERROR: shimmer identity did not set AGENT_HOME" >&2
   exit 1
