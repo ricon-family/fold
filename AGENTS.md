@@ -88,7 +88,7 @@ Guidance only works when it appears at the moment you need it. Before starting a
 | Write a README | Read `notes/readme-writing.md` |
 | Review a PR | Read `notes/code-review.md` |
 | Wake or spawn a local worker/agent, continue a session, or dispatch a hosted wake | Read `notes/local-agent-wakes.md`; for several live attachable child desks, also read `notes/session-forking.md` |
-| Start substantial work likely to cross a rewind, span branches, or accumulate material side effects | Read `notes/feed-backed-session-progress-map.md`; create one recipient-owned pending feed by default and skip it only for tiny, read-only, or genuinely one-shot work |
+| Start substantial work whose transition evidence may outgrow a rewind handback | Read `notes/feed-backed-session-progress-map.md`; use a small private feed when it makes resumption easier, put its exact path in the handback, and skip it when the handback is enough |
 | Change GitHub Actions / CI auth | Read `notes/github-actions-ci.md` and `notes/ci-auth-debugging.md` |
 | Check or repair agent GitHub 2FA/PATs | Read `notes/github-2fa-pat-runbook.md` and `notes/credential-rotation-consent.md` |
 | Enable a feature that permanently or publicly publishes identifiers or metadata | Read `notes/irreversible-publication-preflight.md`; inspect exact values, audience, permanence, and contextual leakage before the first write |
