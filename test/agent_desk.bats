@@ -417,6 +417,37 @@ JSON
   grep -q 'shimmer agent --model "$MODEL"' "$work_dir/start-quick-a.sh"
 }
 
+@test "agent:desk:wake launcher stops when identity setup fails" {
+  home="$BATS_TEST_TMPDIR/home"
+  work_dir="$BATS_TEST_TMPDIR/wake"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  agent_log="$BATS_TEST_TMPDIR/agent.log"
+  make_repo "$home" home
+  printf 'hello packet\n' > "$packet"
+  export AGENT_LOG="$agent_log"
+  cat > "$TMPBIN/shimmer" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  as)
+    printf 'unset GIT_AUTHOR_NAME AGENT_HOME\n'
+    exit 23
+    ;;
+  agent)
+    printf 'agent started\n' >> "${AGENT_LOG:?}"
+    ;;
+  *) exit 2 ;;
+esac
+SH
+  chmod +x "$TMPBIN/shimmer"
+
+  fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --work-dir "$work_dir" >/dev/null
+  run "$work_dir/start-quick-a.sh"
+
+  [ "$status" -eq 23 ]
+  [ ! -e "$agent_log" ]
+}
+
 @test "agent:desk:wake launcher rejects identity from another home" {
   home="$BATS_TEST_TMPDIR/home"
   wrong_home="$BATS_TEST_TMPDIR/wrong-home"

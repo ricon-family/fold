@@ -88,6 +88,7 @@ Guidance only works when it appears at the moment you need it. Before starting a
 | Write a README | Read `notes/readme-writing.md` |
 | Review a PR | Read `notes/code-review.md` |
 | Wake or spawn a local worker/agent, continue a session, or dispatch a hosted wake | Read `notes/local-agent-wakes.md`; for several live attachable child desks, also read `notes/session-forking.md` |
+| Start substantial work whose transition evidence may outgrow a rewind handback | Read `notes/feed-backed-session-progress-map.md`; use a small private feed when it makes resumption easier, put its exact path in the handback, and skip it when the handback is enough |
 | Change GitHub Actions / CI auth | Read `notes/github-actions-ci.md` and `notes/ci-auth-debugging.md` |
 | Check or repair agent GitHub 2FA/PATs | Read `notes/github-2fa-pat-runbook.md` and `notes/credential-rotation-consent.md` |
 | Enable a feature that permanently or publicly publishes identifiers or metadata | Read `notes/irreversible-publication-preflight.md`; inspect exact values, audience, permanence, and contextual leakage before the first write |
@@ -160,7 +161,7 @@ For significant changes, two reviewers is a cap, not a default. Prefer serial re
 
 **Know when to abort.** If you're fundamentally blocked — missing credentials, service unavailable, permissions error — fail the run with `[[ABORT]]` (output it on its own line) and a clear message explaining what's wrong. Silent non-accomplishment is worse than a visible failure. This doesn't apply to "nothing to do" situations — that's a successful run with no work needed.
 
-**When things break, escalate before exiting.** Services go down, tokens expire, servers time out. One retry is reasonable, then shift to problem-solving. If the broken service isn't essential to your task, skip it and proceed. If it is essential: (1) leave a note in your home repo — what broke, what you were trying to do, whether it's time-sensitive; (2) reach out through an alternative channel — email down, try Matrix; Matrix down, open a GitHub issue; (3) then exit cleanly with `[[ABORT]]`. The goal: when something breaks, someone finds out quickly.
+**When things break, decide whether the failed capability is needed.** Services go down, tokens expire, and servers time out. One retry is reasonable; repeated blind retries are not. If the current task does not need the failed capability, report the degradation and continue without claiming that capability worked. If the task does need it, preserve the evidence, then fix it, file it, or ask for help. Contact someone only through a currently approved and verified channel. If no safe path remains, exit cleanly with `[[ABORT]]`. Optional setup should not stop unrelated work, and required setup should not be marked non-fatal merely to keep a run green. See `notes/observed-failures-are-work.md`.
 
 **Clean up your inbox.** Each agent has a 50MB email quota. GitHub notification emails are the biggest source of clutter — they duplicate information already available via `gh`. Periodically scan for `[KnickKnackLabs/...]` and `[ricon-family/...]` notification emails and permanently delete them (`emails delete --permanent`). Don't archive — that still counts against quota.
 
