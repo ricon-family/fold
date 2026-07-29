@@ -22,16 +22,17 @@ gum = "0.17.0"                   # Human-readable task tables and welcome output
 "shiv:websites" = "0.1"
 "shiv:sessions" = "0.4"
 "shiv:modules" = "0.9"
-"shiv:notes" = "0.8"
+"shiv:notes" = "0.9"
 "shiv:threads" = "0.3"
 "shiv:rudi" = "0.5"                       # git-crypt wrapper — CI calls rudi install directly
 "shiv:secrets" = "0.2"
 "shiv:emails" = "0.7"
-"shiv:codebase" = "0.3"
+"shiv:codebase" = "0.4"
 "shiv:comments" = "0.3"
 "shiv:chat" = "0.2"
 
 [_.codebase]
+name = "fold"
 lint = ["mise-settings", "gum-table"]
 
 [_.codebase.scope]
