@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+#MISE description="Provision one agent's home-local email account"
+#USAGE flag "-y --yes" default=#false help="Create and validate the ignored local email config"
+#USAGE flag "--home <path>" default="" help="Home repo path (default: ~/agents/<agent>/home)"
+#USAGE arg "<agent>" help="Agent name"
+#USAGE example "mise run homes:email:setup quick" header="Preview Quick email setup"
+#USAGE example "mise run homes:email:setup quick --home /path/to/desk/home --yes" header="Provision one desk home"
+set -euo pipefail
+
+ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
+# shellcheck source=.mise/lib/common.sh
+source "$ROOT/.mise/lib/common.sh"
+
+AGENT="${usage_agent:?agent required}"
+HOME_PATH="${usage_home:-}"
+YES="${usage_yes:-false}"
+EMAILS_BIN="${EMAILS:-emails}"
+GPG_BIN="${GPG:-gpg}"
+GIT_BIN="${GIT:-git}"
+
+validate_agent "$AGENT"
+require_tool "$EMAILS_BIN" "$GPG_BIN" "$GIT_BIN" "$SECRETS_BIN"
+
+if [ -z "$HOME_PATH" ]; then
+  HOME_PATH="$HOME/agents/$AGENT/home"
+fi
+case "$HOME_PATH" in
+  /*) ;;
+  *) HOME_PATH="$PWD/$HOME_PATH" ;;
+esac
+
+ADDRESS="$AGENT@ricon.family"
+CONFIG="$HOME_PATH/.emails/himalaya.toml"
+MODE=dry-run
+[ "$YES" = true ] && MODE=mutate
+
+printf 'Homes email setup: %s\n\n' "$AGENT"
+printf 'home:   %s\n' "$HOME_PATH"
+printf 'config: %s\n' "$CONFIG"
+printf 'mode:   %s\n' "$MODE"
+
+if [ "$YES" != true ]; then
+  printf '\ndry-run: rerun with --yes to retrieve %s/email-password and provision email\n' "$AGENT"
+  exit 0
+fi
+
+if [ ! -d "$HOME_PATH/.git" ]; then
+  printf 'ERROR: home is not a Git repository: %s\n' "$HOME_PATH" >&2
+  exit 1
+fi
+
+run_emails() {
+  env -u __MISE_DIFF -u HIMALAYA_CONFIG \
+    EMAILS_CONFIG="$CONFIG" \
+    "$EMAILS_BIN" "$@"
+}
+
+protect_local_email() {
+  local exclude git_dir
+  git_dir=$($GIT_BIN -C "$HOME_PATH" rev-parse --absolute-git-dir)
+  exclude="$git_dir/info/exclude"
+  mkdir -p "$(dirname "$exclude")" "$HOME_PATH/.emails"
+  chmod 700 "$HOME_PATH/.emails"
+  if ! grep -Fxq '/.emails/' "$exclude" 2>/dev/null; then
+    printf '\n/.emails/\n' >> "$exclude"
+  fi
+}
+
+require_account_line() {
+  local expected="$1"
+  if ! printf '%s\n' "$account" | grep -Fqx "$expected"; then
+    printf 'ERROR: email account validation failed; expected: %s\n' "$expected" >&2
+    exit 1
+  fi
+}
+
+validate_account() {
+  local permissions
+  if ! account=$(run_emails account:show "$AGENT" 2>&1); then
+    printf 'ERROR: could not validate %s at %s\n' "$AGENT" "$CONFIG" >&2
+    exit 1
+  fi
+  require_account_line "Account:       $AGENT"
+  require_account_line "Address:       $ADDRESS"
+  require_account_line 'Default:       true'
+  require_account_line 'GPG signing:   enabled'
+  require_account_line "Config:        $CONFIG"
+
+  if permissions=$(stat -f '%Lp' "$CONFIG" 2>/dev/null); then
+    :
+  else
+    permissions=$(stat -c '%a' "$CONFIG")
+  fi
+  if [ "$permissions" != 600 ]; then
+    printf 'ERROR: email config mode is %s; expected 600: %s\n' "$permissions" "$CONFIG" >&2
+    exit 1
+  fi
+  if ! "$GPG_BIN" --list-secret-keys "$ADDRESS" >/dev/null 2>&1; then
+    printf 'ERROR: missing GPG secret key for %s\n' "$ADDRESS" >&2
+    exit 1
+  fi
+  if ! "$GIT_BIN" -C "$HOME_PATH" check-ignore -q -- .emails/himalaya.toml; then
+    printf 'ERROR: email config is not ignored by Git: %s\n' "$CONFIG" >&2
+    exit 1
+  fi
+}
+
+protect_local_email
+if [ -f "$CONFIG" ]; then
+  validate_account
+  printf '\nEmail already ready: %s <%s>\n' "$AGENT" "$ADDRESS"
+  exit 0
+fi
+
+"$SECRETS_BIN" get "$AGENT/email-password" |
+  run_emails account:setup "$AGENT" \
+    --address "$ADDRESS" \
+    --display-name "$AGENT" \
+    --imap-host mail.ricon.family \
+    --imap-port 993 \
+    --smtp-host mail.ricon.family \
+    --smtp-port 465 \
+    --password-stdin \
+    --set-default \
+    --gpg-local-user "$ADDRESS"
+
+validate_account
+printf '\nEmail ready: %s <%s>\n' "$AGENT" "$ADDRESS"

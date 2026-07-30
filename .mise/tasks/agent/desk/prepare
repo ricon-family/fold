@@ -159,8 +159,9 @@ if [ -n "$REMOTE_URL" ]; then
   printf ' --remote-url %s' "$(homes_redact_url "$REMOTE_URL")"
 fi
 printf ' --branch %s --yes\n' "$BRANCH"
-printf '4. verify: mise run homes:status %s --home %s --json --check\n' "$AGENT" "$HOME_PATH"
-printf '5. wake later: '
+printf '4. setup email: mise run homes:email:setup %s --home %s --yes\n' "$AGENT" "$HOME_PATH"
+printf '5. verify: mise run homes:status %s --home %s --json --check\n' "$AGENT" "$HOME_PATH"
+printf '6. wake later: '
 render_next_wake
 
 if [ "$YES" != "true" ]; then
@@ -180,6 +181,9 @@ if [ -n "$REMOTE_URL" ]; then
   adopt_args+=(--remote-url "$REMOTE_URL")
 fi
 run_nested_mise "${adopt_args[@]}"
+
+printf '\n== setup home email ==\n'
+run_nested_mise run homes:email:setup "$AGENT" --home "$HOME_PATH" --yes
 
 printf '\n== verify home readiness ==\n'
 run_nested_mise run homes:status "$AGENT" --home "$HOME_PATH" --json --check

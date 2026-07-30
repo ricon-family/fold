@@ -148,6 +148,22 @@ case "${1:-} ${2:-}" in
     git -C "$home" add AGENTS.md
     git -C "$home" commit -q -m 'prepared home'
     ;;
+  "run homes:email:setup")
+    home=""
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = "--home" ]; then
+        home="${2:-}"
+        break
+      fi
+      shift
+    done
+    if [ -z "$home" ] || [ ! -d "$home/.git" ]; then
+      echo "homes:email:setup requires adopted --home" >&2
+      exit 2
+    fi
+    mkdir -p "$home/.emails"
+    printf 'fixture email config\n' > "$home/.emails/himalaya.toml"
+    ;;
   "run homes:status")
     home=""
     while [ "$#" -gt 0 ]; do
@@ -243,6 +259,7 @@ make_repo() {
   [[ "$output" == *"repo:    quick-ricon/home"* ]]
   [[ "$output" == *"dry-run: rerun with --yes"* ]]
   [[ "$output" == *"setup auth: mise run homes:auth:setup quick --home $desk_path/home --yes"* ]]
+  [[ "$output" == *"setup email: mise run homes:email:setup quick --home $desk_path/home --yes"* ]]
   [[ "$output" == *"mise run agent:desk:wake quick --desk $desk_path --shell quick-probe --packet /tmp/packet.md --model '<model>' --yes"* ]]
   [ ! -e "$desk/home" ]
 }
@@ -264,15 +281,19 @@ make_repo() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"== setup home auth =="* ]]
   [[ "$output" == *"== adopt home =="* ]]
+  [[ "$output" == *"== setup home email =="* ]]
   [[ "$output" == *"== verify home readiness =="* ]]
   [[ "$output" == *"Ready. Next wake command:"* ]]
   auth_line=$(grep -nF "mise run homes:auth:setup quick --home $desk_path/home --yes" "$MISE_LOG" | cut -d: -f1)
   adopt_line=$(grep -nF "mise run homes:adopt-remote quick --home $desk_path/home --branch main --yes --repo quick-ricon/home" "$MISE_LOG" | cut -d: -f1)
+  email_line=$(grep -nF "mise run homes:email:setup quick --home $desk_path/home --yes" "$MISE_LOG" | cut -d: -f1)
   status_line=$(grep -nF "mise run homes:status quick --home $desk_path/home --json --check" "$MISE_LOG" | cut -d: -f1)
   [ "$auth_line" -lt "$adopt_line" ]
-  [ "$adopt_line" -lt "$status_line" ]
+  [ "$adopt_line" -lt "$email_line" ]
+  [ "$email_line" -lt "$status_line" ]
   [ -f "$desk/.gitconfig" ]
   [ -d "$desk/home/.git" ]
+  [ -f "$desk/home/.emails/himalaya.toml" ]
   if [ -f "$SHELL_LOG" ]; then
     ! grep -q 'shell run' "$SHELL_LOG"
   fi
@@ -296,7 +317,9 @@ make_repo() {
   grep -F "desks path $desk_id" "$DESKS_LOG" >/dev/null
   auth_line=$(grep -nF "mise run homes:auth:setup quick --home $desk/home --yes" "$MISE_LOG" | cut -d: -f1)
   adopt_line=$(grep -nF "mise run homes:adopt-remote quick --home $desk/home --branch main --yes --repo quick-ricon/home" "$MISE_LOG" | cut -d: -f1)
+  email_line=$(grep -nF "mise run homes:email:setup quick --home $desk/home --yes" "$MISE_LOG" | cut -d: -f1)
   [ "$auth_line" -lt "$adopt_line" ]
+  [ "$adopt_line" -lt "$email_line" ]
   [[ "$output" == *"desk id: $desk_id"* ]]
   [[ "$output" == *"mise run agent:desk:wake quick --desk $desk --shell $desk_id --packet /tmp/packet.md --model '<model>' --yes"* ]]
   [ -f "$desk/.desk/registry.json" ]
