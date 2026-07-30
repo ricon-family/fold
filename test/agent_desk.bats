@@ -417,6 +417,51 @@ JSON
   grep -q 'shimmer agent --model "$MODEL"' "$work_dir/start-quick-a.sh"
 }
 
+@test "agent:desk:wake isolates inherited email selectors to the authenticated desk home" {
+  home="$BATS_TEST_TMPDIR/home"
+  work_dir="$BATS_TEST_TMPDIR/wake"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  agent_log="$BATS_TEST_TMPDIR/agent.log"
+  make_repo "$home" home
+  printf 'hello packet\n' > "$packet"
+  export AGENT_LOG="$agent_log"
+  export EMAILS_CONFIG="/agents/junior/home/.emails/himalaya.toml"
+  export HIMALAYA_CONFIG="/agents/brownie/home/.emails/himalaya.toml"
+  export __MISE_DIFF="stale-parent-activation"
+  cat > "$TMPBIN/shimmer" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  as)
+    [ -z "${EMAILS_CONFIG:-}" ]
+    [ -z "${HIMALAYA_CONFIG:-}" ]
+    [ -z "${__MISE_DIFF:-}" ]
+    printf 'export AGENT_HOME=%q\n' "$PWD"
+    printf 'export GIT_AUTHOR_NAME=quick\n'
+    printf 'export EMAILS_CONFIG=%q\n' '/agents/wrong/home/.emails/himalaya.toml'
+    printf 'export HIMALAYA_CONFIG=%q\n' '/agents/wrong/home/.emails/himalaya.toml'
+    printf 'export __MISE_DIFF=%q\n' 'wrong-identity-activation'
+    ;;
+  agent)
+    printf 'EMAILS_CONFIG=%s\n' "${EMAILS_CONFIG:-unset}" > "${AGENT_LOG:?}"
+    printf 'HIMALAYA_CONFIG=%s\n' "${HIMALAYA_CONFIG:-unset}" >> "$AGENT_LOG"
+    printf '__MISE_DIFF=%s\n' "${__MISE_DIFF:-unset}" >> "$AGENT_LOG"
+    ;;
+  *) exit 2 ;;
+esac
+SH
+  chmod +x "$TMPBIN/shimmer"
+
+  fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --work-dir "$work_dir" >/dev/null
+  run "$work_dir/start-quick-a.sh"
+
+  [ "$status" -eq 0 ]
+  home_real=$(cd "$home" && pwd -P)
+  grep -Fx "EMAILS_CONFIG=$home_real/.emails/himalaya.toml" "$agent_log"
+  grep -Fx 'HIMALAYA_CONFIG=unset' "$agent_log"
+  grep -Fx '__MISE_DIFF=unset' "$agent_log"
+}
+
 @test "agent:desk:wake launcher stops when identity setup fails" {
   home="$BATS_TEST_TMPDIR/home"
   work_dir="$BATS_TEST_TMPDIR/wake"

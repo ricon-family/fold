@@ -80,6 +80,9 @@ MODEL=$(agent_desk_single_quote "$MODEL")
 TITLE=$(agent_desk_single_quote "$TITLE")
 
 cd "\$HOME_PATH"
+# A desk launch is a fresh identity boundary. Do not let the caller's mail
+# persona or mise activation diff survive into identity setup.
+unset EMAILS_CONFIG HIMALAYA_CONFIG __MISE_DIFF
 identity_shell=\$(cd "\$IDENTITY_SOURCE" && shimmer as "\$AGENT")
 eval "\$identity_shell"
 unset identity_shell
@@ -94,6 +97,10 @@ if [ "\$AUTHENTICATED_HOME" != "\$HOME_PATH" ]; then
   echo "  desk home:          \$HOME_PATH" >&2
   exit 1
 fi
+# Bind the long-lived process to its authenticated home. A missing local file
+# must fail closed instead of falling through to another persona's global config.
+unset HIMALAYA_CONFIG __MISE_DIFF
+export EMAILS_CONFIG="\$AUTHENTICATED_HOME/.emails/himalaya.toml"
 export CHAT_IDENTITY="\$AGENT"
 message=\$(cat "\$PACKET_PATH")
 exec shimmer agent --model "\$MODEL" "[\$TITLE]
