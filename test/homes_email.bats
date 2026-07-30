@@ -110,7 +110,10 @@ SH
   [ "$status" -eq 0 ]
   [[ "$output" == *"Email ready: test-agent <test-agent@ricon.family>"* ]]
   [ "$(cat "$PASSWORD_CAPTURE")" = fixture-email-password ]
-  [ "$(stat -f '%Lp' "$HOME_REPO/.emails/himalaya.toml" 2>/dev/null || stat -c '%a' "$HOME_REPO/.emails/himalaya.toml")" = 600 ]
+  local config_mode
+  config_mode=$(stat -f '%Lp' "$HOME_REPO/.emails/himalaya.toml" 2>/dev/null) \
+    || config_mode=$(stat -c '%a' "$HOME_REPO/.emails/himalaya.toml")
+  [ "$config_mode" = 600 ]
   git -C "$HOME_REPO" check-ignore -q -- .emails/himalaya.toml
   [ -z "$(git -C "$HOME_REPO" status --short --untracked-files=all)" ]
   grep -Fx 'get test-agent/email-password' "$SECRET_LOG"
