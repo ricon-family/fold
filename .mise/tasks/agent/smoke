@@ -34,7 +34,7 @@ manifest_readable() {
 }
 
 check_notes_repo() {
-  local label="$1" dir="$2" status encryption obfuscation
+  local label="$1" dir="$2" failure_status="${3:-FAIL}" status encryption obfuscation
 
   if [ ! -f "$dir/notes/.manifest" ]; then
     row "$label notes" OK "not notes-managed"
@@ -42,7 +42,7 @@ check_notes_repo() {
   fi
 
   if ! status=$(cd "$dir" && "$NOTES_BIN" status --json 2>/dev/null); then
-    row "$label notes" FAIL "notes status failed"
+    row "$label notes" "$failure_status" "notes status failed"
     return 0
   fi
 
@@ -51,12 +51,12 @@ check_notes_repo() {
   if [ "$encryption" = "unlocked" ] && [ "$obfuscation" = "deobfuscated" ]; then
     row "$label notes" OK "unlocked/deobfuscated"
   else
-    row "$label notes" FAIL "${encryption:-?}/${obfuscation:-?}"
+    row "$label notes" "$failure_status" "${encryption:-?}/${obfuscation:-?}"
   fi
 }
 
 check_notes_hooks() {
-  local label="$1" dir="$2" missing=""
+  local label="$1" dir="$2" failure_status="${3:-FAIL}" missing=""
 
   if [ ! -f "$dir/notes/.manifest" ]; then
     row "$label notes hooks" OK "not notes-managed"
@@ -68,7 +68,7 @@ check_notes_hooks() {
   if [ -z "$missing" ]; then
     row "$label notes hooks" OK "pre-commit and post-checkout present"
   else
-    row "$label notes hooks" FAIL "missing:${missing}"
+    row "$label notes hooks" "$failure_status" "missing:${missing}"
   fi
 }
 
@@ -92,9 +92,26 @@ home_prepare_modules() {
   ' "$mise_file"
 }
 
+module_is_required() {
+  local candidate="$1" module
+
+  while IFS= read -r module; do
+    [ "$module" = "$candidate" ] && return 0
+  done < <(printf '%s' "$PREPARE_MODULES_RAW" | xargs printf '%s\n')
+  return 1
+}
+
+home_module_names() {
+  {
+    if [ -f "$HOME_DIR/.modules/manifest" ]; then
+      awk 'NF == 3 || NF == 4 { print $1 }' "$HOME_DIR/.modules/manifest"
+    fi
+    printf '%s' "$PREPARE_MODULES_RAW" | xargs printf '%s\n'
+  } | awk 'NF && !seen[$0]++'
+}
+
 check_required_modules() {
-  local modules_raw module missing=""
-  modules_raw="$(home_prepare_modules || true)"
+  local modules_raw="$PREPARE_MODULES_RAW" module missing=""
 
   if [ -z "$modules_raw" ]; then
     row "required modules" OK "none declared"
@@ -144,18 +161,27 @@ else
   row "home modules manifest" OK "no modules config"
 fi
 
+PREPARE_MODULES_RAW="$(home_prepare_modules || true)"
 check_required_modules
 
-for module in den fold; do
+while IFS= read -r module; do
   module_dir="$HOME_DIR/modules/$module"
   if [ -d "$module_dir/.git" ]; then
-    row "module:$module clone" OK "present"
-    check_notes_repo "module:$module" "$module_dir"
-    check_notes_hooks "module:$module" "$module_dir"
+    if module_is_required "$module"; then
+      row "module:$module clone" OK "present; required"
+      check_notes_repo "module:$module" "$module_dir"
+      check_notes_hooks "module:$module" "$module_dir"
+    else
+      row "module:$module clone" OK "present; optional"
+      check_notes_repo "module:$module" "$module_dir" WARN
+      check_notes_hooks "module:$module" "$module_dir" WARN
+    fi
+  elif module_is_required "$module"; then
+    row "module:$module clone" FAIL "not present; required"
   else
-    row "module:$module clone" OK "not present"
+    row "module:$module clone" OK "not present; optional"
   fi
-done
+done < <(home_module_names)
 
 if [ "$failures" -ne 0 ]; then
   exit 1

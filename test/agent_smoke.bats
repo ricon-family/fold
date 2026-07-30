@@ -12,7 +12,13 @@ set -euo pipefail
 if [ "${1:-}" = "status" ] && [ "${2:-}" = "--json" ]; then
   case "$PWD" in
     *locked*) printf '{"encryption":{"status":"locked"},"obfuscation":{"status":"unknown"}}\n' ;;
-    *) printf '{"encryption":{"status":"unlocked"},"obfuscation":{"status":"deobfuscated"}}\n' ;;
+    *)
+      if [ -f "$PWD/.locked-notes" ]; then
+        printf '{"encryption":{"status":"locked"},"obfuscation":{"status":"unknown"}}\n'
+      else
+        printf '{"encryption":{"status":"unlocked"},"obfuscation":{"status":"deobfuscated"}}\n'
+      fi
+      ;;
   esac
   exit 0
 fi
@@ -56,6 +62,7 @@ add_modules_manifest() {
   cat > "$dir/.modules/manifest" <<'EOF'
 den	https://github.com/ricon-family/den.git	0123456789abcdef0123456789abcdef01234567	main
 fold	https://github.com/ricon-family/fold.git	abcdef0123456789abcdef0123456789abcdef01	main
+or-home	https://github.com/rikonor/home.git	23456789abcdef0123456789abcdef0123456789	main
 EOF
 }
 
@@ -90,6 +97,43 @@ add_module_clone() {
   [[ "$output" == *$'home notes\tOK\tunlocked/deobfuscated'* ]]
   [[ "$output" == *$'required modules\tOK\tden fold'* ]]
   [[ "$output" == *$'module:fold notes\tOK\tunlocked/deobfuscated'* ]]
+}
+
+@test "agent:smoke warns without failing for an unhealthy optional module" {
+  home="$TEST_TMPDIR/home"
+  make_git_repo "$home"
+  add_prepare_task "$home"
+  add_notes_ready "$home"
+  add_modules_manifest "$home"
+  add_prepare_modules_env "$home" "fold"
+  add_module_clone "$home" fold
+  add_module_clone "$home" or-home
+  touch "$home/modules/or-home/.locked-notes"
+  rm "$home/modules/or-home/.git/hooks/post-checkout"
+
+  run fold_task agent:smoke --home "$home"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'module:or-home clone\tOK\tpresent; optional'* ]]
+  [[ "$output" == *$'module:or-home notes\tWARN\tlocked/unknown'* ]]
+  [[ "$output" == *$'module:or-home notes hooks\tWARN\tmissing: post-checkout'* ]]
+  [[ "$output" == *$'module:fold clone\tOK\tpresent; required'* ]]
+}
+
+@test "agent:smoke fails when a required module is locked" {
+  home="$TEST_TMPDIR/home"
+  make_git_repo "$home"
+  add_prepare_task "$home"
+  add_notes_ready "$home"
+  add_modules_manifest "$home"
+  add_prepare_modules_env "$home" "fold"
+  add_module_clone "$home" fold
+  touch "$home/modules/fold/.locked-notes"
+
+  run fold_task agent:smoke --home "$home"
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *$'module:fold notes\tFAIL\tlocked/unknown'* ]]
 }
 
 @test "agent:smoke fails when notes-managed home is locked" {
