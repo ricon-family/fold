@@ -88,6 +88,7 @@ Guidance only works when it appears at the moment you need it. Before starting a
 | Write a README | Read `notes/readme-writing.md` |
 | Review a PR | Read `notes/code-review.md` |
 | Wake or spawn a local worker/agent, continue a session, or dispatch a hosted wake | Read `notes/local-agent-wakes.md`; for several live attachable child desks, also read `notes/session-forking.md` |
+| Observe or supervise another live agent session | Read `notes/agent-supervision-guide.md`; the workflow is untested and requires exact observation and contact authority |
 | Start substantial work whose transition evidence may outgrow a rewind handback | Read `notes/feed-backed-session-progress-map.md`; use a small private feed when it makes resumption easier, put its exact path in the handback, and skip it when the handback is enough |
 | Change GitHub Actions / CI auth | Read `notes/github-actions-ci.md` and `notes/ci-auth-debugging.md` |
 | Check or repair agent GitHub 2FA/PATs | Read `notes/github-2fa-pat-runbook.md` and `notes/credential-rotation-consent.md` |
