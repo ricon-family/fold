@@ -232,6 +232,8 @@ Key commands:
 
 Notes use YAML frontmatter (title, tags, related, created, updated) and `[[wikilinks]]` for cross-referencing. Do not regenerate generated indexes as a commit ritual; fold no longer maintains `notes/index.md` or `notes/graph.md`.
 
+**Avoid Git worktrees for now:** encrypted/obfuscated Notes checkouts do not behave reliably in linked worktrees, so use a clean branch switch or separate clone instead.
+
 ## Legacy HUMAN.md
 
 HUMAN.md is retired as a routine orientation, inbox, and task-queue surface. Do not inspect it at session start or infer current authority from its contents. Use it only when Or explicitly points to a specific historical item.
