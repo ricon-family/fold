@@ -61,12 +61,33 @@ write_fake_sessions() {
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'sessions %s\n' "$*" >> "${SESSIONS_LOG:?}"
+case "${1:-}" in
+  inspect)
+    [ "${2:-}" = --json ] || { echo "expected inspect --json" >&2; exit 2; }
+    [ -n "${FAKE_RESUME_SESSION_ID:-}" ] || { echo "no fake continuation session" >&2; exit 1; }
+    jq -n \
+      --arg session_id "$FAKE_RESUME_SESSION_ID" \
+      --arg filepath "${FAKE_RESUME_SESSION_FILE:?}" \
+      '{session_id:$session_id,filepath:$filepath}'
+    exit 0
+    ;;
+  wake)
+    exit 0
+    ;;
+  ps)
+    [ "${2:-}" = --all ] && [ "${3:-}" = --json ] || {
+      echo "expected ps --all --json" >&2
+      exit 2
+    }
+    ;;
+  *)
+    echo "unexpected sessions command: $*" >&2
+    exit 2
+    ;;
+esac
+
 call_count=$(($(cat "${SESSIONS_CALLS:?}") + 1))
 printf '%s\n' "$call_count" > "$SESSIONS_CALLS"
-if [ "${1:-}" != ps ] || [ "${2:-}" != --all ] || [ "${3:-}" != --json ]; then
-  echo "unexpected sessions command: $*" >&2
-  exit 2
-fi
 if [ "${FAKE_SESSIONS_MODE:-ready}" = invalid ]; then
   printf '{not-json}\n'
   exit 0
@@ -76,6 +97,18 @@ if [ "${FAKE_SESSIONS_MODE:-ready}" = fail ]; then
   exit 42
 fi
 mode="${FAKE_SESSIONS_MODE:-ready}"
+if [ -n "${FAKE_RESUME_SESSION_ID:-}" ]; then
+  status="${FAKE_RESUME_SESSION_STATUS:-exited}"
+  if [ "$mode" = resume-ready ] && [ -f "${SHELL_RUN_MARKER:?}" ]; then
+    status=live
+  fi
+  jq -n \
+    --arg session_id "$FAKE_RESUME_SESSION_ID" \
+    --arg status "$status" \
+    --arg cwd "${FAKE_SESSION_CWD:-}" \
+    '[{session_id:$session_id,status:$status,cwd:$cwd,harness:"pi"}]'
+  exit 0
+fi
 if [ "$mode" = deadline-edge ] && [ "$call_count" -eq 2 ]; then
   sleep "${FAKE_SESSIONS_DELAY:-1.1}"
 fi
@@ -98,6 +131,18 @@ fi
 SH
   chmod +x "$TMPBIN/sessions"
   export SESSIONS_BIN="$TMPBIN/sessions"
+}
+
+write_fake_session_file() {
+  local file="$1" session_id="$2" cwd="$3" agent="$4"
+  local header_id="${5:-$session_id}"
+  jq -nc \
+    --arg header_id "$header_id" \
+    --arg cwd "$cwd" \
+    --arg agent "$agent" \
+    '{type:"session",id:$header_id,cwd:$cwd,meta:{agent:{name:$agent}}}' > "$file"
+  export FAKE_RESUME_SESSION_ID="$session_id"
+  export FAKE_RESUME_SESSION_FILE="$file"
 }
 
 write_fake_mise_for_prepare() {
@@ -440,6 +485,206 @@ JSON
   grep -q 'shimmer agent --model "$MODEL"' "$work_dir/start-quick-a.sh"
 }
 
+@test "agent:desk:wake renders an existing-session continuation under the desk identity" {
+  home="$BATS_TEST_TMPDIR/home"
+  work_dir="$BATS_TEST_TMPDIR/wake"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  session_file="$BATS_TEST_TMPDIR/session.jsonl"
+  make_repo "$home" home
+  printf 'continue carefully\n' > "$packet"
+  home_real=$(cd "$home" && pwd -P)
+  write_fake_session_file "$session_file" continued-pi-session "$home_real" quick
+  export FAKE_SESSION_CWD="$home_real"
+
+  run fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --session continued-pi-session \
+    --model openai-codex/gpt-5.6-sol \
+    --work-dir "$work_dir"
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"session:         continued-pi-session"* ]]
+  grep -q "SESSION_ID='continued-pi-session'" "$work_dir/start-quick-a.sh"
+  grep -q 'exec "$SESSIONS_BIN" wake "$SESSION_ID"' "$work_dir/start-quick-a.sh"
+  grep -Fx '[agent desk wake — root handoff]' "$work_dir/context-quick-a.md"
+  grep -Fx 'continue carefully' "$work_dir/context-quick-a.md"
+
+  cat > "$TMPBIN/shimmer" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  as)
+    printf 'export AGENT_HOME=%q\n' "$PWD"
+    ;;
+  agent)
+    echo "fresh agent launch should not run" >&2
+    exit 99
+    ;;
+  *) exit 2 ;;
+esac
+SH
+  chmod +x "$TMPBIN/shimmer"
+
+  run "$work_dir/start-quick-a.sh"
+
+  [ "$status" -eq 0 ]
+  grep -F 'sessions wake continued-pi-session' "$SESSIONS_LOG" >/dev/null
+  grep -F -- '--context-file' "$SESSIONS_LOG" >/dev/null
+  grep -F -- '--project-trust inherit' "$SESSIONS_LOG" >/dev/null
+}
+
+@test "agent:desk:wake rejects a continuation from another home" {
+  home="$BATS_TEST_TMPDIR/home"
+  other_home="$BATS_TEST_TMPDIR/other-home"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  session_file="$BATS_TEST_TMPDIR/session.jsonl"
+  make_repo "$home" home
+  make_repo "$other_home" other
+  printf 'continue carefully\n' > "$packet"
+  other_real=$(cd "$other_home" && pwd -P)
+  write_fake_session_file "$session_file" continued-pi-session "$other_real" quick
+
+  run fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --session continued-pi-session \
+    --model openai-codex/gpt-5.6-sol
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"session home does not match desk home"* ]]
+}
+
+@test "agent:desk:wake rejects a continuation owned by another agent" {
+  home="$BATS_TEST_TMPDIR/home"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  session_file="$BATS_TEST_TMPDIR/session.jsonl"
+  make_repo "$home" home
+  printf 'continue carefully\n' > "$packet"
+  home_real=$(cd "$home" && pwd -P)
+  write_fake_session_file "$session_file" continued-pi-session "$home_real" junior
+
+  run fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --session continued-pi-session \
+    --model openai-codex/gpt-5.6-sol
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"session agent does not match requested agent"* ]]
+}
+
+@test "agent:desk:wake rejects a continuation whose header ID does not match" {
+  home="$BATS_TEST_TMPDIR/home"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  session_file="$BATS_TEST_TMPDIR/session.jsonl"
+  make_repo "$home" home
+  printf 'continue carefully\n' > "$packet"
+  home_real=$(cd "$home" && pwd -P)
+  write_fake_session_file \
+    "$session_file" continued-pi-session "$home_real" quick other-session
+
+  run fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --session continued-pi-session \
+    --model openai-codex/gpt-5.6-sol
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"session header ID does not match inspected session"* ]]
+}
+
+@test "agent:desk:wake rejects an already-live continuation" {
+  home="$BATS_TEST_TMPDIR/home"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  session_file="$BATS_TEST_TMPDIR/session.jsonl"
+  make_repo "$home" home
+  printf 'continue carefully\n' > "$packet"
+  home_real=$(cd "$home" && pwd -P)
+  write_fake_session_file "$session_file" continued-pi-session "$home_real" quick
+  export FAKE_SESSION_CWD="$home_real"
+  export FAKE_RESUME_SESSION_STATUS=live
+
+  run fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --session continued-pi-session \
+    --model openai-codex/gpt-5.6-sol
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"session is already live: continued-pi-session"* ]]
+}
+
+@test "agent:desk:wake launcher rechecks continuation liveness after identity setup" {
+  home="$BATS_TEST_TMPDIR/home"
+  work_dir="$BATS_TEST_TMPDIR/wake"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  session_file="$BATS_TEST_TMPDIR/session.jsonl"
+  make_repo "$home" home
+  printf 'continue carefully\n' > "$packet"
+  home_real=$(cd "$home" && pwd -P)
+  write_fake_session_file "$session_file" continued-pi-session "$home_real" quick
+  export FAKE_SESSION_CWD="$home_real"
+
+  fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --session continued-pi-session \
+    --model openai-codex/gpt-5.6-sol \
+    --work-dir "$work_dir" >/dev/null
+
+  cat > "$TMPBIN/shimmer" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  as) printf 'export AGENT_HOME=%q\n' "$PWD" ;;
+  *) exit 2 ;;
+esac
+SH
+  chmod +x "$TMPBIN/shimmer"
+  export FAKE_RESUME_SESSION_STATUS=live
+
+  run "$work_dir/start-quick-a.sh"
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"session became live before continuation: continued-pi-session"* ]]
+  ! grep -F 'sessions wake continued-pi-session' "$SESSIONS_LOG" >/dev/null
+}
+
+@test "agent:desk:wake --yes waits for the exact continued session" {
+  home="$BATS_TEST_TMPDIR/home"
+  work_dir="$BATS_TEST_TMPDIR/wake"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  session_file="$BATS_TEST_TMPDIR/session.jsonl"
+  make_repo "$home" home
+  printf 'continue carefully\n' > "$packet"
+  home_real=$(cd "$home" && pwd -P)
+  write_fake_session_file "$session_file" continued-pi-session "$home_real" quick
+  export FAKE_SESSION_CWD="$home_real"
+  export FAKE_SESSIONS_MODE=resume-ready
+
+  run fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --session continued-pi-session \
+    --model openai-codex/gpt-5.6-sol \
+    --work-dir "$work_dir" \
+    --yes
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Agent runtime ready"* ]]
+  [[ "$output" == *"session: continued-pi-session"* ]]
+  work_real=$(cd "$work_dir" && pwd -P)
+  grep -q "shell run --cwd $home_real quick-a $work_real/start-quick-a.sh" "$SHELL_LOG"
+}
+
 @test "agent:desk:wake isolates inherited email selectors to the authenticated desk home" {
   home="$BATS_TEST_TMPDIR/home"
   work_dir="$BATS_TEST_TMPDIR/wake"
@@ -615,7 +860,7 @@ SH
   run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --startup-timeout 1 --work-dir "$work_dir" --yes
 
   [ "$status" -ne 0 ]
-  [[ "$output" == *"no new live Pi process appeared during the 1s window or final observation"* ]]
+  [[ "$output" == *"target Pi process did not become live during the 1s window or final observation"* ]]
   [[ "$output" == *"line one"* ]]
 }
 

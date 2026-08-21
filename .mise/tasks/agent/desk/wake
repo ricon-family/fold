@@ -4,14 +4,16 @@
 #USAGE flag "--home <path>" default="" help="Home repo path for the agent process (default: <desk>/home)"
 #USAGE flag "--shell <name>" default="" help="Attachable shell name to launch"
 #USAGE flag "--packet <path>" default="" help="Wake packet file to pass to the agent"
-#USAGE flag "--model <model>" default="" help="Provider/model passed explicitly to shimmer agent"
+#USAGE flag "--session <id>" default="" help="Existing Pi session ID to continue under the desk identity"
+#USAGE flag "--model <model>" default="" help="Provider/model passed explicitly to the agent runtime"
 #USAGE flag "--title <title>" default="agent desk wake — root handoff" help="Title line prepended to the packet"
 #USAGE flag "--identity-source <path>" default="" help="Directory where 'shimmer as <agent>' runs (default: resolved desk home)"
 #USAGE flag "--startup-timeout <seconds>" default="30" help="Seconds to wait before one final Pi readiness observation"
 #USAGE flag "--work-dir <path>" default="" help="Directory for generated launcher (default: temporary directory)"
 #USAGE flag "-y --yes" default=#false help="Actually call shell run; without this, render and print the plan only"
 #USAGE arg "<agent>" help="Agent identity to launch"
-#USAGE example "mise run agent:desk:wake quick --desk ~/desks/q --shell quick-q --packet /tmp/wake.md --model '<model>' --yes" header="Launch Quick in a desk"
+#USAGE example "mise run agent:desk:wake quick --desk ~/desks/q --shell quick-q --packet ~/agents/quick/wake-context/quick-q.md --model '<model>' --yes" header="Launch Quick in a fresh session"
+#USAGE example "mise run agent:desk:wake quick --desk ~/desks/q --shell quick-q --packet ~/agents/quick/wake-context/quick-q.md --session <session-id> --model '<model>' --yes" header="Continue Quick's existing session"
 set -euo pipefail
 
 ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
@@ -23,6 +25,7 @@ DESK_PATH=$(agent_desk_resolve_desk "${usage_desk:-}")
 HOME_PATH=$(agent_desk_resolve_home "${usage_home:-}" "$DESK_PATH" || true)
 SHELL_NAME="${usage_shell:-}"
 PACKET_PATH="${usage_packet:-}"
+SESSION_ID="${usage_session:-}"
 MODEL="${usage_model:-}"
 TITLE="${usage_title:-agent desk wake — root handoff}"
 IDENTITY_SOURCE="${usage_identity_source:-$HOME_PATH}"
@@ -61,6 +64,86 @@ fi
 PACKET_PATH=$(agent_desk_abs_file "$PACKET_PATH")
 IDENTITY_SOURCE=$(agent_desk_abs_path "$IDENTITY_SOURCE")
 
+SESSION_FILE=""
+if [ -n "$SESSION_ID" ]; then
+  if ! command -v "$SESSIONS_BIN" >/dev/null 2>&1; then
+    echo "ERROR: sessions command not found: $SESSIONS_BIN" >&2
+    exit 1
+  fi
+  if ! command -v "$JQ_BIN" >/dev/null 2>&1; then
+    echo "ERROR: jq command not found: $JQ_BIN" >&2
+    exit 1
+  fi
+  if ! session_info=$("$SESSIONS_BIN" inspect --json "$SESSION_ID"); then
+    echo "ERROR: could not inspect session: $SESSION_ID" >&2
+    exit 1
+  fi
+  if ! printf '%s\n' "$session_info" | "$JQ_BIN" -e 'type == "object"' >/dev/null; then
+    echo "ERROR: Sessions inspect output is not a JSON object" >&2
+    exit 1
+  fi
+  if ! SESSION_ID=$(printf '%s\n' "$session_info" | "$JQ_BIN" -er '.session_id | select(type == "string" and length > 0)'); then
+    echo "ERROR: Sessions inspect output has no session ID" >&2
+    exit 1
+  fi
+  if ! SESSION_FILE=$(printf '%s\n' "$session_info" | "$JQ_BIN" -er '.filepath | select(type == "string" and length > 0)'); then
+    echo "ERROR: Sessions inspect output has no session file" >&2
+    exit 1
+  fi
+  if [ ! -f "$SESSION_FILE" ]; then
+    echo "ERROR: inspected session file not found: $SESSION_FILE" >&2
+    exit 1
+  fi
+  if ! IFS= read -r session_header < "$SESSION_FILE"; then
+    echo "ERROR: could not read session header: $SESSION_FILE" >&2
+    exit 1
+  fi
+  if ! session_header_id=$(printf '%s\n' "$session_header" | "$JQ_BIN" -er 'select(.type == "session") | .id | select(type == "string" and length > 0)'); then
+    echo "ERROR: session header has no session ID" >&2
+    exit 1
+  fi
+  if ! session_home=$(printf '%s\n' "$session_header" | "$JQ_BIN" -er '.cwd | select(type == "string" and length > 0)'); then
+    echo "ERROR: session header has no home directory" >&2
+    exit 1
+  fi
+  if ! session_agent=$(printf '%s\n' "$session_header" | "$JQ_BIN" -er '.meta.agent.name | select(type == "string" and length > 0)'); then
+    echo "ERROR: session header has no agent identity" >&2
+    exit 1
+  fi
+  if [ "$session_header_id" != "$SESSION_ID" ]; then
+    echo "ERROR: session header ID does not match inspected session" >&2
+    echo "  session header: $session_header_id" >&2
+    echo "  inspected:      $SESSION_ID" >&2
+    exit 1
+  fi
+  if [ "$session_home" != "$HOME_PATH" ]; then
+    echo "ERROR: session home does not match desk home" >&2
+    echo "  session home: $session_home" >&2
+    echo "  desk home:    $HOME_PATH" >&2
+    exit 1
+  fi
+  if [ "$session_agent" != "$AGENT" ]; then
+    echo "ERROR: session agent does not match requested agent" >&2
+    echo "  session agent:   $session_agent" >&2
+    echo "  requested agent: $AGENT" >&2
+    exit 1
+  fi
+  if ! session_processes=$("$SESSIONS_BIN" ps --all --json); then
+    echo "ERROR: could not inspect Sessions processes before continuation" >&2
+    exit 1
+  fi
+  if ! printf '%s\n' "$session_processes" | "$JQ_BIN" -e 'type == "array"' >/dev/null; then
+    echo "ERROR: Sessions process output is not a JSON array" >&2
+    exit 1
+  fi
+  if printf '%s\n' "$session_processes" |
+    "$JQ_BIN" -e --arg session_id "$SESSION_ID" \
+      '.[] | select(.session_id == $session_id and .status == "live")' >/dev/null; then
+    echo "ERROR: session is already live: $SESSION_ID" >&2
+    exit 1
+  fi
+fi
+
 if [ -z "$WORK_DIR" ]; then
   WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/fold-agent-desk-wake.XXXXXX")
 else
@@ -68,6 +151,14 @@ else
   WORK_DIR=$(agent_desk_abs_path "$WORK_DIR")
 fi
 LAUNCHER="$WORK_DIR/start-$SHELL_NAME.sh"
+CONTEXT_PATH=""
+if [ -n "$SESSION_ID" ]; then
+  CONTEXT_PATH="$WORK_DIR/context-$SHELL_NAME.md"
+  {
+    printf '[%s]\n' "$TITLE"
+    cat "$PACKET_PATH"
+  } > "$CONTEXT_PATH"
+fi
 
 cat > "$LAUNCHER" <<LAUNCHER
 #!/usr/bin/env bash
@@ -76,6 +167,10 @@ AGENT=$(agent_desk_single_quote "$AGENT")
 HOME_PATH=$(agent_desk_single_quote "$HOME_PATH")
 IDENTITY_SOURCE=$(agent_desk_single_quote "$IDENTITY_SOURCE")
 PACKET_PATH=$(agent_desk_single_quote "$PACKET_PATH")
+CONTEXT_PATH=$(agent_desk_single_quote "$CONTEXT_PATH")
+SESSION_ID=$(agent_desk_single_quote "$SESSION_ID")
+SESSIONS_BIN=$(agent_desk_single_quote "$SESSIONS_BIN")
+JQ_BIN=$(agent_desk_single_quote "$JQ_BIN")
 MODEL=$(agent_desk_single_quote "$MODEL")
 TITLE=$(agent_desk_single_quote "$TITLE")
 
@@ -102,6 +197,27 @@ fi
 unset HIMALAYA_CONFIG __MISE_DIFF
 export EMAILS_CONFIG="\$AUTHENTICATED_HOME/.emails/himalaya.toml"
 export CHAT_IDENTITY="\$AGENT"
+if [ -n "\$SESSION_ID" ]; then
+  if ! session_processes=\$("\$SESSIONS_BIN" ps --all --json); then
+    echo "ERROR: could not recheck Sessions processes before continuation" >&2
+    exit 1
+  fi
+  if ! printf '%s\n' "\$session_processes" | "\$JQ_BIN" -e 'type == "array"' >/dev/null; then
+    echo "ERROR: Sessions process recheck is not a JSON array" >&2
+    exit 1
+  fi
+  if printf '%s\n' "\$session_processes" |
+    "\$JQ_BIN" -e --arg session_id "\$SESSION_ID" \
+      '.[] | select(.session_id == \$session_id and .status == "live")' >/dev/null; then
+    echo "ERROR: session became live before continuation: \$SESSION_ID" >&2
+    exit 1
+  fi
+  exec "\$SESSIONS_BIN" wake "\$SESSION_ID" \
+    --context-file "\$CONTEXT_PATH" \
+    --message "Resume from the injected agent desk continuation handoff." \
+    --model "\$MODEL" \
+    --project-trust inherit
+fi
 message=\$(cat "\$PACKET_PATH")
 exec shimmer agent --model "\$MODEL" "[\$TITLE]
 \${message}"
@@ -114,6 +230,7 @@ printf 'desk:            %s\n' "${DESK_PATH:-'(not resolved)'}"
 printf 'home:            %s\n' "$HOME_PATH"
 printf 'shell:           %s\n' "$SHELL_NAME"
 printf 'packet:          %s\n' "$PACKET_PATH"
+printf 'session:         %s\n' "${SESSION_ID:-'(new session)'}"
 printf 'model:           %s\n' "$MODEL"
 printf 'identity-source: %s\n' "$IDENTITY_SOURCE"
 printf 'startup window:  %ss plus one final observation\n' "$STARTUP_TIMEOUT"
@@ -142,13 +259,17 @@ if ! printf '%s\n' "$session_processes" | "$JQ_BIN" -e 'type == "array"' >/dev/n
   echo "ERROR: Sessions process output is not a JSON array" >&2
   exit 1
 fi
-printf '%s\n' "$session_processes" |
-  "$JQ_BIN" -r --arg cwd "$HOME_PATH" '.[] | select(.cwd == $cwd) | .session_id' > "$BASELINE_IDS"
+if [ -n "$SESSION_ID" ]; then
+  : > "$BASELINE_IDS"
+else
+  printf '%s\n' "$session_processes" |
+    "$JQ_BIN" -r --arg cwd "$HOME_PATH" '.[] | select(.cwd == $cwd) | .session_id' > "$BASELINE_IDS"
+fi
 
 printf '\nlaunching shell %s from %s\n' "$SHELL_NAME" "$HOME_PATH"
 "$AGENT_DESK_SHELL_BIN" run --cwd "$HOME_PATH" "$SHELL_NAME" "$LAUNCHER"
 
-printf '\nwaiting %ss plus one final observation for a new live Pi process\n' "$STARTUP_TIMEOUT"
+printf '\nwaiting %ss plus one final observation for the target Pi process to become live\n' "$STARTUP_TIMEOUT"
 started_at=$SECONDS
 while :; do
   final_observation=false
@@ -171,18 +292,26 @@ while :; do
     echo "ERROR: Sessions process output is not a JSON array" >&2
     exit 1
   fi
-  ready_id=$(
-    printf '%s\n' "$session_processes" |
-      "$JQ_BIN" -r --arg cwd "$HOME_PATH" \
-        '.[] | select(.cwd == $cwd and .status == "live" and .harness == "pi") | .session_id' |
-      while IFS= read -r session_id; do
-        [ -n "$session_id" ] || continue
-        if ! grep -Fqx "$session_id" "$BASELINE_IDS"; then
-          printf '%s\n' "$session_id"
-          break
-        fi
-      done
-  )
+  if [ -n "$SESSION_ID" ]; then
+    ready_id=$(
+      printf '%s\n' "$session_processes" |
+        "$JQ_BIN" -r --arg session_id "$SESSION_ID" --arg cwd "$HOME_PATH" \
+          '.[] | select(.session_id == $session_id and .cwd == $cwd and .status == "live" and .harness == "pi") | .session_id'
+    )
+  else
+    ready_id=$(
+      printf '%s\n' "$session_processes" |
+        "$JQ_BIN" -r --arg cwd "$HOME_PATH" \
+          '.[] | select(.cwd == $cwd and .status == "live" and .harness == "pi") | .session_id' |
+        while IFS= read -r session_id; do
+          [ -n "$session_id" ] || continue
+          if ! grep -Fqx "$session_id" "$BASELINE_IDS"; then
+            printf '%s\n' "$session_id"
+            break
+          fi
+        done
+    )
+  fi
   if [ -n "$ready_id" ]; then
     printf 'Agent runtime ready\n\n'
     printf 'session: %s\n' "$ready_id"
@@ -199,7 +328,7 @@ while :; do
   fi
 done
 
-echo "ERROR: no new live Pi process appeared during the ${STARTUP_TIMEOUT}s window or final observation" >&2
+echo "ERROR: target Pi process did not become live during the ${STARTUP_TIMEOUT}s window or final observation" >&2
 if ! mise run -q agent:desk:smoke --shell "$SHELL_NAME"; then
   : # Preserve the primary startup timeout if diagnostics also fail.
 fi
