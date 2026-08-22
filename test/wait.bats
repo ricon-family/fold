@@ -65,6 +65,72 @@ process_is_dead() {
   [[ "$output" == *"Wait across Chat and Sessions"* ]]
 }
 
+@test "wait resolves managed executables instead of ambient PATH" {
+  AMBIENT_LOG="$BATS_TEST_TMPDIR/ambient.log"
+  RESOLUTION_LOG="$BATS_TEST_TMPDIR/resolution.log"
+  export AMBIENT_LOG RESOLUTION_LOG TMPBIN
+
+  cat > "$TMPBIN/chat" <<'SH'
+#!/usr/bin/env bash
+printf 'ambient chat\n' >> "$AMBIENT_LOG"
+exit 99
+SH
+  cat > "$TMPBIN/sessions" <<'SH'
+#!/usr/bin/env bash
+printf 'ambient sessions\n' >> "$AMBIENT_LOG"
+exit 99
+SH
+  cat > "$TMPBIN/managed-chat" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' '{"sender":"or","timestamp":"2026-08-22 17:00","body":"hello"}'
+SH
+  cat > "$TMPBIN/managed-sessions" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' '{"event":"turn.settled","events":[{"session_id":"alpha","text":"done"}]}'
+SH
+  cat > "$TMPBIN/managed-mise" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$RESOLUTION_LOG"
+case "${!#}" in
+  chat) printf '%s\n' "$TMPBIN/managed-chat" ;;
+  sessions) printf '%s\n' "$TMPBIN/managed-sessions" ;;
+  *) exit 2 ;;
+esac
+SH
+  chmod +x \
+    "$TMPBIN/chat" \
+    "$TMPBIN/sessions" \
+    "$TMPBIN/managed-chat" \
+    "$TMPBIN/managed-sessions" \
+    "$TMPBIN/managed-mise"
+
+  export MISE="$TMPBIN/managed-mise"
+  export PATH="$TMPBIN:$PATH"
+  unset CHAT SESSIONS
+
+  run fold_task wait \
+    --chat ops \
+    --as alice \
+    --from or \
+    --state-dir "$BATS_TEST_TMPDIR/chat-state" \
+    --timeout 5
+
+  [ "$status" -eq 0 ]
+  jq -e '.source == "chat" and .records[0].sender == "or"' <<< "$output"
+
+  run fold_task wait \
+    --session alpha \
+    --state-dir "$BATS_TEST_TMPDIR/sessions-state" \
+    --timeout 5
+
+  [ "$status" -eq 0 ]
+  jq -e '.source == "sessions" and .records[0].event == "turn.settled"' <<< "$output"
+  [ ! -e "$AMBIENT_LOG" ]
+  grep -F 'which -C' "$RESOLUTION_LOG" | grep -F 'chat'
+  grep -F 'which -C' "$RESOLUTION_LOG" | grep -F 'sessions'
+}
+
 @test "wait rejects a request without a source" {
   run fold_task wait --state-dir "$STATE_DIR"
 

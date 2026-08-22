@@ -22,6 +22,23 @@ def fail [message: string] {
 }
 
 
+def resolve-executable [name: string override_value] {
+  let explicit = ($override_value | default "" | str trim)
+  if $explicit != "" {
+    return $explicit
+  }
+
+  let mise = ($env.MISE? | default "mise")
+  let result = (run-external $mise "which" "-C" $env.MISE_CONFIG_ROOT $name | complete)
+  let path = ($result.stdout | str trim)
+  if $result.exit_code != 0 or $path == "" {
+    error make {msg: $"mise could not resolve managed executable: ($name)"}
+  }
+
+  $path
+}
+
+
 let request = try {
   build-request {
     sessions: $env.usage_session
@@ -38,9 +55,13 @@ let request = try {
   fail $error.msg
 }
 
-let executables = {
-  chat: ($env.CHAT? | default "chat")
-  sessions: ($env.SESSIONS? | default "sessions")
+let executables = try {
+  {
+    chat: (if ($request.chat.room | is-empty) { "" } else { resolve-executable "chat" $env.CHAT? })
+    sessions: (if ($request.sessions | is-empty) { "" } else { resolve-executable "sessions" $env.SESSIONS? })
+  }
+} catch {|error|
+  fail $error.msg
 }
 
 let waiters = (build-waiters $request $executables)
