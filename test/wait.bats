@@ -217,6 +217,27 @@ SH
   process_is_dead "$slow_pid"
 }
 
+@test "wait returns a wall-clock timeout and stops the quiet source" {
+  export CHAT="$TMPBIN/slow-chat"
+
+  run fold_task wait \
+    --chat ops \
+    --as alice \
+    --from or \
+    --state-dir "$STATE_DIR" \
+    --timeout 1
+
+  [ "$status" -eq 0 ]
+  jq -e '
+    .source == "wait"
+    and .exit_code == 124
+    and .records == [{"event":"timeout","timeout_seconds":1}]
+  ' <<< "$output"
+
+  slow_pid=$(cat "$SLOW_PID_FILE")
+  process_is_dead "$slow_pid"
+}
+
 @test "wait restarts one Chat child and applies sender-or-mention rules" {
   CHAT_CALLS="$BATS_TEST_TMPDIR/chat-calls"
   export CHAT_CALLS

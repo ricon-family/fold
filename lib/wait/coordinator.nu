@@ -200,16 +200,23 @@ def result-event [result: record] {
 }
 
 
-def receive-first [timeout: record] {
-  if $timeout.duration == null {
-    {timed_out: false result: (job recv)}
-  } else {
-    try {
-      {timed_out: false result: (job recv --timeout $timeout.duration)}
-    } catch {
-      {timed_out: true}
-    }
+def spawn-deadline [parent_id: int deadline] {
+  if $deadline == null {
+    return
   }
+
+  job spawn --description "wait deadline" {
+    loop {
+      let remaining = $deadline - (date now)
+      if $remaining <= 0sec {
+        {coordinator_timeout: true} | job send $parent_id
+        break
+      }
+
+      let pause = if $remaining < 1sec { $remaining } else { 1sec }
+      sleep $pause
+    }
+  } | ignore
 }
 
 
@@ -231,26 +238,30 @@ export def run-waiters [waiters: list<record> state_dir: string timeout: record]
   for waiter in $waiters {
     spawn-waiter $parent_id $waiter
   }
+  spawn-deadline $parent_id $timeout.deadline
 
-  let received = (receive-first $timeout)
-  if $received.timed_out {
-    {
+  let ready = (collect-ready-results (job recv))
+  let results = (
+    $ready
+    | where {|result| not ($result.coordinator_timeout? | default false) }
+  )
+  if ($results | is-empty) {
+    return {
       events: [(timeout-event $timeout.seconds)]
       exit_code: 0
     }
-  } else {
-    let results = (collect-ready-results $received.result)
-    let events = ($results | each {|result| result-event $result })
-    let failures = ($events | where exit_code != 0)
-    let exit_code = if ($failures | is-empty) {
-      0
-    } else {
-      $failures | first | get exit_code
-    }
+  }
 
-    {
-      events: $events
-      exit_code: $exit_code
-    }
+  let events = ($results | each {|result| result-event $result })
+  let failures = ($events | where exit_code != 0)
+  let exit_code = if ($failures | is-empty) {
+    0
+  } else {
+    $failures | first | get exit_code
+  }
+
+  {
+    events: $events
+    exit_code: $exit_code
   }
 }

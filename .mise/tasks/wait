@@ -71,7 +71,7 @@ let timeout_duration = if $request.timeout_seconds == 0 {
   $"($request.timeout_seconds)sec" | into duration
 }
 let timeout = {
-  duration: $timeout_duration
+  deadline: (if $timeout_duration == null { null } else { (date now) + $timeout_duration })
   seconds: $request.timeout_seconds
 }
 let outcome = (run-waiters $waiters $request.state_dir $timeout)

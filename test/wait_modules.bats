@@ -1,5 +1,8 @@
 #!/usr/bin/env bats
 
+# Embedded Nushell snippets require literal dollar expressions.
+# shellcheck disable=SC2016
+
 bats_require_minimum_version 1.5.0
 
 load test_helper
@@ -92,14 +95,16 @@ export -f wait_nu
   [ "$output" = '["sessions","chat:mention:alice"]' ]
 }
 
-@test "coordinator returns a structured timeout without a wall-clock delay" {
-  export WAIT_TEST_STATE_DIR="$BATS_TEST_TMPDIR/timeout-state"
+@test "coordinator returns an expired wall-clock deadline immediately" {
+  export TIMEOUT_STATE_DIR="$BATS_TEST_TMPDIR/timeout-state"
 
   run wait_nu '
     use ./lib/wait/coordinator.nu run-waiters
 
-    run-waiters [] $env.WAIT_TEST_STATE_DIR {duration: 1ms seconds: 0.001}
-    | to json -r
+    run-waiters [] $env.TIMEOUT_STATE_DIR {
+      deadline: ((date now) - 1sec)
+      seconds: 300
+    } | to json -r
   '
 
   [ "$status" -eq 0 ]
@@ -109,7 +114,40 @@ export -f wait_nu
       "source": "wait",
       "cursor_file": null,
       "exit_code": 124,
-      "records": [{"event": "timeout", "timeout_seconds": 0.001}],
+      "records": [{"event": "timeout", "timeout_seconds": 300}],
+      "stderr": ""
+    }]
+  ' <<< "$output"
+}
+
+@test "coordinator prefers an already-queued source at the deadline" {
+  export SOURCE_AT_DEADLINE_STATE_DIR="$BATS_TEST_TMPDIR/source-at-deadline-state"
+
+  run wait_nu '
+    use ./lib/wait/coordinator.nu run-waiters
+
+    {
+      source: "sessions"
+      cursor_file: "/tmp/sessions.json"
+      stdout: "{\"event\":\"turn.settled\",\"events\":[]}"
+      stderr: ""
+      exit_code: 0
+    } | job send 0
+
+    run-waiters [] $env.SOURCE_AT_DEADLINE_STATE_DIR {
+      deadline: ((date now) - 1sec)
+      seconds: 300
+    } | to json -r
+  '
+
+  [ "$status" -eq 0 ]
+  jq -e '
+    .exit_code == 0
+    and .events == [{
+      "source": "sessions",
+      "cursor_file": "/tmp/sessions.json",
+      "exit_code": 0,
+      "records": [{"event": "turn.settled", "events": []}],
       "stderr": ""
     }]
   ' <<< "$output"
