@@ -151,6 +151,53 @@ process_is_dead() {
   process_is_dead "$slow_pid"
 }
 
+@test "wait restarts one Chat child and applies sender-or-mention rules" {
+  CHAT_CALLS="$BATS_TEST_TMPDIR/chat-calls"
+  export CHAT_CALLS
+  cat > "$TMPBIN/chat-sequence" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+calls=0
+if [ -f "$CHAT_CALLS" ]; then
+  calls=$(cat "$CHAT_CALLS")
+fi
+calls=$((calls + 1))
+printf '%s\n' "$calls" > "$CHAT_CALLS"
+
+if [ "$calls" -eq 1 ]; then
+  printf '%s\n' '{"sender":"bob","timestamp":"2026-08-22 17:00","body":"hello @alice-helper"}'
+  exit 0
+fi
+
+printf '%s\n' \
+  '{"sender":"or","timestamp":"2026-08-22 17:01","body":"plain update"}' \
+  '{"sender":"bob","timestamp":"2026-08-22 17:02","body":"hello @alice!"}' \
+  '{"sender":"quick","timestamp":"2026-08-22 17:03","body":"unrelated"}'
+SH
+  chmod +x "$TMPBIN/chat-sequence"
+  export CHAT="$TMPBIN/chat-sequence"
+
+  run fold_task wait \
+    --chat ops \
+    --as alice \
+    --from or \
+    --mention alice \
+    --state-dir "$STATE_DIR" \
+    --timeout 5
+
+  [ "$status" -eq 0 ]
+  [ "$(cat "$CHAT_CALLS")" -eq 2 ]
+  jq -e '
+    .source == "chat"
+    and .exit_code == 0
+    and (.records | length) == 2
+    and .records[0].sender == "or"
+    and .records[0].body == "plain update"
+    and .records[1].sender == "bob"
+    and .records[1].body == "hello @alice!"
+  ' <<< "$output"
+}
+
 @test "wait returns a structured source failure" {
   cat > "$TMPBIN/failing-sessions" <<'SH'
 #!/usr/bin/env bash

@@ -9,7 +9,7 @@ wait_nu() {
 }
 export -f wait_nu
 
-@test "waiter cursor identity survives Chat filter reordering" {
+@test "waiter planning uses one Chat cursor across filter reordering" {
   run wait_nu '
     use ./lib/wait/request.nu build-request
     use ./lib/wait/waiters.nu build-waiters
@@ -21,7 +21,7 @@ export -f wait_nu
           room: "ops"
           identity: "alice"
           senders: $senders
-          mentions: ""
+          mentions: "alice"
         }
         state_dir: "/tmp/wait-state"
         timeout_seconds: "120"
@@ -30,21 +30,25 @@ export -f wait_nu
 
     let executables = {chat: "chat" sessions: "sessions"}
     {
-      original: (build-waiters (request "or bob or") $executables)
-      reordered: (build-waiters (request "bob or") $executables)
+      original: (build-waiters (request "or bob or") $executables | first)
+      reordered: (build-waiters (request "bob or") $executables | first)
     } | to json -r
   '
 
   [ "$status" -eq 0 ]
-  [ "$(jq '.original | length' <<< "$output")" -eq 2 ]
-
-  original_or=$(jq -r '.original[] | select(.source == "chat:from:or") | .cursor_file' <<< "$output")
-  reordered_or=$(jq -r '.reordered[] | select(.source == "chat:from:or") | .cursor_file' <<< "$output")
-  original_bob=$(jq -r '.original[] | select(.source == "chat:from:bob") | .cursor_file' <<< "$output")
-
-  [ "$original_or" = "$reordered_or" ]
-  [ "$original_or" != "$original_bob" ]
-  jq -e 'all(.original[]; .command[-3:] == ["--timeout", "0", "--json"])' <<< "$output"
+  jq -e '
+    .original.kind == "chat"
+    and .original.source == "chat"
+    and .original.match == {
+      "identity": "alice",
+      "senders": ["or", "bob"],
+      "mentions": ["alice"]
+    }
+    and .original.command[-3:] == ["--timeout", "0", "--json"]
+    and (.original.command | index("--by")) == null
+    and (.original.command | index("--mention")) == null
+    and .original.cursor_file == .reordered.cursor_file
+  ' <<< "$output"
 }
 
 @test "waiter planning preserves a hyphenated session ID" {

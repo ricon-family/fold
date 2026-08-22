@@ -19,6 +19,47 @@ def add-diagnostic [stderr: string message: string] {
 }
 
 
+def mentions [body: string identity: string] {
+  let suffixes = ($body | split row $"@($identity)" | skip 1)
+  $suffixes | any {|suffix|
+    if $suffix == "" {
+      true
+    } else {
+      let next = ($suffix | split chars | first)
+      not ($next =~ '^[A-Za-z0-9_.-]$')
+    }
+  }
+}
+
+
+def relevant-chat-message [message: record match: record] {
+  let sender = $message.sender
+  let body = $message.body
+  if (
+    ($sender | describe --detailed | get type) != "string"
+    or ($body | describe --detailed | get type) != "string"
+  ) {
+    error make {msg: "Chat message sender and body must be strings"}
+  }
+
+  let unrestricted = (
+    ($match.senders | is-empty)
+    and ($match.mentions | is-empty)
+  )
+  let sender_matches = ($match.senders | any {|expected| $sender == $expected })
+  let mention_matches = (
+    $match.mentions
+    | any {|identity| mentions $body $identity }
+  )
+
+  $sender != $match.identity and (
+    $unrestricted
+    or $sender_matches
+    or $mention_matches
+  )
+}
+
+
 # Batch only results already queued when the first source settles.
 # A quiet source remains cancellable without adding a timing grace period.
 export def collect-ready-results [first: record] {
@@ -43,28 +84,86 @@ export def collect-ready-results [first: record] {
 }
 
 
+def complete-waiter [waiter: record] {
+  let result = try {
+    run-external ...$waiter.command | complete
+  } catch {|error|
+    {
+      stdout: ""
+      stderr: $error.msg
+      exit_code: 127
+    }
+  }
+  {
+    source: $waiter.source
+    cursor_file: $waiter.cursor_file
+    command: $waiter.command
+    stdout: $result.stdout
+    stderr: $result.stderr
+    exit_code: $result.exit_code
+  }
+}
+
+
+def complete-relevant-chat [waiter: record] {
+  loop {
+    let result = (complete-waiter $waiter)
+    if $result.exit_code != 0 {
+      return $result
+    }
+
+    let parsed = try {
+      {valid: true records: (json-records $result.stdout)}
+    } catch {
+      {valid: false records: []}
+    }
+    if (not $parsed.valid) or ($parsed.records | is-empty) {
+      return $result
+    }
+
+    let selected = try {
+      {
+        valid: true
+        records: (
+          $parsed.records
+          | where {|message| relevant-chat-message $message $waiter.match }
+        )
+      }
+    } catch {|error|
+      {valid: false records: [] error: $error.msg}
+    }
+    if not $selected.valid {
+      return (
+        $result
+        | upsert stdout ""
+        | upsert stderr (
+            add-diagnostic $result.stderr $"invalid Chat message: ($selected.error)"
+          )
+        | upsert exit_code 1
+      )
+    }
+
+    if ($selected.records | is-not-empty) {
+      let stdout = (
+        $selected.records
+        | each {|record| $record | to json -r }
+        | str join "\n"
+      )
+      return ($result | upsert stdout $stdout)
+    }
+  }
+}
+
+
 def spawn-waiter [parent_id: int waiter: record] {
   let source = $waiter.source
-  let cursor_file = $waiter.cursor_file
-  let command = $waiter.command
   job spawn --description $source {
-    let result = try {
-      run-external ...$command | complete
-    } catch {|error|
-      {
-        stdout: ""
-        stderr: $error.msg
-        exit_code: 127
-      }
+    let result = if $waiter.kind == "chat" {
+      complete-relevant-chat $waiter
+    } else {
+      complete-waiter $waiter
     }
-    {
-      source: $source
-      cursor_file: $cursor_file
-      command: $command
-      stdout: $result.stdout
-      stderr: $result.stderr
-      exit_code: $result.exit_code
-    } | job send $parent_id
+    $result | job send $parent_id
   } | ignore
 }
 
