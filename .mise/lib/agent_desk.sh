@@ -189,6 +189,22 @@ agent_desk_identity_error() {
   exit 1
 }
 
+agent_desk_signing_keys_match() {
+  local expected actual
+
+  expected=$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]' | sed 's/^0X//')
+  actual=$(printf '%s' "$2" | tr '[:lower:]' '[:upper:]' | sed 's/^0X//')
+  case "$expected:$actual" in
+    *[!0-9A-F:]*|:*|*:) return 1 ;;
+  esac
+  [ "${#expected}" -ge 16 ] || return 1
+  [ "${#actual}" -ge 16 ] || return 1
+  [ "$expected" = "$actual" ] && return 0
+  case "$expected" in *"$actual") return 0 ;; esac
+  case "$actual" in *"$expected") return 0 ;; esac
+  return 1
+}
+
 agent_desk_activate_target_identity() {
   local actual_home actual_github actual_name actual_email actual_signing_key
   local identity_shell
@@ -224,7 +240,7 @@ agent_desk_activate_target_identity() {
     agent_desk_identity_error "Git config user.name is not $AGENT"
   [ "$actual_email" = "$EXPECTED_EMAIL" ] || \
     agent_desk_identity_error "Git config user.email is not $EXPECTED_EMAIL"
-  [ "$actual_signing_key" = "$EXPECTED_SIGNING_KEY" ] || \
+  agent_desk_signing_keys_match "$EXPECTED_SIGNING_KEY" "$actual_signing_key" || \
     agent_desk_identity_error "Git signing key does not match the prepared target home"
   [ "$(git -C "$HOME_PATH" config --bool commit.gpgsign || true)" = true ] || \
     agent_desk_identity_error "Git commit signing is not enabled"

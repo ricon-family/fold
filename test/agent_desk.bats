@@ -180,7 +180,7 @@ case "${1:-}" in
     printf 'export GIT_CONFIG_KEY_1=user.email\n'
     printf 'export GIT_CONFIG_VALUE_1=quick@ricon.family\n'
     printf 'export GIT_CONFIG_KEY_2=user.signingkey\n'
-    printf 'export GIT_CONFIG_VALUE_2=fixture-signing-key\n'
+    printf 'export GIT_CONFIG_VALUE_2=%q\n' "${FAKE_ACTIVE_SIGNING_KEY:-AABBCCDDEEFF0011}"
     printf 'export GIT_CONFIG_KEY_3=commit.gpgsign\n'
     printf 'export GIT_CONFIG_VALUE_3=true\n'
     ;;
@@ -338,7 +338,7 @@ make_repo() {
   git init -q -b main "$repo"
   git -C "$repo" config user.name fixture
   git -C "$repo" config user.email fixture@example.test
-  git -C "$repo" config user.signingkey fixture-signing-key
+  git -C "$repo" config user.signingkey AABBCCDDEEFF0011
   git -C "$repo" config commit.gpgsign false
   printf '%s\n' "$name" > "$repo/README.md"
   git -C "$repo" add README.md
@@ -610,6 +610,45 @@ JSON
   grep -Fx 'GIT_COMMITTER_NAME=quick' "$agent_log"
   grep -Fx 'GIT_COMMITTER_EMAIL=quick@ricon.family' "$agent_log"
   grep -Fx 'GH_TOKEN=quick-target-token' "$agent_log"
+}
+
+@test "agent:desk:wake accepts the prepared fingerprint through its active long key ID" {
+  home="$BATS_TEST_TMPDIR/home"
+  work_dir="$BATS_TEST_TMPDIR/wake"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  agent_log="$BATS_TEST_TMPDIR/agent.log"
+  make_repo "$home" home
+  git -C "$home" config user.signingkey E290F2F77201FF5E0E3B75A65EA22CEE669F73CB
+  printf 'hello packet\n' > "$packet"
+  export AGENT_LOG="$agent_log"
+  export FAKE_ACTIVE_SIGNING_KEY=5ea22cee669f73cb
+  write_target_identity_shimmer
+
+  fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --work-dir "$work_dir" >/dev/null
+  run "$work_dir/start-quick-a.sh"
+
+  [ "$status" -eq 0 ]
+  [ -e "$agent_log" ]
+}
+
+@test "agent:desk:wake rejects an unrelated active signing key" {
+  home="$BATS_TEST_TMPDIR/home"
+  work_dir="$BATS_TEST_TMPDIR/wake"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  agent_log="$BATS_TEST_TMPDIR/agent.log"
+  make_repo "$home" home
+  git -C "$home" config user.signingkey E290F2F77201FF5E0E3B75A65EA22CEE669F73CB
+  printf 'hello packet\n' > "$packet"
+  export AGENT_LOG="$agent_log"
+  export FAKE_ACTIVE_SIGNING_KEY=1111222233334444
+  write_target_identity_shimmer
+
+  fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --work-dir "$work_dir" >/dev/null
+  run "$work_dir/start-quick-a.sh"
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Git signing key does not match the prepared target home"* ]]
+  [ ! -e "$agent_log" ]
 }
 
 @test "agent:desk:wake fails closed on a target GitHub mismatch" {
