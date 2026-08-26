@@ -12,11 +12,14 @@ setup() {
   export SHELL_RUN_MARKER="$BATS_TEST_TMPDIR/shell-ran"
   export SHELL_EXITED_MARKER="$BATS_TEST_TMPDIR/shell-exited"
   export SESSIONS_LOG="$BATS_TEST_TMPDIR/sessions.log"
+  export SESSIONS_ENV_LOG="$BATS_TEST_TMPDIR/sessions-env.log"
   export SESSIONS_CALLS="$BATS_TEST_TMPDIR/sessions-calls"
   printf '0\n' > "$SESSIONS_CALLS"
   export FAKE_SESSIONS_MODE="ready"
+  export FAKE_GITHUB_LOGIN="quick-ricon"
   write_fake_shell
   write_fake_sessions
+  write_fake_gh
 }
 
 write_fake_shell() {
@@ -61,6 +64,20 @@ write_fake_sessions() {
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'sessions %s\n' "$*" >> "${SESSIONS_LOG:?}"
+if [ "${1:-}" = wake ]; then
+  {
+    printf 'AGENT_HOME=%s\n' "${AGENT_HOME:-unset}"
+    printf 'AGENT_IDENTITY=%s\n' "${AGENT_IDENTITY:-unset}"
+    printf 'GIT_AUTHOR_NAME=%s\n' "${GIT_AUTHOR_NAME:-unset}"
+    printf 'GIT_AUTHOR_EMAIL=%s\n' "${GIT_AUTHOR_EMAIL:-unset}"
+    printf 'GIT_COMMITTER_NAME=%s\n' "${GIT_COMMITTER_NAME:-unset}"
+    printf 'GIT_COMMITTER_EMAIL=%s\n' "${GIT_COMMITTER_EMAIL:-unset}"
+    printf 'GH_TOKEN=%s\n' "${GH_TOKEN:-unset}"
+    printf 'GIT_CONFIG_COUNT=%s\n' "${GIT_CONFIG_COUNT:-unset}"
+  } > "${SESSIONS_ENV_LOG:?}"
+  exit 0
+fi
+
 call_count=$(($(cat "${SESSIONS_CALLS:?}") + 1))
 printf '%s\n' "$call_count" > "$SESSIONS_CALLS"
 if [ "${1:-}" != ps ] || [ "${2:-}" != --all ] || [ "${3:-}" != --json ]; then
@@ -88,16 +105,104 @@ if [ -f "${SHELL_RUN_MARKER:?}" ]; then
 fi
 if [ -z "${FAKE_SESSION_CWD:-}" ]; then
   printf '[]\n'
+elif [ -n "${FAKE_TARGET_SESSION_ID:-}" ]; then
+  if [ "$session_ready" = true ]; then
+    jq -n --arg cwd "$FAKE_SESSION_CWD" --arg id "$FAKE_TARGET_SESSION_ID" \
+      '[{session_id:$id,status:"exited",cwd:$cwd,harness:"pi",pid:101,process_start_id:"old-start"},{session_id:$id,status:"live",cwd:$cwd,harness:"pi",pid:202,process_start_id:"new-start"}]'
+  else
+    jq -n --arg cwd "$FAKE_SESSION_CWD" --arg id "$FAKE_TARGET_SESSION_ID" \
+      '[{session_id:$id,status:"exited",cwd:$cwd,harness:"pi",pid:101,process_start_id:"old-start"}]'
+  fi
 elif [ "$session_ready" = true ]; then
   jq -n --arg cwd "$FAKE_SESSION_CWD" \
-    '[{session_id:"old-pi-session",status:"live",cwd:$cwd,harness:"pi"},{session_id:"new-pi-session",status:"live",cwd:$cwd,harness:"pi"}]'
+    '[{session_id:"old-pi-session",status:"live",cwd:$cwd,harness:"pi",pid:101,process_start_id:"old-start"},{session_id:"new-pi-session",status:"live",cwd:$cwd,harness:"pi",pid:202,process_start_id:"new-start"}]'
 else
   jq -n --arg cwd "$FAKE_SESSION_CWD" \
-    '[{session_id:"old-pi-session",status:"live",cwd:$cwd,harness:"pi"}]'
+    '[{session_id:"old-pi-session",status:"live",cwd:$cwd,harness:"pi",pid:101,process_start_id:"old-start"}]'
 fi
 SH
   chmod +x "$TMPBIN/sessions"
   export SESSIONS_BIN="$TMPBIN/sessions"
+}
+
+write_fake_gh() {
+  cat > "$TMPBIN/gh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+if [ "${1:-}" = api ] && [ "${2:-}" = user ] && [ "${3:-}" = --jq ] && [ "${4:-}" = .login ]; then
+  [ "${GH_TOKEN:-}" = quick-target-token ] || {
+    echo "wrong GitHub token" >&2
+    exit 1
+  }
+  printf '%s\n' "${FAKE_GITHUB_LOGIN:-quick-ricon}"
+  exit 0
+fi
+echo "unexpected gh command: $*" >&2
+exit 2
+SH
+  chmod +x "$TMPBIN/gh"
+  export GH_BIN="$TMPBIN/gh"
+}
+
+write_target_identity_shimmer() {
+  cat > "$TMPBIN/shimmer" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}" in
+  as)
+    if [ "${REQUIRE_CLEAN_PARENT:-false}" = true ]; then
+      [ -z "${AGENT_HOME:-}" ]
+      [ -z "${AGENT_IDENTITY:-}" ]
+      [ -z "${CHAT_IDENTITY:-}" ]
+      [ -z "${EMAILS_CONFIG:-}" ]
+      [ -z "${HIMALAYA_CONFIG:-}" ]
+      [ -z "${GH_TOKEN:-}" ]
+      [ -z "${GITHUB_TOKEN:-}" ]
+      [ -z "${GH_CONFIG_DIR:-}" ]
+      [ -z "${GIT_AUTHOR_NAME:-}" ]
+      [ -z "${GIT_AUTHOR_EMAIL:-}" ]
+      [ -z "${GIT_COMMITTER_NAME:-}" ]
+      [ -z "${GIT_COMMITTER_EMAIL:-}" ]
+      [ -z "${GIT_CONFIG_COUNT:-}" ]
+      [ -z "${GIT_CONFIG_KEY_0:-}" ]
+      [ -z "${GIT_CONFIG_VALUE_0:-}" ]
+      [ -z "${__MISE_DIFF:-}" ]
+    fi
+    printf 'export AGENT_HOME=%q\n' "${FAKE_IDENTITY_HOME:-$PWD}"
+    printf 'export GIT_AUTHOR_NAME=quick\n'
+    printf 'export GIT_AUTHOR_EMAIL=quick@ricon.family\n'
+    printf 'export GIT_COMMITTER_NAME=quick\n'
+    printf 'export GIT_COMMITTER_EMAIL=quick@ricon.family\n'
+    printf 'export GH_TOKEN=quick-target-token\n'
+    printf 'export GIT_CONFIG_COUNT=4\n'
+    printf 'export GIT_CONFIG_KEY_0=user.name\n'
+    printf 'export GIT_CONFIG_VALUE_0=quick\n'
+    printf 'export GIT_CONFIG_KEY_1=user.email\n'
+    printf 'export GIT_CONFIG_VALUE_1=quick@ricon.family\n'
+    printf 'export GIT_CONFIG_KEY_2=user.signingkey\n'
+    printf 'export GIT_CONFIG_VALUE_2=fixture-signing-key\n'
+    printf 'export GIT_CONFIG_KEY_3=commit.gpgsign\n'
+    printf 'export GIT_CONFIG_VALUE_3=true\n'
+    ;;
+  agent)
+    {
+      printf 'AGENT_HOME=%s\n' "${AGENT_HOME:-unset}"
+      printf 'AGENT_IDENTITY=%s\n' "${AGENT_IDENTITY:-unset}"
+      printf 'CHAT_IDENTITY=%s\n' "${CHAT_IDENTITY:-unset}"
+      printf 'EMAILS_CONFIG=%s\n' "${EMAILS_CONFIG:-unset}"
+      printf 'HIMALAYA_CONFIG=%s\n' "${HIMALAYA_CONFIG:-unset}"
+      printf '__MISE_DIFF=%s\n' "${__MISE_DIFF:-unset}"
+      printf 'GIT_AUTHOR_NAME=%s\n' "${GIT_AUTHOR_NAME:-unset}"
+      printf 'GIT_AUTHOR_EMAIL=%s\n' "${GIT_AUTHOR_EMAIL:-unset}"
+      printf 'GIT_COMMITTER_NAME=%s\n' "${GIT_COMMITTER_NAME:-unset}"
+      printf 'GIT_COMMITTER_EMAIL=%s\n' "${GIT_COMMITTER_EMAIL:-unset}"
+      printf 'GH_TOKEN=%s\n' "${GH_TOKEN:-unset}"
+    } > "${AGENT_LOG:?}"
+    ;;
+  *) exit 2 ;;
+esac
+SH
+  chmod +x "$TMPBIN/shimmer"
 }
 
 write_fake_mise_for_prepare() {
@@ -233,6 +338,7 @@ make_repo() {
   git init -q -b main "$repo"
   git -C "$repo" config user.name fixture
   git -C "$repo" config user.email fixture@example.test
+  git -C "$repo" config user.signingkey fixture-signing-key
   git -C "$repo" config commit.gpgsign false
   printf '%s\n' "$name" > "$repo/README.md"
   git -C "$repo" add README.md
@@ -448,32 +554,11 @@ JSON
   make_repo "$home" home
   printf 'hello packet\n' > "$packet"
   export AGENT_LOG="$agent_log"
+  export REQUIRE_CLEAN_PARENT=true
   export EMAILS_CONFIG="/agents/junior/home/.emails/himalaya.toml"
   export HIMALAYA_CONFIG="/agents/brownie/home/.emails/himalaya.toml"
   export __MISE_DIFF="stale-parent-activation"
-  cat > "$TMPBIN/shimmer" <<'SH'
-#!/usr/bin/env bash
-set -euo pipefail
-case "${1:-}" in
-  as)
-    [ -z "${EMAILS_CONFIG:-}" ]
-    [ -z "${HIMALAYA_CONFIG:-}" ]
-    [ -z "${__MISE_DIFF:-}" ]
-    printf 'export AGENT_HOME=%q\n' "$PWD"
-    printf 'export GIT_AUTHOR_NAME=quick\n'
-    printf 'export EMAILS_CONFIG=%q\n' '/agents/wrong/home/.emails/himalaya.toml'
-    printf 'export HIMALAYA_CONFIG=%q\n' '/agents/wrong/home/.emails/himalaya.toml'
-    printf 'export __MISE_DIFF=%q\n' 'wrong-identity-activation'
-    ;;
-  agent)
-    printf 'EMAILS_CONFIG=%s\n' "${EMAILS_CONFIG:-unset}" > "${AGENT_LOG:?}"
-    printf 'HIMALAYA_CONFIG=%s\n' "${HIMALAYA_CONFIG:-unset}" >> "$AGENT_LOG"
-    printf '__MISE_DIFF=%s\n' "${__MISE_DIFF:-unset}" >> "$AGENT_LOG"
-    ;;
-  *) exit 2 ;;
-esac
-SH
-  chmod +x "$TMPBIN/shimmer"
+  write_target_identity_shimmer
 
   fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --work-dir "$work_dir" >/dev/null
   run "$work_dir/start-quick-a.sh"
@@ -483,6 +568,67 @@ SH
   grep -Fx "EMAILS_CONFIG=$home_real/.emails/himalaya.toml" "$agent_log"
   grep -Fx 'HIMALAYA_CONFIG=unset' "$agent_log"
   grep -Fx '__MISE_DIFF=unset' "$agent_log"
+}
+
+@test "agent:desk:wake scrubs a poisoned parent persona before target activation" {
+  home="$BATS_TEST_TMPDIR/home"
+  work_dir="$BATS_TEST_TMPDIR/wake"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  agent_log="$BATS_TEST_TMPDIR/agent.log"
+  make_repo "$home" home
+  printf 'hello packet\n' > "$packet"
+  export AGENT_LOG="$agent_log"
+  export REQUIRE_CLEAN_PARENT=true
+  export AGENT_HOME="/agents/junior/home"
+  export AGENT_IDENTITY=junior
+  export CHAT_IDENTITY=junior
+  export EMAILS_CONFIG="/agents/junior/home/.emails/himalaya.toml"
+  export HIMALAYA_CONFIG="/agents/junior/home/.emails/himalaya.toml"
+  export GH_TOKEN=junior-token
+  export GITHUB_TOKEN=junior-github-token
+  export GH_CONFIG_DIR="/agents/junior/gh"
+  export GIT_AUTHOR_NAME=junior
+  export GIT_AUTHOR_EMAIL=junior@ricon.family
+  export GIT_COMMITTER_NAME=junior
+  export GIT_COMMITTER_EMAIL=junior@ricon.family
+  export GIT_CONFIG_COUNT=1
+  export GIT_CONFIG_KEY_0=user.name
+  export GIT_CONFIG_VALUE_0=junior
+  export __MISE_DIFF="junior-activation"
+  write_target_identity_shimmer
+
+  fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --work-dir "$work_dir" >/dev/null
+  run "$work_dir/start-quick-a.sh"
+
+  [ "$status" -eq 0 ]
+  home_real=$(cd "$home" && pwd -P)
+  grep -Fx "AGENT_HOME=$home_real" "$agent_log"
+  grep -Fx 'AGENT_IDENTITY=quick' "$agent_log"
+  grep -Fx 'CHAT_IDENTITY=quick' "$agent_log"
+  grep -Fx 'GIT_AUTHOR_NAME=quick' "$agent_log"
+  grep -Fx 'GIT_AUTHOR_EMAIL=quick@ricon.family' "$agent_log"
+  grep -Fx 'GIT_COMMITTER_NAME=quick' "$agent_log"
+  grep -Fx 'GIT_COMMITTER_EMAIL=quick@ricon.family' "$agent_log"
+  grep -Fx 'GH_TOKEN=quick-target-token' "$agent_log"
+}
+
+@test "agent:desk:wake fails closed on a target GitHub mismatch" {
+  home="$BATS_TEST_TMPDIR/home"
+  work_dir="$BATS_TEST_TMPDIR/wake"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  agent_log="$BATS_TEST_TMPDIR/agent.log"
+  make_repo "$home" home
+  printf 'hello packet\n' > "$packet"
+  export AGENT_LOG="$agent_log"
+  export FAKE_GITHUB_LOGIN=junior-ricon
+  write_target_identity_shimmer
+
+  fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --work-dir "$work_dir" >/dev/null
+  run "$work_dir/start-quick-a.sh"
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"GitHub login is junior-ricon, expected quick-ricon"* ]]
+  [ ! -e "$agent_log" ]
 }
 
 @test "agent:desk:wake launcher stops when identity setup fails" {
@@ -525,23 +671,9 @@ SH
   make_repo "$home" home
   make_repo "$wrong_home" wrong
   printf 'hello packet\n' > "$packet"
-  export WRONG_HOME="$wrong_home"
+  export FAKE_IDENTITY_HOME="$wrong_home"
   export AGENT_LOG="$agent_log"
-  cat > "$TMPBIN/shimmer" <<'SH'
-#!/usr/bin/env bash
-set -euo pipefail
-case "${1:-}" in
-  as)
-    printf 'export AGENT_HOME=%q\n' "${WRONG_HOME:?}"
-    printf 'export GIT_AUTHOR_NAME=quick\n'
-    ;;
-  agent)
-    printf 'agent started\n' >> "${AGENT_LOG:?}"
-    ;;
-  *) exit 2 ;;
-esac
-SH
-  chmod +x "$TMPBIN/shimmer"
+  write_target_identity_shimmer
 
   fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --work-dir "$work_dir" >/dev/null
   run "$work_dir/start-quick-a.sh"
@@ -561,6 +693,79 @@ SH
 
   [ "$status" -eq 0 ]
   grep -q "PACKET_PATH='$repo_real/AGENTS.md'" "$work_dir/start-quick-a.sh"
+}
+
+@test "agent:desk:continue invokes sessions wake under a scrubbed target identity" {
+  home="$BATS_TEST_TMPDIR/home"
+  work_dir="$BATS_TEST_TMPDIR/continue"
+  packet="$BATS_TEST_TMPDIR/follow-up.md"
+  make_repo "$home" home
+  printf 'continue packet\n' > "$packet"
+  export REQUIRE_CLEAN_PARENT=true
+  export AGENT_HOME="/agents/junior/home"
+  export AGENT_IDENTITY=junior
+  export CHAT_IDENTITY=junior
+  export GH_TOKEN=junior-token
+  export GIT_AUTHOR_NAME=junior
+  export GIT_AUTHOR_EMAIL=junior@ricon.family
+  export GIT_COMMITTER_NAME=junior
+  export GIT_COMMITTER_EMAIL=junior@ricon.family
+  export GIT_CONFIG_COUNT=1
+  export GIT_CONFIG_KEY_0=user.name
+  export GIT_CONFIG_VALUE_0=junior
+  write_target_identity_shimmer
+
+  fold_task agent:desk:continue quick \
+    --session session-123 \
+    --home "$home" \
+    --shell quick-cont \
+    --packet "$packet" \
+    --model openai-codex/gpt-5.6-sol \
+    --message "Continue the reviewed lane." \
+    --work-dir "$work_dir" >/dev/null
+  run "$work_dir/continue-quick-cont.sh"
+
+  [ "$status" -eq 0 ]
+  home_real=$(cd "$home" && pwd -P)
+  packet_real=$(cd "$(dirname "$packet")" && pwd -P)/$(basename "$packet")
+  grep -F "sessions wake session-123 --model openai-codex/gpt-5.6-sol --context-file $packet_real" "$SESSIONS_LOG"
+  grep -F -- "--message [agent desk continuation — root handoff] Continue the reviewed lane." "$SESSIONS_LOG"
+  grep -Fx "AGENT_HOME=$home_real" "$SESSIONS_ENV_LOG"
+  grep -Fx 'AGENT_IDENTITY=quick' "$SESSIONS_ENV_LOG"
+  grep -Fx 'GIT_AUTHOR_NAME=quick' "$SESSIONS_ENV_LOG"
+  grep -Fx 'GIT_AUTHOR_EMAIL=quick@ricon.family' "$SESSIONS_ENV_LOG"
+  grep -Fx 'GIT_COMMITTER_NAME=quick' "$SESSIONS_ENV_LOG"
+  grep -Fx 'GIT_COMMITTER_EMAIL=quick@ricon.family' "$SESSIONS_ENV_LOG"
+  grep -Fx 'GH_TOKEN=quick-target-token' "$SESSIONS_ENV_LOG"
+  grep -Fx 'GIT_CONFIG_COUNT=4' "$SESSIONS_ENV_LOG"
+}
+
+@test "agent:desk:continue --yes detects a new process for the same session ID" {
+  home="$BATS_TEST_TMPDIR/home"
+  work_dir="$BATS_TEST_TMPDIR/continue"
+  packet="$BATS_TEST_TMPDIR/follow-up.md"
+  make_repo "$home" home
+  printf 'continue packet\n' > "$packet"
+  home_real=$(cd "$home" && pwd -P)
+  export FAKE_SESSION_CWD="$home_real"
+  export FAKE_TARGET_SESSION_ID=session-123
+
+  run fold_task agent:desk:continue quick \
+    --session session-123 \
+    --home "$home" \
+    --shell quick-cont \
+    --packet "$packet" \
+    --model openai-codex/gpt-5.6-sol \
+    --work-dir "$work_dir" \
+    --yes
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Agent continuation ready"* ]]
+  [[ "$output" == *"session: session-123"* ]]
+  [[ "$output" == *"attach:  shell attach quick-cont"* ]]
+  work_real=$(cd "$work_dir" && pwd -P)
+  grep -q "shell run --cwd $home_real quick-cont $work_real/continue-quick-cont.sh" "$SHELL_LOG"
+  [ "$(cat "$SESSIONS_CALLS")" -ge 2 ]
 }
 
 @test "agent:desk:wake --yes waits for a new live Pi process" {
