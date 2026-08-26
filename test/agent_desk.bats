@@ -64,6 +64,30 @@ write_fake_sessions() {
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'sessions %s\n' "$*" >> "${SESSIONS_LOG:?}"
+if [ "${1:-}" = meta ]; then
+  if [ "${3:-}" != --field ]; then
+    echo "unexpected sessions meta command: $*" >&2
+    exit 2
+  fi
+  case "${4:-}" in
+    .meta.agent.name)
+      printf '%s\n' "${FAKE_SESSION_AGENT:-quick}"
+      ;;
+    .cwd)
+      meta_cwd="${FAKE_SESSION_META_CWD:-${FAKE_SESSION_CWD:-}}"
+      if [ -z "$meta_cwd" ]; then
+        echo "missing fake session cwd" >&2
+        exit 1
+      fi
+      printf '%s\n' "$meta_cwd"
+      ;;
+    *)
+      echo "unexpected sessions meta field: ${4:-}" >&2
+      exit 2
+      ;;
+  esac
+  exit 0
+fi
 if [ "${1:-}" = wake ]; then
   {
     printf 'AGENT_HOME=%s\n' "${AGENT_HOME:-unset}"
@@ -835,6 +859,63 @@ SH
   work_real=$(cd "$work_dir" && pwd -P)
   grep -q "shell run --cwd $home_real quick-cont $work_real/start-quick-cont.sh" "$SHELL_LOG"
   [ "$(cat "$SESSIONS_CALLS")" -ge 2 ]
+}
+
+@test "agent:desk:wake --session rejects another agent's session before launch" {
+  home="$BATS_TEST_TMPDIR/home"
+  work_dir="$BATS_TEST_TMPDIR/continue"
+  packet="$BATS_TEST_TMPDIR/follow-up.md"
+  make_repo "$home" home
+  printf 'continue packet\n' > "$packet"
+  home_real=$(cd "$home" && pwd -P)
+  export FAKE_SESSION_CWD="$home_real"
+  export FAKE_SESSION_AGENT=junior
+  export FAKE_TARGET_SESSION_ID=session-123
+
+  run fold_task agent:desk:wake quick \
+    --session session-123 \
+    --home "$home" \
+    --shell quick-cont \
+    --packet "$packet" \
+    --model openai-codex/gpt-5.6-sol \
+    --work-dir "$work_dir" \
+    --yes
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"session session-123 belongs to junior, expected quick"* ]]
+  [ ! -e "$SHELL_RUN_MARKER" ]
+  ! grep -q '^sessions wake ' "$SESSIONS_LOG"
+}
+
+@test "agent:desk:wake --session rejects another desk before launch" {
+  home="$BATS_TEST_TMPDIR/home"
+  other_home="$BATS_TEST_TMPDIR/other-home"
+  work_dir="$BATS_TEST_TMPDIR/continue"
+  packet="$BATS_TEST_TMPDIR/follow-up.md"
+  make_repo "$home" home
+  mkdir -p "$other_home"
+  printf 'continue packet\n' > "$packet"
+  home_real=$(cd "$home" && pwd -P)
+  other_home_real=$(cd "$other_home" && pwd -P)
+  export FAKE_SESSION_CWD="$home_real"
+  export FAKE_SESSION_META_CWD="$other_home_real"
+  export FAKE_TARGET_SESSION_ID=session-123
+
+  run fold_task agent:desk:wake quick \
+    --session session-123 \
+    --home "$home" \
+    --shell quick-cont \
+    --packet "$packet" \
+    --model openai-codex/gpt-5.6-sol \
+    --work-dir "$work_dir" \
+    --yes
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"session cwd does not match prepared target home"* ]]
+  [[ "$output" == *"session cwd: $other_home_real"* ]]
+  [[ "$output" == *"target home: $home_real"* ]]
+  [ ! -e "$SHELL_RUN_MARKER" ]
+  ! grep -q '^sessions wake ' "$SESSIONS_LOG"
 }
 
 @test "agent:desk:wake --yes waits for a new live Pi process" {

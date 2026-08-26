@@ -158,6 +158,31 @@ if ! command -v "$SESSIONS_BIN" >/dev/null 2>&1; then
   echo "ERROR: sessions command not found: $SESSIONS_BIN" >&2
   exit 1
 fi
+if [ "$MODE" = resume ]; then
+  if ! session_agent=$("$SESSIONS_BIN" meta "$SESSION_ID" --field .meta.agent.name); then
+    echo "ERROR: could not verify session owner before wake: $SESSION_ID" >&2
+    exit 1
+  fi
+  if [ "$session_agent" != "$AGENT" ]; then
+    echo "ERROR: session $SESSION_ID belongs to $session_agent, expected $AGENT" >&2
+    exit 1
+  fi
+  if ! session_cwd=$("$SESSIONS_BIN" meta "$SESSION_ID" --field .cwd); then
+    echo "ERROR: could not verify session cwd before wake: $SESSION_ID" >&2
+    exit 1
+  fi
+  if [ ! -d "$session_cwd" ]; then
+    echo "ERROR: session cwd is unavailable: $session_cwd" >&2
+    exit 1
+  fi
+  session_cwd=$(cd "$session_cwd" && pwd -P)
+  if [ "$session_cwd" != "$HOME_PATH" ]; then
+    echo "ERROR: session cwd does not match prepared target home" >&2
+    echo "  session cwd: $session_cwd" >&2
+    echo "  target home: $HOME_PATH" >&2
+    exit 1
+  fi
+fi
 BASELINE="$WORK_DIR/baseline-processes.txt"
 if ! session_processes=$("$SESSIONS_BIN" ps --all --json); then
   echo "ERROR: could not inspect Sessions processes before wake" >&2
