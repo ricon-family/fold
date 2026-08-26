@@ -10,26 +10,30 @@ header = '''printf '\n== %s ==\n''''
 shiv = "https://github.com/KnickKnackLabs/vfox-shiv"
 
 [tools]
-"aqua:shenwei356/rush" = "0.9.0" # Cross-file BATS parallel runner
-usage = "3.2.1"                   # CLI arg parsing for tasks
-yq = "4.50.1"                     # YAML processing
-jq = "1.8.1"                     # JSON processing for task composition
-gh = "2.92.0"                    # GitHub API for token status tasks
-bats = "1.13.0"                  # Task test suite
-gum = "0.17.0"                   # Human-readable task tables and welcome output
-"shiv:shimmer" = "0.1"
-"shiv:browser" = "0.1"
-"shiv:websites" = "0.1"
-"shiv:sessions" = "0.4"
-"shiv:modules" = "0.9"
-"shiv:notes" = "0.9"
-"shiv:threads" = "0.3"
-"shiv:rudi" = "0.5"                       # git-crypt wrapper — CI calls rudi install directly
-"shiv:secrets" = "0.2"
-"shiv:emails" = "0.7"
+# Task runtimes and command-line utilities
+"aqua:nushell/nushell" = "0.115.0"
+"aqua:shenwei356/rush" = "0.9.0"
+bats = "1.14.0"
+gh = "2.98.0"
+gum = "2.0.0"
+jq = "1.8.2"
+usage = "5.1.0"
+yq = "4.53.6"
+
+# Shared KKL packages
+"shiv:browser" = "0.2"
+"shiv:chat" = "0.2"
 "shiv:codebase" = "0.4"
 "shiv:comments" = "0.3"
-"shiv:chat" = "0.2"
+"shiv:emails" = "0.7"
+"shiv:modules" = "0.9"
+"shiv:notes" = "0.10"
+"shiv:rudi" = "0.5"
+"shiv:secrets" = "0.2"
+"shiv:sessions" = "0.5"
+"shiv:shimmer" = "0.1"
+"shiv:threads" = "0.3"
+"shiv:websites" = "0.1"
 
 [_.codebase]
 name = "fold"

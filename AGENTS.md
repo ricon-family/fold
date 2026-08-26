@@ -63,7 +63,7 @@ scan configured live signals under explicit identity. Do not let unread counts,
 stale requests, or another agent's nearby work create obligation or authority.
 Orientation ends with a natural readiness handback and, when session control
 is available, a `post-orientation` anchor. A missing independent capability may
-remain locally degraded; an unverified persona/home, unread governing contract,
+remain locally degraded; an unverified agent identity/home, unread governing contract,
 or unclear ownership/authority blocks general readiness.
 
 Orient with curiosity, not ritual. Follow current references, meaningful deltas,
@@ -89,6 +89,7 @@ Guidance only works when it appears at the moment you need it. Before starting a
 | Write a README | Read `notes/readme-writing.md` |
 | Review a PR | Read `notes/code-review.md` |
 | Wake or spawn a local worker/agent, continue a session, or dispatch a hosted wake | Read `notes/local-agent-wakes.md`; for several live attachable child desks, also read `notes/session-forking.md` |
+| Back up raw Pi session history | Read `notes/agent-scoped-session-backup.md`; use explicit IDs on shared machines and reserve `--all` for isolated single-agent runners |
 | Observe or supervise another live agent session | Read `notes/agent-supervision-guide.md`; the workflow is untested and requires exact observation and contact authority |
 | Start substantial work whose transition evidence may outgrow a rewind handback | Read `notes/feed-backed-session-progress-map.md`; use a small private feed when it makes resumption easier, put its exact path in the handback, and skip it when the handback is enough |
 | Change GitHub Actions / CI auth | Read `notes/github-actions-ci.md` and `notes/ci-auth-debugging.md` |
@@ -233,6 +234,8 @@ Key commands:
 - `notes verify --gpg-key <fingerprint>` — Verify a collaborator's public key
 
 Notes use YAML frontmatter (title, tags, related, created, updated) and `[[wikilinks]]` for cross-referencing. Do not regenerate generated indexes as a commit ritual; fold no longer maintains `notes/index.md` or `notes/graph.md`.
+
+**Avoid Git worktrees for now:** encrypted/obfuscated Notes checkouts do not behave reliably in linked worktrees, so use a clean branch switch or separate clone instead.
 
 ## Legacy HUMAN.md
 
