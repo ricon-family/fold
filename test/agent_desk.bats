@@ -336,13 +336,22 @@ make_repo() {
   local repo="$1" name="$2"
   mkdir -p "$repo"
   git init -q -b main "$repo"
-  git -C "$repo" config user.name fixture
-  git -C "$repo" config user.email fixture@example.test
+  if [ "$name" = home ]; then
+    git -C "$repo" config user.name quick
+    git -C "$repo" config user.email quick@ricon.family
+  else
+    git -C "$repo" config user.name fixture
+    git -C "$repo" config user.email fixture@example.test
+  fi
   git -C "$repo" config user.signingkey AABBCCDDEEFF0011
   git -C "$repo" config commit.gpgsign false
   printf '%s\n' "$name" > "$repo/README.md"
   git -C "$repo" add README.md
   git -C "$repo" commit -q -m "initial $name"
+  if [ "$name" = home ]; then
+    git -C "$repo" config commit.gpgsign true
+    git -C "$repo" remote add origin https://github.com/quick-ricon/home.git
+  fi
 }
 
 @test "agent:desk:prepare dry-run plans an existing desk without mutation" {
@@ -523,6 +532,24 @@ JSON
   [[ "${output}${stderr:-}" == *"ERROR: --model is required"* ]]
 }
 
+@test "agent:desk:wake rejects a noncanonical home origin without printing credentials" {
+  home="$BATS_TEST_TMPDIR/home"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  make_repo "$home" home
+  git -C "$home" remote set-url origin https://secret-token@github.com/quick-ricon/home.git
+  printf 'hello packet\n' > "$packet"
+
+  run fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --model openai-codex/gpt-5.6-sol
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"target home origin is not a canonical GitHub OWNER/home URL"* ]]
+  [[ "$output" != *"secret-token"* ]]
+}
+
 @test "agent:desk:wake defaults identity to the desk home" {
   home="$BATS_TEST_TMPDIR/home"
   work_dir="$BATS_TEST_TMPDIR/wake"
@@ -540,10 +567,12 @@ JSON
   if [ -f "$SHELL_LOG" ]; then
     ! grep -q 'shell run' "$SHELL_LOG"
   fi
-  grep -q "IDENTITY_SOURCE='$home_real'" "$work_dir/start-quick-a.sh"
-  grep -q 'shimmer as "$AGENT"' "$work_dir/start-quick-a.sh"
-  grep -q 'MODEL='"'"'openai-codex/gpt-5.6-sol'"'"'' "$work_dir/start-quick-a.sh"
-  grep -q 'shimmer agent --model "$MODEL"' "$work_dir/start-quick-a.sh"
+  repo_real=$(cd "$REPO_DIR" && pwd -P)
+  grep -q "AGENT_DESK_IDENTITY_SOURCE='$home_real'" "$work_dir/start-quick-a.sh"
+  grep -q "AGENT_DESK_MODEL='openai-codex/gpt-5.6-sol'" "$work_dir/start-quick-a.sh"
+  grep -q "exec '$repo_real/.mise/lib/agent_desk_runtime.sh'" "$work_dir/start-quick-a.sh"
+  ! grep -q 'agent_desk_runtime_scrub_inherited_identity' "$work_dir/start-quick-a.sh"
+  [ "$(wc -l < "$work_dir/start-quick-a.sh")" -le 20 ]
 }
 
 @test "agent:desk:wake isolates inherited email selectors to the authenticated desk home" {
@@ -731,10 +760,10 @@ SH
   run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet AGENTS.md --model openai-codex/gpt-5.6-sol --work-dir "$work_dir"
 
   [ "$status" -eq 0 ]
-  grep -q "PACKET_PATH='$repo_real/AGENTS.md'" "$work_dir/start-quick-a.sh"
+  grep -q "AGENT_DESK_PACKET='$repo_real/AGENTS.md'" "$work_dir/start-quick-a.sh"
 }
 
-@test "agent:desk:continue invokes sessions wake under a scrubbed target identity" {
+@test "agent:desk:wake --session invokes sessions wake under a scrubbed target identity" {
   home="$BATS_TEST_TMPDIR/home"
   work_dir="$BATS_TEST_TMPDIR/continue"
   packet="$BATS_TEST_TMPDIR/follow-up.md"
@@ -754,7 +783,7 @@ SH
   export GIT_CONFIG_VALUE_0=junior
   write_target_identity_shimmer
 
-  fold_task agent:desk:continue quick \
+  fold_task agent:desk:wake quick \
     --session session-123 \
     --home "$home" \
     --shell quick-cont \
@@ -762,13 +791,13 @@ SH
     --model openai-codex/gpt-5.6-sol \
     --message "Continue the reviewed lane." \
     --work-dir "$work_dir" >/dev/null
-  run "$work_dir/continue-quick-cont.sh"
+  run "$work_dir/start-quick-cont.sh"
 
   [ "$status" -eq 0 ]
   home_real=$(cd "$home" && pwd -P)
   packet_real=$(cd "$(dirname "$packet")" && pwd -P)/$(basename "$packet")
   grep -F "sessions wake session-123 --model openai-codex/gpt-5.6-sol --context-file $packet_real" "$SESSIONS_LOG"
-  grep -F -- "--message [agent desk continuation — root handoff] Continue the reviewed lane." "$SESSIONS_LOG"
+  grep -F -- "--message [agent desk wake — root handoff] Continue the reviewed lane." "$SESSIONS_LOG"
   grep -Fx "AGENT_HOME=$home_real" "$SESSIONS_ENV_LOG"
   grep -Fx 'AGENT_IDENTITY=quick' "$SESSIONS_ENV_LOG"
   grep -Fx 'GIT_AUTHOR_NAME=quick' "$SESSIONS_ENV_LOG"
@@ -779,7 +808,7 @@ SH
   grep -Fx 'GIT_CONFIG_COUNT=4' "$SESSIONS_ENV_LOG"
 }
 
-@test "agent:desk:continue --yes detects a new process for the same session ID" {
+@test "agent:desk:wake --session detects a new process for the same session ID" {
   home="$BATS_TEST_TMPDIR/home"
   work_dir="$BATS_TEST_TMPDIR/continue"
   packet="$BATS_TEST_TMPDIR/follow-up.md"
@@ -789,7 +818,7 @@ SH
   export FAKE_SESSION_CWD="$home_real"
   export FAKE_TARGET_SESSION_ID=session-123
 
-  run fold_task agent:desk:continue quick \
+  run fold_task agent:desk:wake quick \
     --session session-123 \
     --home "$home" \
     --shell quick-cont \
@@ -799,11 +828,12 @@ SH
     --yes
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Agent continuation ready"* ]]
+  [[ "$output" == *"Agent wake ready"* ]]
+  [[ "$output" == *"mode:    resume"* ]]
   [[ "$output" == *"session: session-123"* ]]
   [[ "$output" == *"attach:  shell attach quick-cont"* ]]
   work_real=$(cd "$work_dir" && pwd -P)
-  grep -q "shell run --cwd $home_real quick-cont $work_real/continue-quick-cont.sh" "$SHELL_LOG"
+  grep -q "shell run --cwd $home_real quick-cont $work_real/start-quick-cont.sh" "$SHELL_LOG"
   [ "$(cat "$SESSIONS_CALLS")" -ge 2 ]
 }
 
@@ -820,8 +850,9 @@ SH
   run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --work-dir "$work_dir" --yes
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"launching shell quick-a"* ]]
-  [[ "$output" == *"Agent runtime ready"* ]]
+  [[ "$output" == *"launching fresh wake in shell quick-a"* ]]
+  [[ "$output" == *"Agent wake ready"* ]]
+  [[ "$output" == *"mode:    fresh"* ]]
   [[ "$output" == *"session: new-pi-session"* ]]
   [[ "$output" == *"attach:  shell attach quick-a"* ]]
   work_real=$(cd "$work_dir" && pwd -P)
@@ -842,7 +873,7 @@ SH
   run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --startup-timeout 1 --work-dir "$work_dir" --yes
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Agent runtime ready"* ]]
+  [[ "$output" == *"Agent wake ready"* ]]
   [[ "$output" == *"session: new-pi-session"* ]]
   [ "$(cat "$SESSIONS_CALLS")" -ge 3 ]
 }

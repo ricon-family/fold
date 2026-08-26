@@ -146,121 +146,40 @@ agent_desk_clean_git_config_get() {
     git -C "$repo" config --get "$key"
 }
 
-agent_desk_github_login() {
-  local agent="$1" jq_bin="$2" records login
+agent_desk_clean_git_config_bool() {
+  local repo="$1" key="$2"
+  env \
+    -u GIT_CONFIG_COUNT \
+    -u GIT_CONFIG_PARAMETERS \
+    -u GIT_CONFIG_GLOBAL \
+    -u GIT_CONFIG_SYSTEM \
+    -u GIT_CONFIG_NOSYSTEM \
+    git -C "$repo" config --bool --get "$key"
+}
 
-  if ! records=$(mise run -q agent:list --json); then
-    echo "ERROR: could not resolve agent metadata for $agent" >&2
+agent_desk_home_github_login() {
+  local home="$1" origin path login repo
+
+  if ! origin=$(agent_desk_clean_git_config_get "$home" remote.origin.url); then
+    echo "ERROR: prepared target home has no origin remote: $home" >&2
     return 1
   fi
-  login=$(
-    printf '%s\n' "$records" |
-      "$jq_bin" -r --arg agent "$agent" \
-        '[.[] | select(.name == $agent) | .github_login] | if length == 1 then .[0] else "" end'
-  )
-  if [ -z "$login" ]; then
-    echo "ERROR: agent metadata has no unique GitHub login for $agent" >&2
-    return 1
-  fi
-  printf '%s\n' "$login"
-}
-
-agent_desk_render_identity_boundary() {
-  cat <<'IDENTITY_BOUNDARY'
-agent_desk_scrub_inherited_identity() {
-  local variable
-
-  while IFS= read -r variable; do
-    [ -n "$variable" ] || continue
-    unset "$variable"
-  done < <(compgen -A variable GIT_CONFIG_ || true)
-
-  unset \
-    AGENT_HOME AGENT_IDENTITY CHAT_IDENTITY \
-    EMAILS_CONFIG HIMALAYA_CONFIG \
-    GH_TOKEN GITHUB_TOKEN GH_CONFIG_DIR \
-    GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL \
-    GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL \
-    __MISE_DIFF
-}
-
-agent_desk_identity_error() {
-  printf 'ERROR: target identity verification failed: %s\n' "$1" >&2
-  exit 1
-}
-
-agent_desk_signing_keys_match() {
-  local expected actual
-
-  expected=$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]' | sed 's/^0X//')
-  actual=$(printf '%s' "$2" | tr '[:lower:]' '[:upper:]' | sed 's/^0X//')
-  case "$expected:$actual" in
-    *[!0-9A-F:]*|:*|*:) return 1 ;;
+  case "$origin" in
+    https://github.com/*) path=${origin#https://github.com/} ;;
+    git@github.com:*) path=${origin#git@github.com:} ;;
+    ssh://git@github.com/*) path=${origin#ssh://git@github.com/} ;;
+    *)
+      echo "ERROR: target home origin is not a canonical GitHub OWNER/home URL" >&2
+      return 1
+      ;;
   esac
-  [ "${#expected}" -ge 16 ] || return 1
-  [ "${#actual}" -ge 16 ] || return 1
-  [ "$expected" = "$actual" ] && return 0
-  case "$expected" in *"$actual") return 0 ;; esac
-  case "$actual" in *"$expected") return 0 ;; esac
-  return 1
-}
-
-agent_desk_activate_target_identity() {
-  local actual_home actual_github actual_name actual_email actual_signing_key
-  local identity_shell
-
-  agent_desk_scrub_inherited_identity
-  identity_shell=$(cd "$IDENTITY_SOURCE" && shimmer as "$AGENT") || return $?
-  eval "$identity_shell"
-  unset identity_shell
-
-  [ -n "${AGENT_HOME:-}" ] || \
-    agent_desk_identity_error "shimmer did not set AGENT_HOME"
-  actual_home=$(cd "$AGENT_HOME" && pwd -P)
-  if [ "$actual_home" != "$HOME_PATH" ]; then
-    printf 'ERROR: authenticated agent home does not match desk home\n' >&2
-    printf '  authenticated home: %s\n' "$actual_home" >&2
-    printf '  desk home:          %s\n' "$HOME_PATH" >&2
-    exit 1
+  path=${path%.git}
+  login=${path%%/*}
+  repo=${path#*/}
+  if [ -z "$login" ] || [ "$repo" != home ] || [ "$path" = "$login" ]; then
+    echo "ERROR: target home origin must identify GitHub OWNER/home" >&2
+    return 1
   fi
-
-  [ "${GIT_AUTHOR_NAME:-}" = "$AGENT" ] || \
-    agent_desk_identity_error "Git author name is not $AGENT"
-  [ "${GIT_AUTHOR_EMAIL:-}" = "$EXPECTED_EMAIL" ] || \
-    agent_desk_identity_error "Git author email is not $EXPECTED_EMAIL"
-  [ "${GIT_COMMITTER_NAME:-}" = "$AGENT" ] || \
-    agent_desk_identity_error "Git committer name is not $AGENT"
-  [ "${GIT_COMMITTER_EMAIL:-}" = "$EXPECTED_EMAIL" ] || \
-    agent_desk_identity_error "Git committer email is not $EXPECTED_EMAIL"
-
-  actual_name=$(git -C "$HOME_PATH" config --get user.name || true)
-  actual_email=$(git -C "$HOME_PATH" config --get user.email || true)
-  actual_signing_key=$(git -C "$HOME_PATH" config --get user.signingkey || true)
-  [ "$actual_name" = "$AGENT" ] || \
-    agent_desk_identity_error "Git config user.name is not $AGENT"
-  [ "$actual_email" = "$EXPECTED_EMAIL" ] || \
-    agent_desk_identity_error "Git config user.email is not $EXPECTED_EMAIL"
-  agent_desk_signing_keys_match "$EXPECTED_SIGNING_KEY" "$actual_signing_key" || \
-    agent_desk_identity_error "Git signing key does not match the prepared target home"
-  [ "$(git -C "$HOME_PATH" config --bool commit.gpgsign || true)" = true ] || \
-    agent_desk_identity_error "Git commit signing is not enabled"
-
-  command -v "$GH_BIN" >/dev/null 2>&1 || \
-    agent_desk_identity_error "GitHub CLI is unavailable: $GH_BIN"
-  if ! actual_github=$("$GH_BIN" api user --jq .login); then
-    agent_desk_identity_error "GitHub authentication check failed"
-  fi
-  [ "$actual_github" = "$EXPECTED_GITHUB_LOGIN" ] || \
-    agent_desk_identity_error \
-      "GitHub login is $actual_github, expected $EXPECTED_GITHUB_LOGIN"
-
-  unset HIMALAYA_CONFIG __MISE_DIFF
-  export EMAILS_CONFIG="$actual_home/.emails/himalaya.toml"
-  export AGENT_HOME="$actual_home"
-  export AGENT_IDENTITY="$AGENT"
-  export CHAT_IDENTITY="$AGENT"
-}
-
-agent_desk_activate_target_identity
-IDENTITY_BOUNDARY
+  validate_login "$login"
+  printf '%s\n' "$login"
 }
