@@ -4,151 +4,127 @@ bats_require_minimum_version 1.5.0
 
 load test_helper
 
-setup() {
-  TMPBIN="$BATS_TEST_TMPDIR/bin"
-  mkdir -p "$TMPBIN"
-  export TMPBIN
+write_passing_test() {
+  local path="$1" name="$2"
+  mkdir -p "$(dirname "$path")"
+  local test_keyword='@test'
+  printf '%s\n' \
+    '#!/usr/bin/env bats' \
+    "$test_keyword \"$name\" {" \
+    '  true' \
+    '}' > "$path"
 }
 
-setup_bats_mocks() {
-  BATS_LOG="$BATS_TEST_TMPDIR/bats.log"
-  export BATS_LOG
+@test "options-only calls use the configured Fold test directory and run all gates" {
+  run fold_task test --jobs 1 \
+    --filter '^agent:list preserves line-oriented CI roster$'
 
-  cat > "$TMPBIN/bats" <<'BASH'
-#!/usr/bin/env bash
-set -euo pipefail
-{
-  printf 'jobs=%s\n' "${BATS_NUMBER_OF_PARALLEL_JOBS:-}"
-  printf 'runner=%s\n' "${BATS_PARALLEL_BINARY_NAME:-}"
-  for arg in "$@"; do
-    printf 'arg=%s\n' "$arg"
-  done
-} > "$BATS_LOG"
-BASH
-
-  cat > "$TMPBIN/rush" <<'BASH'
-#!/usr/bin/env bash
-exit 0
-BASH
-
-  chmod +x "$TMPBIN/bats" "$TMPBIN/rush"
-  export BATS_COMMAND="$TMPBIN/bats"
-  export RUSH_COMMAND="$TMPBIN/rush"
-  unset BATS_NUMBER_OF_PARALLEL_JOBS BATS_PARALLEL_BINARY_NAME
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'ok 1 agent:list preserves line-oriented CI roster'* ]]
+  [[ "$output" == *'== codebase lint =='* ]]
+  [[ "$output" == *'== welcome smoke =='* ]]
 }
 
-log_value() {
-  local key="$1"
-  awk -F= -v key="$key" '$1 == key { print substr($0, length(key) + 2); exit }' "$BATS_LOG"
+@test "the bats mode uses the default target without running other gates" {
+  run fold_task test bats --jobs 1 \
+    --filter '^agent:list --json emits explicit GitHub logins$'
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'ok 1 agent:list --json emits explicit GitHub logins'* ]]
+  [[ "$output" != *'== codebase lint =='* ]]
+  [[ "$output" != *'== welcome smoke =='* ]]
 }
 
-arg_count() {
-  local expected="$1"
-  awk -F= -v expected="$expected" '$1 == "arg" && substr($0, 5) == expected { count++ } END { print count + 0 }' "$BATS_LOG"
-}
-
-@test "test codebase runs configured codebase lints" {
-  cat > "$TMPBIN/codebase" <<'EOF'
-#!/usr/bin/env bash
-printf '%s\n' "$*" >> "$BATS_TEST_TMPDIR/codebase-args"
-printf 'codebase ok: %s\n' "$1"
-EOF
-  chmod +x "$TMPBIN/codebase"
-
-  export CODEBASE_BIN="$TMPBIN/codebase"
+@test "the codebase mode runs only configured Codebase lints" {
   run fold_task test codebase
 
   [ "$status" -eq 0 ]
-  grep -q "^lint$" "$BATS_TEST_TMPDIR/codebase-args"
+  [[ "$output" == *'== codebase lint =='* ]]
+  [[ "$output" != *'== bats =='* ]]
+  [[ "$output" != *'== welcome smoke =='* ]]
 }
 
-@test "test bats defaults to four Rush jobs across files" {
-  setup_bats_mocks
+@test "an explicit test target takes precedence over the configured default" {
+  local target="$BATS_TEST_TMPDIR/explicit.bats"
+  write_passing_test "$target" 'explicit target only'
 
-  run fold_task test bats agent_list --filter json
+  run fold_task test bats --jobs 1 "$target"
+
   [ "$status" -eq 0 ]
-  [[ "$output" == *"4 jobs across files"* ]]
-  [[ "$output" != *"codebase lint"* ]]
-  [[ "$output" != *"welcome smoke"* ]]
-  [ "$(log_value jobs)" = "4" ]
-  [ "$(log_value runner)" = "$TMPBIN/rush" ]
-  [ "$(arg_count --no-parallelize-within-files)" -eq 1 ]
-  [ "$(arg_count "$REPO_DIR/test/agent_list.bats")" -eq 1 ]
-  [ "$(arg_count --filter)" -eq 1 ]
-  [ "$(arg_count json)" -eq 1 ]
+  [[ "$output" == *'1..1'* ]]
+  [[ "$output" == *'ok 1 explicit target only'* ]]
 }
 
-@test "explicit BATS jobs override is forwarded once" {
-  setup_bats_mocks
+@test "relative test targets resolve from the repository root" {
+  run fold_task test bats --jobs 1 test/agent_list.bats \
+    --filter '^agent:list preserves line-oriented CI roster$'
 
-  run fold_task test bats --jobs 3 agent_list
   [ "$status" -eq 0 ]
-  [[ "$output" == *"3 jobs across files"* ]]
-  [ "$(log_value jobs)" = "" ]
-  [ "$(arg_count --jobs)" -eq 1 ]
-  [ "$(arg_count 3)" -eq 1 ]
-  [ "$(arg_count --no-parallelize-within-files)" -eq 1 ]
+  [[ "$output" == *'1..1'* ]]
+  [[ "$output" == *'ok 1 agent:list preserves line-oriented CI roster'* ]]
 }
 
-@test "BATS environment jobs override the default" {
-  setup_bats_mocks
-  export BATS_NUMBER_OF_PARALLEL_JOBS=2
+@test "whitespace-bearing explicit test targets remain one argument" {
+  local target="$BATS_TEST_TMPDIR/explicit target/passing test.bats"
+  write_passing_test "$target" 'whitespace target'
 
-  run fold_task test bats agent_list
+  run fold_task test bats --jobs 2 "$target"
+
   [ "$status" -eq 0 ]
-  [[ "$output" == *"2 jobs across files"* ]]
-  [ "$(log_value jobs)" = "2" ]
-  [ "$(arg_count --jobs)" -eq 0 ]
+  [[ "$output" == *'1..1'* ]]
+  [[ "$output" == *'ok 1 whitespace target'* ]]
 }
 
-@test "BATS environment serial opt-out does not require Rush" {
-  setup_bats_mocks
-  export BATS_NUMBER_OF_PARALLEL_JOBS=1
-  export RUSH_COMMAND="$TMPBIN/missing-rush"
+@test "public Fold test path runs separate BATS files concurrently" {
+  local probe_dir="$BATS_TEST_TMPDIR/across-file-probe"
+  export PROBE_DIR="$BATS_TEST_TMPDIR/across-file-barrier"
+  mkdir -p "$probe_dir" "$PROBE_DIR"
+  local test_keyword='@test'
 
-  run fold_task test bats agent_list
+  for side in one two; do
+    other=one
+    [ "$side" = one ] && other=two
+    cat > "$probe_dir/$side.bats" <<BATS
+#!/usr/bin/env bats
+$test_keyword "$side worker observes $other worker" {
+  touch "\$PROBE_DIR/$side"
+  for _ in {1..50}; do
+    [ ! -e "\$PROBE_DIR/$other" ] || return 0
+    sleep 0.05
+  done
+  false
+}
+BATS
+  done
+
+  run fold_task test bats "$probe_dir"
+
   [ "$status" -eq 0 ]
-  [[ "$output" == *"BATS parallelism: serial"* ]]
-  [ "$(arg_count --no-parallelize-within-files)" -eq 0 ]
 }
 
-@test "BATS CLI serial opt-out does not require Rush" {
-  setup_bats_mocks
-  export RUSH_COMMAND="$TMPBIN/missing-rush"
+@test "public Fold test path keeps tests within one BATS file serial" {
+  local target="$BATS_TEST_TMPDIR/within-file.bats"
+  export PROBE_DIR="$BATS_TEST_TMPDIR/within-file-barrier"
+  mkdir -p "$PROBE_DIR"
+  local test_keyword='@test'
 
-  run fold_task test bats --jobs 1 agent_list
+  cat > "$target" <<BATS
+#!/usr/bin/env bats
+$test_keyword "first test runs alone" {
+  touch "\$PROBE_DIR/one"
+  sleep 0.2
+  [ ! -e "\$PROBE_DIR/two" ]
+  rm "\$PROBE_DIR/one"
+}
+$test_keyword "second test runs alone" {
+  touch "\$PROBE_DIR/two"
+  sleep 0.2
+  [ ! -e "\$PROBE_DIR/one" ]
+  rm "\$PROBE_DIR/two"
+}
+BATS
+
+  run fold_task test bats "$target"
+
   [ "$status" -eq 0 ]
-  [[ "$output" == *"BATS parallelism: serial"* ]]
-  [ "$(arg_count --no-parallelize-within-files)" -eq 0 ]
-}
-
-@test "parallel BATS fails clearly when Rush is unavailable" {
-  setup_bats_mocks
-  export RUSH_COMMAND="$TMPBIN/missing-rush"
-
-  run -127 fold_task test bats agent_list
-  [ "$status" -eq 127 ]
-  [[ "$output" == *"parallel runner '$TMPBIN/missing-rush' is unavailable for 4 jobs"* ]]
-  [[ "$output" == *"run 'mise install' or use --jobs 1"* ]]
-  [ ! -e "$BATS_LOG" ]
-}
-
-@test "explicit BATS runner override is preserved" {
-  setup_bats_mocks
-  cp "$TMPBIN/rush" "$TMPBIN/alternate-runner"
-  export BATS_PARALLEL_BINARY_NAME="$TMPBIN/alternate-runner"
-
-  run fold_task test bats agent_list
-  [ "$status" -eq 0 ]
-  [ "$(log_value runner)" = "$TMPBIN/alternate-runner" ]
-}
-
-@test "invalid BATS job override fails before execution" {
-  setup_bats_mocks
-  export BATS_NUMBER_OF_PARALLEL_JOBS=lots
-
-  run fold_task test bats agent_list
-  [ "$status" -eq 2 ]
-  [[ "$output" == *"must be a positive integer"* ]]
-  [ ! -e "$BATS_LOG" ]
 }

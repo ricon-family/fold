@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
-#MISE description="Render and optionally launch an attachable agent desk wake"
+#MISE description="Render and optionally launch or resume an attachable agent desk wake"
+#USAGE flag "--session <id>" default="" help="Existing Sessions session ID to resume; omit for a fresh wake"
 #USAGE flag "--desk <path>" default="" help="Desk root path (used to derive --home when omitted)"
-#USAGE flag "--home <path>" default="" help="Home repo path for the agent process (default: <desk>/home)"
+#USAGE flag "--home <path>" default="" help="Prepared target home (default: <desk>/home)"
 #USAGE flag "--shell <name>" default="" help="Attachable shell name to launch"
-#USAGE flag "--packet <path>" default="" help="Wake packet file to pass to the agent"
-#USAGE flag "--model <model>" default="" help="Provider/model passed explicitly to shimmer agent"
-#USAGE flag "--title <title>" default="agent desk wake — root handoff" help="Title line prepended to the packet"
-#USAGE flag "--identity-source <path>" default="" help="Directory where 'shimmer as <agent>' runs (default: resolved desk home)"
+#USAGE flag "--packet <path>" default="" help="File-backed wake or continuation context"
+#USAGE flag "--model <model>" default="" help="Provider/model passed explicitly to the agent runtime"
+#USAGE flag "--message <message>" default="Read the continuation packet and resume." help="Short message for a resumed session"
+#USAGE flag "--title <title>" default="agent desk wake — root handoff" help="Title prepended to the wake message"
+#USAGE flag "--identity-source <path>" default="" help="Directory where 'shimmer as <agent>' runs (default: target home)"
 #USAGE flag "--startup-timeout <seconds>" default="30" help="Seconds to wait before one final Pi readiness observation"
 #USAGE flag "--work-dir <path>" default="" help="Directory for generated launcher (default: temporary directory)"
-#USAGE flag "-y --yes" default=#false help="Actually call shell run; without this, render and print the plan only"
-#USAGE arg "<agent>" help="Agent identity to launch"
+#USAGE flag "-y --yes" default=#false help="Actually launch; without this, render and print the plan only"
+#USAGE arg "<agent>" help="Agent identity to launch or resume"
 #USAGE example "mise run agent:desk:wake quick --desk ~/desks/q --shell quick-q --packet /tmp/wake.md --model '<model>' --yes" header="Launch Quick in a desk"
+#USAGE example "mise run agent:desk:wake quick --session <id> --desk ~/desks/q --shell quick-q-cont --packet /tmp/follow-up.md --model '<model>' --yes" header="Resume Quick in a desk"
 set -euo pipefail
 
 ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
@@ -19,11 +22,13 @@ ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
 source "$ROOT/.mise/lib/agent_desk.sh"
 
 AGENT="${usage_agent:?agent required}"
+SESSION_ID="${usage_session:-}"
 DESK_PATH=$(agent_desk_resolve_desk "${usage_desk:-}")
 HOME_PATH=$(agent_desk_resolve_home "${usage_home:-}" "$DESK_PATH" || true)
 SHELL_NAME="${usage_shell:-}"
 PACKET_PATH="${usage_packet:-}"
 MODEL="${usage_model:-}"
+MESSAGE="${usage_message:-Read the continuation packet and resume.}"
 TITLE="${usage_title:-agent desk wake — root handoff}"
 IDENTITY_SOURCE="${usage_identity_source:-$HOME_PATH}"
 STARTUP_TIMEOUT="${usage_startup_timeout:-30}"
@@ -31,8 +36,17 @@ WORK_DIR="${usage_work_dir:-}"
 YES="${usage_yes:-false}"
 SESSIONS_BIN="${SESSIONS_BIN:-sessions}"
 JQ_BIN="${JQ:-jq}"
+GH_BIN="${GH_BIN:-gh}"
+RUNTIME_PATH="$ROOT/.mise/lib/agent_desk_runtime.sh"
+MODE=fresh
+if [ -n "$SESSION_ID" ]; then
+  MODE=resume
+fi
 
 validate_agent "$AGENT"
+if [ -n "$SESSION_ID" ]; then
+  agent_desk_validate_name session "$SESSION_ID"
+fi
 if [ -z "$HOME_PATH" ]; then
   echo "ERROR: --home is required when --desk/home cannot be resolved" >&2
   exit 64
@@ -58,8 +72,38 @@ if [ ! -f "$PACKET_PATH" ]; then
   echo "ERROR: packet file not found: $PACKET_PATH" >&2
   exit 1
 fi
+if [ ! -x "$RUNTIME_PATH" ]; then
+  echo "ERROR: maintained agent desk runtime is unavailable: $RUNTIME_PATH" >&2
+  exit 1
+fi
 PACKET_PATH=$(agent_desk_abs_file "$PACKET_PATH")
 IDENTITY_SOURCE=$(agent_desk_abs_path "$IDENTITY_SOURCE")
+
+if ! command -v "$JQ_BIN" >/dev/null 2>&1; then
+  echo "ERROR: jq command not found: $JQ_BIN" >&2
+  exit 1
+fi
+EXPECTED_NAME=$(agent_desk_clean_git_config_get "$HOME_PATH" user.name || true)
+EXPECTED_EMAIL=$(agent_desk_clean_git_config_get "$HOME_PATH" user.email || true)
+EXPECTED_SIGNING_KEY=$(agent_desk_clean_git_config_get "$HOME_PATH" user.signingkey || true)
+EXPECTED_GPGSIGN=$(agent_desk_clean_git_config_bool "$HOME_PATH" commit.gpgsign || true)
+if [ "$EXPECTED_NAME" != "$AGENT" ]; then
+  echo "ERROR: prepared target home Git user.name is not $AGENT: $HOME_PATH" >&2
+  exit 1
+fi
+if [ -z "$EXPECTED_EMAIL" ]; then
+  echo "ERROR: prepared target home has no Git email: $HOME_PATH" >&2
+  exit 1
+fi
+if [ -z "$EXPECTED_SIGNING_KEY" ]; then
+  echo "ERROR: prepared target home has no Git signing key: $HOME_PATH" >&2
+  exit 1
+fi
+if [ "$EXPECTED_GPGSIGN" != true ]; then
+  echo "ERROR: prepared target home does not require signed commits: $HOME_PATH" >&2
+  exit 1
+fi
+EXPECTED_GITHUB_LOGIN=$(agent_desk_home_github_login "$HOME_PATH")
 
 if [ -z "$WORK_DIR" ]; then
   WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/fold-agent-desk-wake.XXXXXX")
@@ -72,44 +116,30 @@ LAUNCHER="$WORK_DIR/start-$SHELL_NAME.sh"
 cat > "$LAUNCHER" <<LAUNCHER
 #!/usr/bin/env bash
 set -euo pipefail
-AGENT=$(agent_desk_single_quote "$AGENT")
-HOME_PATH=$(agent_desk_single_quote "$HOME_PATH")
-IDENTITY_SOURCE=$(agent_desk_single_quote "$IDENTITY_SOURCE")
-PACKET_PATH=$(agent_desk_single_quote "$PACKET_PATH")
-MODEL=$(agent_desk_single_quote "$MODEL")
-TITLE=$(agent_desk_single_quote "$TITLE")
-
-cd "\$HOME_PATH"
-# A desk launch is a fresh identity boundary. Do not let the caller's mail
-# persona or mise activation diff survive into identity setup.
-unset EMAILS_CONFIG HIMALAYA_CONFIG __MISE_DIFF
-identity_shell=\$(cd "\$IDENTITY_SOURCE" && shimmer as "\$AGENT")
-eval "\$identity_shell"
-unset identity_shell
-if [ -z "\${AGENT_HOME:-}" ]; then
-  echo "ERROR: shimmer identity did not set AGENT_HOME" >&2
-  exit 1
-fi
-AUTHENTICATED_HOME=\$(cd "\$AGENT_HOME" && pwd -P)
-if [ "\$AUTHENTICATED_HOME" != "\$HOME_PATH" ]; then
-  echo "ERROR: authenticated agent home does not match desk home" >&2
-  echo "  authenticated home: \$AUTHENTICATED_HOME" >&2
-  echo "  desk home:          \$HOME_PATH" >&2
-  exit 1
-fi
-# Bind the long-lived process to its authenticated home. A missing local file
-# must fail closed instead of falling through to another persona's global config.
-unset HIMALAYA_CONFIG __MISE_DIFF
-export EMAILS_CONFIG="\$AUTHENTICATED_HOME/.emails/himalaya.toml"
-export CHAT_IDENTITY="\$AGENT"
-message=\$(cat "\$PACKET_PATH")
-exec shimmer agent --model "\$MODEL" "[\$TITLE]
-\${message}"
+export AGENT_DESK_MODE=$(agent_desk_single_quote "$MODE")
+export AGENT_DESK_AGENT=$(agent_desk_single_quote "$AGENT")
+export AGENT_DESK_HOME=$(agent_desk_single_quote "$HOME_PATH")
+export AGENT_DESK_IDENTITY_SOURCE=$(agent_desk_single_quote "$IDENTITY_SOURCE")
+export AGENT_DESK_PACKET=$(agent_desk_single_quote "$PACKET_PATH")
+export AGENT_DESK_MODEL=$(agent_desk_single_quote "$MODEL")
+export AGENT_DESK_TITLE=$(agent_desk_single_quote "$TITLE")
+export AGENT_DESK_MESSAGE=$(agent_desk_single_quote "$MESSAGE")
+export AGENT_DESK_SESSION=$(agent_desk_single_quote "$SESSION_ID")
+export AGENT_DESK_EXPECTED_EMAIL=$(agent_desk_single_quote "$EXPECTED_EMAIL")
+export AGENT_DESK_EXPECTED_SIGNING_KEY=$(agent_desk_single_quote "$EXPECTED_SIGNING_KEY")
+export AGENT_DESK_EXPECTED_GITHUB_LOGIN=$(agent_desk_single_quote "$EXPECTED_GITHUB_LOGIN")
+export AGENT_DESK_GH_BIN=$(agent_desk_single_quote "$GH_BIN")
+export AGENT_DESK_SESSIONS_BIN=$(agent_desk_single_quote "$SESSIONS_BIN")
+exec $(agent_desk_single_quote "$RUNTIME_PATH")
 LAUNCHER
 chmod +x "$LAUNCHER"
 
 printf 'Agent desk wake plan\n\n'
+printf 'mode:            %s\n' "$MODE"
 printf 'agent:           %s\n' "$AGENT"
+if [ -n "$SESSION_ID" ]; then
+  printf 'session:         %s\n' "$SESSION_ID"
+fi
 printf 'desk:            %s\n' "${DESK_PATH:-'(not resolved)'}"
 printf 'home:            %s\n' "$HOME_PATH"
 printf 'shell:           %s\n' "$SHELL_NAME"
@@ -119,8 +149,8 @@ printf 'identity-source: %s\n' "$IDENTITY_SOURCE"
 printf 'startup window:  %ss plus one final observation\n' "$STARTUP_TIMEOUT"
 printf 'launcher:        %s\n' "$LAUNCHER"
 
-if [ "$YES" != "true" ]; then
-  printf '\ndry-run: pass --yes to launch with shell run.\n'
+if [ "$YES" != true ]; then
+  printf '\ndry-run: pass --yes to wake with shell run.\n'
   exit 0
 fi
 
@@ -128,12 +158,32 @@ if ! command -v "$SESSIONS_BIN" >/dev/null 2>&1; then
   echo "ERROR: sessions command not found: $SESSIONS_BIN" >&2
   exit 1
 fi
-if ! command -v "$JQ_BIN" >/dev/null 2>&1; then
-  echo "ERROR: jq command not found: $JQ_BIN" >&2
-  exit 1
+if [ "$MODE" = resume ]; then
+  if ! session_agent=$("$SESSIONS_BIN" meta "$SESSION_ID" --field .meta.agent.name); then
+    echo "ERROR: could not verify session owner before wake: $SESSION_ID" >&2
+    exit 1
+  fi
+  if [ "$session_agent" != "$AGENT" ]; then
+    echo "ERROR: session $SESSION_ID belongs to $session_agent, expected $AGENT" >&2
+    exit 1
+  fi
+  if ! session_cwd=$("$SESSIONS_BIN" meta "$SESSION_ID" --field .cwd); then
+    echo "ERROR: could not verify session cwd before wake: $SESSION_ID" >&2
+    exit 1
+  fi
+  if [ ! -d "$session_cwd" ]; then
+    echo "ERROR: session cwd is unavailable: $session_cwd" >&2
+    exit 1
+  fi
+  session_cwd=$(cd "$session_cwd" && pwd -P)
+  if [ "$session_cwd" != "$HOME_PATH" ]; then
+    echo "ERROR: session cwd does not match prepared target home" >&2
+    echo "  session cwd: $session_cwd" >&2
+    echo "  target home: $HOME_PATH" >&2
+    exit 1
+  fi
 fi
-
-BASELINE_IDS="$WORK_DIR/baseline-session-ids.txt"
+BASELINE="$WORK_DIR/baseline-processes.txt"
 if ! session_processes=$("$SESSIONS_BIN" ps --all --json); then
   echo "ERROR: could not inspect Sessions processes before wake" >&2
   exit 1
@@ -142,13 +192,26 @@ if ! printf '%s\n' "$session_processes" | "$JQ_BIN" -e 'type == "array"' >/dev/n
   echo "ERROR: Sessions process output is not a JSON array" >&2
   exit 1
 fi
-printf '%s\n' "$session_processes" |
-  "$JQ_BIN" -r --arg cwd "$HOME_PATH" '.[] | select(.cwd == $cwd) | .session_id' > "$BASELINE_IDS"
+if [ "$MODE" = resume ]; then
+  known_count=$(printf '%s\n' "$session_processes" | "$JQ_BIN" -r --arg id "$SESSION_ID" '[.[] | select(.session_id == $id)] | length')
+  if [ "$known_count" -eq 0 ]; then
+    echo "ERROR: Sessions has no process history for session: $SESSION_ID" >&2
+    exit 1
+  fi
+  printf '%s\n' "$session_processes" |
+    "$JQ_BIN" -r --arg id "$SESSION_ID" \
+      '.[] | select(.session_id == $id) | [(.pid | tostring), (.process_start_id // "")] | @tsv' \
+      > "$BASELINE"
+else
+  printf '%s\n' "$session_processes" |
+    "$JQ_BIN" -r --arg cwd "$HOME_PATH" '.[] | select(.cwd == $cwd) | .session_id' \
+      > "$BASELINE"
+fi
 
-printf '\nlaunching shell %s from %s\n' "$SHELL_NAME" "$HOME_PATH"
+printf '\nlaunching %s wake in shell %s from %s\n' "$MODE" "$SHELL_NAME" "$HOME_PATH"
 "$AGENT_DESK_SHELL_BIN" run --cwd "$HOME_PATH" "$SHELL_NAME" "$LAUNCHER"
 
-printf '\nwaiting %ss plus one final observation for a new live Pi process\n' "$STARTUP_TIMEOUT"
+printf '\nwaiting %ss plus one final observation for the Pi process\n' "$STARTUP_TIMEOUT"
 started_at=$SECONDS
 while :; do
   final_observation=false
@@ -171,21 +234,39 @@ while :; do
     echo "ERROR: Sessions process output is not a JSON array" >&2
     exit 1
   fi
-  ready_id=$(
-    printf '%s\n' "$session_processes" |
-      "$JQ_BIN" -r --arg cwd "$HOME_PATH" \
-        '.[] | select(.cwd == $cwd and .status == "live" and .harness == "pi") | .session_id' |
-      while IFS= read -r session_id; do
-        [ -n "$session_id" ] || continue
-        if ! grep -Fqx "$session_id" "$BASELINE_IDS"; then
-          printf '%s\n' "$session_id"
-          break
-        fi
-      done
-  )
-  if [ -n "$ready_id" ]; then
-    printf 'Agent runtime ready\n\n'
-    printf 'session: %s\n' "$ready_id"
+
+  ready_value=
+  if [ "$MODE" = resume ]; then
+    ready_value=$(
+      printf '%s\n' "$session_processes" |
+        "$JQ_BIN" -r --arg id "$SESSION_ID" --arg cwd "$HOME_PATH" \
+          '.[] | select(.session_id == $id and .cwd == $cwd and .status == "live" and .harness == "pi") | [(.pid | tostring), (.process_start_id // "")] | @tsv' |
+        while IFS= read -r process_key; do
+          [ -n "$process_key" ] || continue
+          if ! grep -Fqx "$process_key" "$BASELINE"; then
+            printf '%s\n' "$SESSION_ID"
+            break
+          fi
+        done
+    )
+  else
+    ready_value=$(
+      printf '%s\n' "$session_processes" |
+        "$JQ_BIN" -r --arg cwd "$HOME_PATH" \
+          '.[] | select(.cwd == $cwd and .status == "live" and .harness == "pi") | .session_id' |
+        while IFS= read -r session_id; do
+          [ -n "$session_id" ] || continue
+          if ! grep -Fqx "$session_id" "$BASELINE"; then
+            printf '%s\n' "$session_id"
+            break
+          fi
+        done
+    )
+  fi
+  if [ -n "$ready_value" ]; then
+    printf 'Agent wake ready\n\n'
+    printf 'mode:    %s\n' "$MODE"
+    printf 'session: %s\n' "$ready_value"
     printf 'cwd:     %s\n' "$HOME_PATH"
     printf 'attach:  shell attach %s\n' "$SHELL_NAME"
     exit 0
@@ -199,7 +280,11 @@ while :; do
   fi
 done
 
-echo "ERROR: no new live Pi process appeared during the ${STARTUP_TIMEOUT}s window or final observation" >&2
+if [ "$MODE" = resume ]; then
+  echo "ERROR: no new live Pi process appeared for session $SESSION_ID during the ${STARTUP_TIMEOUT}s window or final observation" >&2
+else
+  echo "ERROR: no new live Pi process appeared during the ${STARTUP_TIMEOUT}s window or final observation" >&2
+fi
 if ! mise run -q agent:desk:smoke --shell "$SHELL_NAME"; then
   : # Preserve the primary startup timeout if diagnostics also fail.
 fi
