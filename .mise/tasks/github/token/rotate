@@ -3,6 +3,7 @@
 #USAGE flag "-y --yes" default=#false help="Actually rotate tokens without prompting"
 #USAGE flag "--dry-run" default=#false help="Check prerequisites without rotating, storing, or syncing"
 #USAGE flag "--no-sync-ci" default=#false help="Rotate/store only; do not sync the fold PAT CI secret"
+#USAGE flag "--operator-agent <agent>" default="" help="Read this agent's stored PAT fresh for each CI sync"
 #USAGE arg "[agents]" var=#true default="" help="Agent names to rotate (default: CI-enabled fold agents)"
 set -euo pipefail
 
@@ -10,7 +11,10 @@ ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
 YES="${usage_yes:-false}"
 DRY_RUN="${usage_dry_run:-false}"
 NO_SYNC_CI="${usage_no_sync_ci:-false}"
+OPERATOR_AGENT="${usage_operator_agent:-}"
 AGENTS_ARG="${usage_agents:-}"
+VERIFY_ATTEMPTS="${VERIFY_ATTEMPTS:-3}"
+VERIFY_DELAY_SECONDS="${VERIFY_DELAY_SECONDS:-2}"
 SECRETS_BIN="${SECRETS_BIN:-secrets}"
 WEBSITES_BIN="${WEBSITES_BIN:-websites}"
 SHIMMER_BIN="${SHIMMER_BIN:-shimmer}"
@@ -85,12 +89,23 @@ list_default_agents() {
 
 sync_ci() {
   local agent="$1"
+  local operator_token=""
   if [ "$NO_SYNC_CI" = "true" ]; then
     echo "  - skipped CI sync (--no-sync-ci)"
     return 0
   fi
 
-  (cd "$ROOT" && mise run github:ci:secrets:sync --repo "ricon-family/fold:$agent" --pat --yes) >/dev/null
+  if [ -n "$OPERATOR_AGENT" ]; then
+    operator_token=$("$SECRETS_BIN" get "$OPERATOR_AGENT/github-pat" 2>/dev/null || true)
+    if [ -z "$operator_token" ]; then
+      echo "ERROR: stored CI-sync PAT missing for operator $OPERATOR_AGENT" >&2
+      exit 1
+    fi
+    (cd "$ROOT" && GH_TOKEN="$operator_token" mise run github:ci:secrets:sync --repo "ricon-family/fold:$agent" --pat --yes) >/dev/null
+    unset operator_token
+  else
+    (cd "$ROOT" && mise run github:ci:secrets:sync --repo "ricon-family/fold:$agent" --pat --yes) >/dev/null
+  fi
   echo "  ✓ synced fold GitHub PAT CI secret"
 }
 
@@ -118,6 +133,20 @@ require_tool "$SHIMMER_BIN"
 require_tool "$GH_BIN"
 require_tool "$AWK_BIN"
 require_tool "$XARGS_BIN"
+
+if [ -n "$OPERATOR_AGENT" ]; then
+  validate_agent "$OPERATOR_AGENT"
+fi
+case "$VERIFY_ATTEMPTS" in
+  ''|*[!0-9]*) echo "ERROR: VERIFY_ATTEMPTS must be a positive integer" >&2; exit 1 ;;
+esac
+if [ "$VERIFY_ATTEMPTS" -lt 1 ]; then
+  echo "ERROR: VERIFY_ATTEMPTS must be a positive integer" >&2
+  exit 1
+fi
+case "$VERIFY_DELAY_SECONDS" in
+  ''|*[!0-9]*) echo "ERROR: VERIFY_DELAY_SECONDS must be a non-negative integer" >&2; exit 1 ;;
+esac
 
 TMP_AGENTS=$(mktemp)
 TMP_ROOT=$(mktemp -d)
@@ -150,7 +179,11 @@ done < "$TMP_AGENTS"
 printf '\n'
 
 if [ "$NO_SYNC_CI" != "true" ]; then
-  printf 'CI sync auth: ambient gh auth / GH_TOKEN\n\n'
+  if [ -n "$OPERATOR_AGENT" ]; then
+    printf 'CI sync auth: refreshed stored PAT for %s\n\n' "$OPERATOR_AGENT"
+  else
+    printf 'CI sync auth: ambient gh auth / GH_TOKEN\n\n'
+  fi
 fi
 
 printf 'Consent reminder: only rotate another agent credential with that agent or Or approving. See fold notes/credential-rotation-consent.md.\n\n'
@@ -160,6 +193,13 @@ if [ "$DRY_RUN" = "true" ]; then
 elif [ "$YES" != "true" ]; then
   echo "ERROR: rotation is destructive; rerun with --yes after confirming consent, or --dry-run to inspect." >&2
   exit 1
+fi
+
+if [ "$NO_SYNC_CI" != "true" ] && [ -n "$OPERATOR_AGENT" ]; then
+  if ! "$SECRETS_BIN" get "$OPERATOR_AGENT/github-pat" >/dev/null 2>&1; then
+    echo "ERROR: stored CI-sync PAT missing for operator $OPERATOR_AGENT" >&2
+    exit 1
+  fi
 fi
 
 while IFS= read -r agent; do
@@ -211,14 +251,30 @@ while IFS= read -r agent; do
   sync_ci "$agent"
 
   stored_token=$("$SECRETS_BIN" get "$agent/github-pat")
-  login=$(GH_TOKEN="$stored_token" "$GH_BIN" api /user --jq .login 2>/dev/null || true)
+  login=""
+  verify_attempt=1
+  while [ "$verify_attempt" -le "$VERIFY_ATTEMPTS" ]; do
+    login=$(GH_TOKEN="$stored_token" "$GH_BIN" api /user --jq .login 2>/dev/null || true)
+    if [ "$login" = "$username" ]; then
+      break
+    fi
+    login=""
+    if [ "$verify_attempt" -lt "$VERIFY_ATTEMPTS" ]; then
+      sleep "$VERIFY_DELAY_SECONDS"
+    fi
+    verify_attempt=$((verify_attempt + 1))
+  done
   if [ -z "$login" ]; then
-    printf '  ✗ verification failed\n'
+    printf '  ✗ verification failed after %s attempt(s)\n' "$VERIFY_ATTEMPTS"
     exit 1
   fi
-  printf '  ✓ verified as %s\n\n' "$login"
+  if [ "$verify_attempt" -gt 1 ]; then
+    printf '  ✓ verified as %s after %s attempts\n\n' "$login" "$verify_attempt"
+  else
+    printf '  ✓ verified as %s\n\n' "$login"
+  fi
 
-  unset username password new_token stored_token login
+  unset username password new_token stored_token login verify_attempt
   rm -rf "$agent_tmp"
 done < "$TMP_AGENTS"
 
