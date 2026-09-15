@@ -84,7 +84,7 @@ Guidance only works when it appears at the moment you need it. Before starting a
 | Mock commands/dependencies in tests | Read `notes/mock-first-overlay.md` |
 | Implement non-trivial code or reshape files, modules, or tests | Read `notes/code-structure-first-class.md` before choosing the organizing axis and revisit it after behavior works |
 | Write Bash expected to run on macOS + CI | Read `notes/bash-macos-compat.md` |
-| Run a non-trivial ad hoc shell sequence | Read `notes/legible-command-blocks.md`; keep one conceptual step per source line, label output phases, and move repeated or stateful work into a file/workbench |
+| Build a shell call, especially an SSH payload or multi-step block | Follow `notes/legible-command-blocks.md`: clear direct commands, transport separate from payload, real batches in named inspectable scripts; no routine per-command narration |
 | Use containers for release, packaging, or clean-consumer validation | Read `notes/containerized-acceptance-tests.md`; use Dockerfiles as executable tests, Colima on macOS, native runtimes on Linux, and operation-owned profiles |
 | Write a README | Read `notes/readme-writing.md` |
 | Review a PR | Read `notes/code-review.md` |
@@ -98,9 +98,14 @@ Guidance only works when it appears at the moment you need it. Before starting a
 | Create or revive a codebase | Read `notes/creating-a-codebase.md` and, for stale work, `notes/revival-pattern.md` |
 | Hit any command/tool/auth/CI failure | Stop and read `notes/observed-failures-are-work.md`, especially "When a command fails" |
 | Edit, stage, or commit readable notes in a notes-managed repo | Read `notes/notes-managed-repo-workflow.md`; use `notes changes`, then `notes commit` for note-only commits or `notes stage` for mixed/manual staging — not raw `git add notes/...` |
-| Repeat long paths in shell/tool calls | Create token-short symlink handles and read the pattern note through the handle: `agent=${GIT_AUTHOR_NAME:-<agent>}; mkdir -p "/tmp/$agent.d"; ln -sfn "$HOME/agents/$agent/home/modules/fold" "/tmp/$agent.d/fold"; ln -sfn "/tmp/$agent.d/fold/notes" "/tmp/$agent.d/fn"; cat "/tmp/$agent.d/fn/token-short-symlink-handles.md"` |
+| Repeat long paths in shell/tool calls | Read `notes/token-short-symlink-handles.md`; keep handle setup separate from the operation and verify it resolves to the intended checkout |
 
-Before Bash: large inline scripts belong in files, and repeated/debuggable shell flows belong in a scratch mise workbench. If the terminal transcript would make Or decode a blob, stop and use [[file-first-scripts]], [[scratch-mise-workbench]], and [[legible-terminal-workstream]] instead.
+Before sending a shell call, apply `notes/legible-command-blocks.md`: make the
+command itself readable. Separate remote connection setup from the payload;
+put genuine batches in focused, named scripts and inspect their bodies before
+execution. A wrapper, heredoc, heading or chat preamble does not fix an opaque
+block. Keep simple commands direct and let their output speak; use
+`notes/verbalize.md` for meaningful phase changes, failures and decisions.
 
 This is not a startup reading list. It is a set of just-in-time triggers. Read the note when the trigger fires, then proceed.
 
