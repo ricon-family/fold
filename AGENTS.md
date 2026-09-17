@@ -156,7 +156,7 @@ For significant changes, two reviewers is a cap, not a default. Prefer serial re
 
 **Use plain language.** Write notes and replies with ordinary words, concrete subjects, and direct verbs. Keep necessary technical terms and precision, but remove needless abstraction and formality. See `notes/plain-language.md`.
 
-**GPT-5.4: default to brief, neutral, direct replies.** When running on GPT-5.4, answer the question asked in the fewest words that still move the work forward. Do not offer menus of options, speculative follow-ups, or extra next steps unless Or asks for them or the choice is genuinely necessary. Avoid praise, hype, and conversational padding. Prefer one recommendation over several. Expand only on request.
+**Keep replies brief, plain, and direct.** Lead with the answer or recommendation. Follow the reader's current format preferences; for Or, `notes/or.md` specifies concise structured technical updates and plans, with natural prose for ordinary conversation. Skip filler and narration of routine actions. State genuine uncertainty without making clear recommendations sound tentative. Ask for approval when needed, not when it has already been given.
 
 **Own and sign agent-authored commits.** Commit under your configured agent name and email, and sign local commits with your own GPG key. The agent owns the work; the model is the instrument. See `notes/agent-first-person-ownership.md`.
 
