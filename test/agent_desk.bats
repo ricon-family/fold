@@ -438,6 +438,38 @@ make_repo() {
   fi
 }
 
+@test "agent:desk:prepare --skip-email excludes mail from the dry-run plan" {
+  desk="$BATS_TEST_TMPDIR/desks/no-mail"
+  mkdir -p "$desk"
+  write_fake_mise_for_prepare
+
+  run fold_task agent:desk:prepare quick --desk "$desk" --repo quick-ricon/home --skip-email
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"skip email: no mailbox provisioning or validation"* ]]
+  [[ "$output" != *"homes:email:setup"* ]]
+  [ ! -s "$MISE_LOG" ]
+  [ ! -e "$desk/home" ]
+}
+
+@test "agent:desk:prepare --skip-email still prepares and verifies without invoking mail" {
+  desk="$BATS_TEST_TMPDIR/desks/no-mail"
+  mkdir -p "$desk"
+  write_fake_mise_for_prepare
+
+  run fold_task agent:desk:prepare quick --desk "$desk" --repo quick-ricon/home --skip-email --yes
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Ready. Next wake command:"* ]]
+  [[ "$output" != *"homes:email:setup"* ]]
+  ! grep -q 'homes:email:setup' "$MISE_LOG"
+  grep -F "homes:status quick --home $desk/home --json --check" "$MISE_LOG"
+  [ -f "$desk/.gitconfig" ]
+  [ -d "$desk/home/.git" ]
+  [ ! -e "$desk/home/.emails" ]
+  [ ! -e "$SHELL_RUN_MARKER" ]
+}
+
 @test "agent:desk:prepare --yes can create a desk through desks new" {
   write_fake_mise_for_prepare
   write_fake_desks
