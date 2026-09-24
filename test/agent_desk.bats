@@ -43,6 +43,10 @@ case "${1:-}" in
     printf 'line one\nline two\nline three\n'
     ;;
   run)
+    if [ "${SHELL_RUN_MODE:-ok}" = fail ]; then
+      echo "probe did not execute" >&2
+      exit 1
+    fi
     : > "${SHELL_RUN_MARKER:?}"
     if [ "${SHELL_STATUS_MODE:-ok}" = fail-after-run ]; then
       : > "${SHELL_EXITED_MARKER:?}"
@@ -889,7 +893,7 @@ SH
   [[ "$output" == *"session: session-123"* ]]
   [[ "$output" == *"attach:  shell attach quick-cont"* ]]
   work_real=$(cd "$work_dir" && pwd -P)
-  grep -q "shell run --cwd $home_real quick-cont $work_real/start-quick-cont.sh" "$SHELL_LOG"
+  grep -q "shell run --probe-ready --ready-timeout 10 --cwd $home_real quick-cont $work_real/start-quick-cont.sh" "$SHELL_LOG"
   [ "$(cat "$SESSIONS_CALLS")" -ge 2 ]
 }
 
@@ -969,7 +973,7 @@ SH
   [[ "$output" == *"session: new-pi-session"* ]]
   [[ "$output" == *"attach:  shell attach quick-a"* ]]
   work_real=$(cd "$work_dir" && pwd -P)
-  grep -q "shell run --cwd $home_real quick-a $work_real/start-quick-a.sh" "$SHELL_LOG"
+  grep -q "shell run --probe-ready --ready-timeout 10 --cwd $home_real quick-a $work_real/start-quick-a.sh" "$SHELL_LOG"
   grep -q "sessions ps --all --json" "$SESSIONS_LOG"
 }
 
@@ -989,6 +993,36 @@ SH
   [[ "$output" == *"Agent wake ready"* ]]
   [[ "$output" == *"session: new-pi-session"* ]]
   [ "$(cat "$SESSIONS_CALLS")" -ge 3 ]
+}
+
+@test "agent:desk:wake rejects an excessive shell readiness timeout" {
+  home="$BATS_TEST_TMPDIR/home"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  make_repo "$home" home
+  printf 'hello packet\n' > "$packet"
+
+  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --shell-ready-timeout 99999999999999999999
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"--shell-ready-timeout must be an integer from 1 to 300"* ]]
+  [ ! -e "$SHELL_RUN_MARKER" ]
+}
+
+@test "agent:desk:wake stops when shell readiness fails before Pi launch" {
+  home="$BATS_TEST_TMPDIR/home"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  make_repo "$home" home
+  printf 'hello packet\n' > "$packet"
+  export FAKE_SESSION_CWD="$(cd "$home" && pwd -P)"
+  export SHELL_RUN_MODE=fail
+
+  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --shell-ready-timeout 2 --yes
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"probe did not execute"* ]]
+  grep -q 'shell run --probe-ready --ready-timeout 2' "$SHELL_LOG"
+  [ ! -e "$SHELL_RUN_MARKER" ]
+  [ "$(cat "$SESSIONS_CALLS")" -eq 1 ]
 }
 
 @test "agent:desk:wake rejects a running shell without a new Pi process" {
