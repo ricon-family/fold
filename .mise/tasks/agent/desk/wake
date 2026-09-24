@@ -9,6 +9,7 @@
 #USAGE flag "--message <message>" default="Read the continuation packet and resume." help="Short message for a resumed session"
 #USAGE flag "--title <title>" default="agent desk wake — root handoff" help="Title prepended to the wake message"
 #USAGE flag "--identity-source <path>" default="" help="Directory where 'shimmer as <agent>' runs (default: target home)"
+#USAGE flag "--shell-ready-timeout <seconds>" default="10" help="Seconds to probe shell execution before submitting the launcher (1-300)"
 #USAGE flag "--startup-timeout <seconds>" default="30" help="Seconds to wait before one final Pi readiness observation"
 #USAGE flag "--work-dir <path>" default="" help="Directory for generated launcher (default: temporary directory)"
 #USAGE flag "-y --yes" default=#false help="Actually launch; without this, render and print the plan only"
@@ -31,6 +32,7 @@ MODEL="${usage_model:-}"
 MESSAGE="${usage_message:-Read the continuation packet and resume.}"
 TITLE="${usage_title:-agent desk wake — root handoff}"
 IDENTITY_SOURCE="${usage_identity_source:-$HOME_PATH}"
+SHELL_READY_TIMEOUT="${usage_shell_ready_timeout:-10}"
 STARTUP_TIMEOUT="${usage_startup_timeout:-30}"
 WORK_DIR="${usage_work_dir:-}"
 YES="${usage_yes:-false}"
@@ -62,6 +64,10 @@ if [ -z "$PACKET_PATH" ]; then
 fi
 if [ -z "$MODEL" ]; then
   echo "ERROR: --model is required" >&2
+  exit 64
+fi
+if ! [[ "$SHELL_READY_TIMEOUT" =~ ^[1-9][0-9]{0,2}$ ]] || [ "$SHELL_READY_TIMEOUT" -gt 300 ]; then
+  echo "ERROR: --shell-ready-timeout must be an integer from 1 to 300" >&2
   exit 64
 fi
 if ! [[ "$STARTUP_TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
@@ -146,6 +152,7 @@ printf 'shell:           %s\n' "$SHELL_NAME"
 printf 'packet:          %s\n' "$PACKET_PATH"
 printf 'model:           %s\n' "$MODEL"
 printf 'identity-source: %s\n' "$IDENTITY_SOURCE"
+printf 'shell readiness: %ss probe deadline\n' "$SHELL_READY_TIMEOUT"
 printf 'startup window:  %ss plus one final observation\n' "$STARTUP_TIMEOUT"
 printf 'launcher:        %s\n' "$LAUNCHER"
 
@@ -209,7 +216,7 @@ else
 fi
 
 printf '\nlaunching %s wake in shell %s from %s\n' "$MODE" "$SHELL_NAME" "$HOME_PATH"
-"$AGENT_DESK_SHELL_BIN" run --cwd "$HOME_PATH" "$SHELL_NAME" "$LAUNCHER"
+"$AGENT_DESK_SHELL_BIN" run --probe-ready --ready-timeout "$SHELL_READY_TIMEOUT" --cwd "$HOME_PATH" "$SHELL_NAME" "$LAUNCHER"
 
 printf '\nwaiting %ss plus one final observation for the Pi process\n' "$STARTUP_TIMEOUT"
 started_at=$SECONDS
