@@ -630,7 +630,7 @@ JSON
   repo_real=$(cd "$REPO_DIR" && pwd -P)
   grep -q "AGENT_DESK_IDENTITY_SOURCE='$home_real'" "$work_dir/start-quick-a.sh"
   grep -q "AGENT_DESK_MODEL='openai-codex/gpt-5.6-sol'" "$work_dir/start-quick-a.sh"
-  grep -q "exec '$repo_real/.mise/lib/agent_desk_runtime.sh'" "$work_dir/start-quick-a.sh"
+  grep -Fq "exec mise -C \"\$AGENT_DESK_HOME\" exec -- '$repo_real/.mise/lib/agent_desk_runtime.sh'" "$work_dir/start-quick-a.sh"
   ! grep -q 'agent_desk_runtime_scrub_inherited_identity' "$work_dir/start-quick-a.sh"
   [ "$(wc -l < "$work_dir/start-quick-a.sh")" -le 20 ]
 }

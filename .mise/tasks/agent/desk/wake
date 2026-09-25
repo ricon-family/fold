@@ -136,7 +136,7 @@ export AGENT_DESK_EXPECTED_SIGNING_KEY=$(agent_desk_single_quote "$EXPECTED_SIGN
 export AGENT_DESK_EXPECTED_GITHUB_LOGIN=$(agent_desk_single_quote "$EXPECTED_GITHUB_LOGIN")
 export AGENT_DESK_GH_BIN=$(agent_desk_single_quote "$GH_BIN")
 export AGENT_DESK_SESSIONS_BIN=$(agent_desk_single_quote "$SESSIONS_BIN")
-exec $(agent_desk_single_quote "$RUNTIME_PATH")
+exec mise -C "\$AGENT_DESK_HOME" exec -- $(agent_desk_single_quote "$RUNTIME_PATH")
 LAUNCHER
 chmod +x "$LAUNCHER"
 
