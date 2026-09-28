@@ -1,0 +1,83 @@
+#!/usr/bin/env nu
+#MISE description="Wait for the first relevant Chat or Sessions event"
+#USAGE flag "--session <session>" var=#true default="" help="Session selector to watch (repeatable)"
+#USAGE flag "--chat <chat>" default="" help="Chat room to watch"
+#USAGE flag "--as <identity>" default="" help="Explicit Chat identity"
+#USAGE flag "--from <sender>" var=#true default="" help="Chat sender to watch (repeatable)"
+#USAGE flag "--mention <identity>" var=#true default="" help="Chat mention to watch (repeatable)"
+#USAGE flag "--state-dir <dir>" default="" help="Directory for independent source cursors"
+#USAGE flag "--timeout <seconds>" default="300" help="Maximum wait in seconds"
+#USAGE example "mise run wait --session alpha --session beta --state-dir ~/.local/state/fold/wait/fleet" header="Wait across Sessions"
+#USAGE example "mise run wait --chat ops --as alice --from or --mention alice --state-dir ~/.local/state/fold/wait/ops" header="Wait for either Chat match"
+#USAGE example "mise run wait --session alpha --chat ops --as alice --from or --state-dir ~/.local/state/fold/wait/combined --timeout 120" header="Wait across Chat and Sessions"
+
+use ../../lib/wait/coordinator.nu run-waiters
+use ../../lib/wait/request.nu build-request
+use ../../lib/wait/waiters.nu build-waiters
+
+
+def fail [message: string] {
+  print -e $"Error: ($message)"
+  exit 2
+}
+
+
+def resolve-executable [name: string override_value] {
+  let explicit = ($override_value | default "" | str trim)
+  if $explicit != "" {
+    return $explicit
+  }
+
+  let mise = ($env.MISE? | default "mise")
+  let result = (run-external $mise "which" "-C" $env.MISE_CONFIG_ROOT $name | complete)
+  let path = ($result.stdout | str trim)
+  if $result.exit_code != 0 or $path == "" {
+    error make {msg: $"mise could not resolve managed executable: ($name)"}
+  }
+
+  $path
+}
+
+
+let request = try {
+  build-request {
+    sessions: $env.usage_session
+    chat: {
+      room: $env.usage_chat
+      identity: $env.usage_as
+      senders: $env.usage_from
+      mentions: $env.usage_mention
+    }
+    state_dir: $env.usage_state_dir
+    timeout_seconds: $env.usage_timeout
+  }
+} catch {|error|
+  fail $error.msg
+}
+
+let executables = try {
+  {
+    chat: (if ($request.chat.room | is-empty) { "" } else { resolve-executable "chat" $env.CHAT? })
+    sessions: (if ($request.sessions | is-empty) { "" } else { resolve-executable "sessions" $env.SESSIONS? })
+  }
+} catch {|error|
+  fail $error.msg
+}
+
+let waiters = (build-waiters $request $executables)
+let timeout_duration = if $request.timeout_seconds == 0 {
+  null
+} else {
+  $"($request.timeout_seconds)sec" | into duration
+}
+let timeout = {
+  deadline: (if $timeout_duration == null { null } else { (date now) + $timeout_duration })
+  seconds: $request.timeout_seconds
+}
+let outcome = (run-waiters $waiters $request.state_dir $timeout)
+
+for event in $outcome.events {
+  print ($event | to json -r)
+}
+
+exit $outcome.exit_code

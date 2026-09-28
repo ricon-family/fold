@@ -7,6 +7,7 @@
 #USAGE flag "--repo <repo>" default="" help="GitHub home repo OWNER/REPO (default: <agent github login>/home)"
 #USAGE flag "--remote-url <url>" default="" help="Remote URL to clone; passed through to homes:adopt-remote"
 #USAGE flag "--branch <branch>" default="main" help="Home repo branch"
+#USAGE flag "--skip-email" default=#false help="Prepare without provisioning a mailbox; email remains unavailable"
 #USAGE flag "--shell <name>" default="" help="Shell name to render in the next wake command"
 #USAGE flag "--packet <path>" default="" help="Packet path to render in the next wake command"
 #USAGE flag "-y --yes" default=#false help="Create/provision the desk home; dry-run by default"
@@ -31,6 +32,7 @@ HOME_PATH="${usage_home:-}"
 REPO="${usage_repo:-}"
 REMOTE_URL="${usage_remote_url:-}"
 BRANCH="${usage_branch:-main}"
+SKIP_EMAIL="${usage_skip_email:-false}"
 SHELL_NAME="${usage_shell:-}"
 PACKET_PATH="${usage_packet:-}"
 YES="${usage_yes:-false}"
@@ -159,7 +161,11 @@ if [ -n "$REMOTE_URL" ]; then
   printf ' --remote-url %s' "$(homes_redact_url "$REMOTE_URL")"
 fi
 printf ' --branch %s --yes\n' "$BRANCH"
-printf '4. setup email: mise run homes:email:setup %s --home %s --yes\n' "$AGENT" "$HOME_PATH"
+if [ "$SKIP_EMAIL" = "true" ]; then
+  printf '4. skip email: no mailbox provisioning or validation\n'
+else
+  printf '4. setup email: mise run homes:email:setup %s --home %s --yes\n' "$AGENT" "$HOME_PATH"
+fi
 printf '5. verify: mise run homes:status %s --home %s --json --check\n' "$AGENT" "$HOME_PATH"
 printf '6. wake later: '
 render_next_wake
@@ -182,8 +188,10 @@ if [ -n "$REMOTE_URL" ]; then
 fi
 run_nested_mise "${adopt_args[@]}"
 
-printf '\n== setup home email ==\n'
-run_nested_mise run homes:email:setup "$AGENT" --home "$HOME_PATH" --yes
+if [ "$SKIP_EMAIL" != "true" ]; then
+  printf '\n== setup home email ==\n'
+  run_nested_mise run homes:email:setup "$AGENT" --home "$HOME_PATH" --yes
+fi
 
 printf '\n== verify home readiness ==\n'
 run_nested_mise run homes:status "$AGENT" --home "$HOME_PATH" --json --check

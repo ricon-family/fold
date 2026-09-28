@@ -134,3 +134,52 @@ agent_desk_parse_repo_spec() {
 agent_desk_single_quote() {
   printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\''/g")"
 }
+
+agent_desk_clean_git_config_get() {
+  local repo="$1" key="$2"
+  env \
+    -u GIT_CONFIG_COUNT \
+    -u GIT_CONFIG_PARAMETERS \
+    -u GIT_CONFIG_GLOBAL \
+    -u GIT_CONFIG_SYSTEM \
+    -u GIT_CONFIG_NOSYSTEM \
+    git -C "$repo" config --get "$key"
+}
+
+agent_desk_clean_git_config_bool() {
+  local repo="$1" key="$2"
+  env \
+    -u GIT_CONFIG_COUNT \
+    -u GIT_CONFIG_PARAMETERS \
+    -u GIT_CONFIG_GLOBAL \
+    -u GIT_CONFIG_SYSTEM \
+    -u GIT_CONFIG_NOSYSTEM \
+    git -C "$repo" config --bool --get "$key"
+}
+
+agent_desk_home_github_login() {
+  local home="$1" origin path login repo
+
+  if ! origin=$(agent_desk_clean_git_config_get "$home" remote.origin.url); then
+    echo "ERROR: prepared target home has no origin remote: $home" >&2
+    return 1
+  fi
+  case "$origin" in
+    https://github.com/*) path=${origin#https://github.com/} ;;
+    git@github.com:*) path=${origin#git@github.com:} ;;
+    ssh://git@github.com/*) path=${origin#ssh://git@github.com/} ;;
+    *)
+      echo "ERROR: target home origin is not a canonical GitHub OWNER/home URL" >&2
+      return 1
+      ;;
+  esac
+  path=${path%.git}
+  login=${path%%/*}
+  repo=${path#*/}
+  if [ -z "$login" ] || [ "$repo" != home ] || [ "$path" = "$login" ]; then
+    echo "ERROR: target home origin must identify GitHub OWNER/home" >&2
+    return 1
+  fi
+  validate_login "$login"
+  printf '%s\n' "$login"
+}

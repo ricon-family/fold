@@ -68,6 +68,16 @@ case "${1:-}" in
   api)
     case "${2:-}" in
       /user)
+        attempt_file="$BATS_TEST_TMPDIR/gh-user-attempts"
+        attempt=0
+        if [ -f "$attempt_file" ]; then
+          attempt=$(cat "$attempt_file")
+        fi
+        attempt=$((attempt + 1))
+        printf '%s' "$attempt" > "$attempt_file"
+        if [ "$attempt" -le "${GH_FAIL_USER_ATTEMPTS:-0}" ]; then
+          exit 1
+        fi
         printf 'c0da-ricon\n'
         exit 0
         ;;
@@ -158,6 +168,32 @@ EOF
   ! grep -q 'GPG\|EMAIL\|B2\|PI_AUTH' "$BATS_TEST_TMPDIR/gh-log"
   [[ "$output$(cat "$BATS_TEST_TMPDIR/gh-log")" != *"ghp_newtoken"* ]]
   [[ "$output$(cat "$BATS_TEST_TMPDIR/gh-log")" != *"ghp_operator"* ]]
+}
+
+@test "github:token:rotate refreshes the stored operator PAT before CI sync" {
+  write_fake_websites github:token:rotate
+  write_fake_shimmer_and_gh
+
+  GH_TOKEN=stale-caller-token run fold_task github:token:rotate --yes --operator-agent c0da c0da
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"CI sync auth: refreshed stored PAT for c0da"* ]]
+  [[ "$output" == *"✓ synced fold GitHub PAT CI secret"* ]]
+  grep -q $'SECRET_SET=C0DA_GITHUB_PAT\tBYTES=12\tGH_TOKEN=ghp_newtoken' "$BATS_TEST_TMPDIR/gh-log"
+  [[ "$output$(cat "$BATS_TEST_TMPDIR/gh-log")" != *"stale-caller-token"* ]]
+}
+
+@test "github:token:rotate retries transient stored-token verification" {
+  write_fake_websites github:token:rotate
+  write_fake_shimmer_and_gh
+  export GH_FAIL_USER_ATTEMPTS=1
+  export VERIFY_DELAY_SECONDS=0
+
+  run fold_task github:token:rotate --yes --no-sync-ci c0da
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"✓ verified as c0da-ricon after 2 attempts"* ]]
+  [ "$(cat "$BATS_TEST_TMPDIR/gh-user-attempts")" -eq 2 ]
 }
 
 @test "github:token:create redacts credential material from browser diagnostics" {

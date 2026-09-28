@@ -63,7 +63,7 @@ scan configured live signals under explicit identity. Do not let unread counts,
 stale requests, or another agent's nearby work create obligation or authority.
 Orientation ends with a natural readiness handback and, when session control
 is available, a `post-orientation` anchor. A missing independent capability may
-remain locally degraded; an unverified persona/home, unread governing contract,
+remain locally degraded; an unverified agent identity/home, unread governing contract,
 or unclear ownership/authority blocks general readiness.
 
 Orient with curiosity, not ritual. Follow current references, meaningful deltas,
@@ -84,10 +84,13 @@ Guidance only works when it appears at the moment you need it. Before starting a
 | Mock commands/dependencies in tests | Read `notes/mock-first-overlay.md` |
 | Implement non-trivial code or reshape files, modules, or tests | Read `notes/code-structure-first-class.md` before choosing the organizing axis and revisit it after behavior works |
 | Write Bash expected to run on macOS + CI | Read `notes/bash-macos-compat.md` |
-| Run a non-trivial ad hoc shell sequence | Read `notes/legible-command-blocks.md`; keep one conceptual step per source line, label output phases, and move repeated or stateful work into a file/workbench |
+| Build a shell call, especially an SSH payload or multi-step block | Follow `notes/legible-command-blocks.md`: clear direct commands, transport separate from payload, real batches in named inspectable scripts; no routine per-command narration |
+| Use containers for release, packaging, or clean-consumer validation | Read `notes/containerized-acceptance-tests.md`; use Dockerfiles as executable tests, Colima on macOS, native runtimes on Linux, and operation-owned profiles |
 | Write a README | Read `notes/readme-writing.md` |
 | Review a PR | Read `notes/code-review.md` |
 | Wake or spawn a local worker/agent, continue a session, or dispatch a hosted wake | Read `notes/local-agent-wakes.md`; for several live attachable child desks, also read `notes/session-forking.md` |
+| Back up raw Pi session history | Read `notes/agent-scoped-session-backup.md`; use explicit IDs on shared machines and reserve `--all` for isolated single-agent runners |
+| Observe or supervise another live agent session | Read `notes/agent-supervision-guide.md`; the workflow is untested and requires exact observation and contact authority |
 | Start substantial work whose transition evidence may outgrow a rewind handback | Read `notes/feed-backed-session-progress-map.md`; use a small private feed when it makes resumption easier, put its exact path in the handback, and skip it when the handback is enough |
 | Change GitHub Actions / CI auth | Read `notes/github-actions-ci.md` and `notes/ci-auth-debugging.md` |
 | Check or repair agent GitHub 2FA/PATs | Read `notes/github-2fa-pat-runbook.md` and `notes/credential-rotation-consent.md` |
@@ -95,9 +98,14 @@ Guidance only works when it appears at the moment you need it. Before starting a
 | Create or revive a codebase | Read `notes/creating-a-codebase.md` and, for stale work, `notes/revival-pattern.md` |
 | Hit any command/tool/auth/CI failure | Stop and read `notes/observed-failures-are-work.md`, especially "When a command fails" |
 | Edit, stage, or commit readable notes in a notes-managed repo | Read `notes/notes-managed-repo-workflow.md`; use `notes changes`, then `notes commit` for note-only commits or `notes stage` for mixed/manual staging — not raw `git add notes/...` |
-| Repeat long paths in shell/tool calls | Create token-short symlink handles and read the pattern note through the handle: `agent=${GIT_AUTHOR_NAME:-<agent>}; mkdir -p "/tmp/$agent.d"; ln -sfn "$HOME/agents/$agent/home/modules/fold" "/tmp/$agent.d/fold"; ln -sfn "/tmp/$agent.d/fold/notes" "/tmp/$agent.d/fn"; cat "/tmp/$agent.d/fn/token-short-symlink-handles.md"` |
+| Repeat long paths in shell/tool calls | Read `notes/token-short-symlink-handles.md`; keep handle setup separate from the operation and verify it resolves to the intended checkout |
 
-Before Bash: large inline scripts belong in files, and repeated/debuggable shell flows belong in a scratch mise workbench. If the terminal transcript would make Or decode a blob, stop and use [[file-first-scripts]], [[scratch-mise-workbench]], and [[legible-terminal-workstream]] instead.
+Before sending a shell call, apply `notes/legible-command-blocks.md`: make the
+command itself readable. Separate remote connection setup from the payload;
+put genuine batches in focused, named scripts and inspect their bodies before
+execution. A wrapper, heredoc, heading or chat preamble does not fix an opaque
+block. Keep simple commands direct and let their output speak; use
+`notes/verbalize.md` for meaningful phase changes, failures and decisions.
 
 This is not a startup reading list. It is a set of just-in-time triggers. Read the note when the trigger fires, then proceed.
 
@@ -112,7 +120,7 @@ This is not a startup reading list. It is a set of just-in-time triggers. Read t
 
 **Capture explicit complaints as issues.** If Or says **"personally, I take issue with ..."**, treat that as a trigger phrase. Open an issue immediately summarizing your understanding of the complaint, and apply the `complaint` label, so it becomes a durable artifact. If your summary misses something, Or can correct it and the issue can be updated. Prefer this explicit convention over trying to retrospectively infer complaints from session transcripts.
 
-**Plan before you act.** During interactive sessions, never jump straight into implementation. Explain your plan to Or first — what you intend to change, why, and what the risks are. Wait for approval before writing code. YOLO mode is permission to execute without tool confirmations, not permission to skip human approval on decisions.
+**Plan before you act.** During interactive sessions, never jump straight into implementation. Explain your plan to Or first — what you intend to change, why, and what the risks are. Wait for approval before writing code. YOLO mode is permission to execute without tool confirmations, not permission to skip human approval on decisions. Use `notes/actionable-proposals.md` to present scope and pending decisions in dependency order without adding approval gates to work already authorized.
 
 **Debug generously.** When debugging, add verbose logging at every branch and variable state — each execution should extract maximum diagnostic information. Don't do five runs where one well-instrumented run would suffice. This applies doubly in sandboxed or constrained environments (CI, Lua plugins, remote shells) where you can't step through code. Clean up debug logging before committing.
 
@@ -153,7 +161,7 @@ For significant changes, two reviewers is a cap, not a default. Prefer serial re
 
 **Use plain language.** Write notes and replies with ordinary words, concrete subjects, and direct verbs. Keep necessary technical terms and precision, but remove needless abstraction and formality. See `notes/plain-language.md`.
 
-**GPT-5.4: default to brief, neutral, direct replies.** When running on GPT-5.4, answer the question asked in the fewest words that still move the work forward. Do not offer menus of options, speculative follow-ups, or extra next steps unless Or asks for them or the choice is genuinely necessary. Avoid praise, hype, and conversational padding. Prefer one recommendation over several. Expand only on request.
+**Keep replies brief, plain, and direct.** Lead with the answer or recommendation. Follow the reader's current format preferences; for Or, `notes/or.md` specifies concise structured technical updates and plans, with natural prose for ordinary conversation. Skip filler and narration of routine actions. State genuine uncertainty without making clear recommendations sound tentative. Ask for approval when needed, not when it has already been given. When a message raises several questions or points, short quote-and-answer pairs can make the reply easier to follow; see `notes/quote-reply-as-lightweight-review.md`.
 
 **Own and sign agent-authored commits.** Commit under your configured agent name and email, and sign local commits with your own GPG key. The agent owns the work; the model is the instrument. See `notes/agent-first-person-ownership.md`.
 
@@ -231,6 +239,8 @@ Key commands:
 - `notes verify --gpg-key <fingerprint>` — Verify a collaborator's public key
 
 Notes use YAML frontmatter (title, tags, related, created, updated) and `[[wikilinks]]` for cross-referencing. Do not regenerate generated indexes as a commit ritual; fold no longer maintains `notes/index.md` or `notes/graph.md`.
+
+**Avoid Git worktrees for now:** encrypted/obfuscated Notes checkouts do not behave reliably in linked worktrees, so use a clean branch switch or separate clone instead.
 
 ## Legacy HUMAN.md
 

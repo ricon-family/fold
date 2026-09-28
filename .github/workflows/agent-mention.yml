@@ -29,8 +29,10 @@ jobs:
       agent_johnson: ${{ steps.detect.outputs.agent_johnson }}
       agent_junior: ${{ steps.detect.outputs.agent_junior }}
       agent_k7r2: ${{ steps.detect.outputs.agent_k7r2 }}
+      agent_kabir: ${{ steps.detect.outputs.agent_kabir }}
       agent_quick: ${{ steps.detect.outputs.agent_quick }}
       agent_rho: ${{ steps.detect.outputs.agent_rho }}
+      agent_sela: ${{ steps.detect.outputs.agent_sela }}
       agent_x1f9: ${{ steps.detect.outputs.agent_x1f9 }}
       agent_zeke: ${{ steps.detect.outputs.agent_zeke }}
       message: ${{ steps.detect.outputs.message }}
@@ -41,8 +43,8 @@ jobs:
       - name: Detect mentions
         id: detect
         env:
-          AGENT_ROSTER: baby-joel,brownie,c0da,ikma,iris,johnson,junior,k7r2,quick,rho,x1f9,zeke
-          AGENT_GITHUB_LOGINS: "{\"baby-joel\":\"baby-joel\",\"brownie\":\"brownie-ricon\",\"c0da\":\"c0da-ricon\",\"ikma\":\"ikma-ricon\",\"iris\":\"iris-ricon\",\"johnson\":\"johnson-ricon\",\"junior\":\"junior-ricon\",\"k7r2\":\"k7r2-ricon\",\"quick\":\"quick-ricon\",\"rho\":\"rho-ricon\",\"x1f9\":\"x1f9-ricon\",\"zeke\":\"zeke-ricon\"}"
+          AGENT_ROSTER: baby-joel,brownie,c0da,ikma,iris,johnson,junior,k7r2,kabir,quick,rho,sela,x1f9,zeke
+          AGENT_GITHUB_LOGINS: "{\"baby-joel\":\"baby-joel\",\"brownie\":\"brownie-ricon\",\"c0da\":\"c0da-ricon\",\"ikma\":\"ikma-ricon\",\"iris\":\"iris-ricon\",\"johnson\":\"johnson-ricon\",\"junior\":\"junior-ricon\",\"k7r2\":\"k7r2-ricon\",\"kabir\":\"kabir-ricon\",\"quick\":\"quick-ricon\",\"rho\":\"rho-ricon\",\"sela\":\"sela-ricon\",\"x1f9\":\"x1f9-ricon\",\"zeke\":\"zeke-ricon\"}"
           # Team fanout stays disabled until fanout limits/jitter are designed explicitly.
           TEAM_ALIASES: ""
           ALLOWED_ASSOCIATIONS: OWNER,MEMBER
@@ -187,6 +189,22 @@ jobs:
       model: "openai-codex/gpt-5.5"
     secrets: inherit
 
+  wake-kabir:
+    name: Wake kabir
+    needs: detect
+    if: ${{ needs.detect.outputs.agent_kabir == 'true' }}
+    concurrency:
+      # At most one running and one pending mention wake per thread/agent.
+      # A newer pending wake replaces an older pending one; running sessions
+      # are not canceled.
+      group: agent-mention-kabir-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    uses: ./.github/workflows/kabir.yml
+    with:
+      message: ${{ needs.detect.outputs.message }}
+      model: "openai-codex/gpt-5.5"
+    secrets: inherit
+
   wake-quick:
     name: Wake quick
     needs: detect
@@ -214,6 +232,22 @@ jobs:
       group: agent-mention-rho-${{ github.event.issue.number }}
       cancel-in-progress: false
     uses: ./.github/workflows/rho.yml
+    with:
+      message: ${{ needs.detect.outputs.message }}
+      model: "openai-codex/gpt-5.5"
+    secrets: inherit
+
+  wake-sela:
+    name: Wake sela
+    needs: detect
+    if: ${{ needs.detect.outputs.agent_sela == 'true' }}
+    concurrency:
+      # At most one running and one pending mention wake per thread/agent.
+      # A newer pending wake replaces an older pending one; running sessions
+      # are not canceled.
+      group: agent-mention-sela-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    uses: ./.github/workflows/sela.yml
     with:
       message: ${{ needs.detect.outputs.message }}
       model: "openai-codex/gpt-5.5"
