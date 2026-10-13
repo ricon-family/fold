@@ -82,12 +82,12 @@ Guidance only works when it appears at the moment you need it. Before starting a
 | Write or change a `mise welcome` task | Also read `notes/setup-health-welcome.md` and `notes/non-mutating-welcome-diagnostics.md` |
 | Write Python mise tasks | Read `notes/mise-python-tasks.md` |
 | Mock commands/dependencies in tests | Read `notes/mock-first-overlay.md` |
-| Implement non-trivial code or reshape files, modules, or tests | Read `notes/code-structure-first-class.md` before choosing the organizing axis and revisit it after behavior works |
+| Implement or review code, including tasks, scripts, tests, and refactors | Read `notes/coding-patterns.md`; apply its human-readability and structure commitments while authoring and reread changed files before handoff |
 | Write Bash expected to run on macOS + CI | Read `notes/bash-macos-compat.md` |
 | Build a shell call, especially an SSH payload or multi-step block | Follow `notes/legible-command-blocks.md`: clear direct commands, transport separate from payload, real batches in named inspectable scripts; no routine per-command narration |
 | Use containers for release, packaging, or clean-consumer validation | Read `notes/containerized-acceptance-tests.md`; use Dockerfiles as executable tests, Colima on macOS, native runtimes on Linux, and operation-owned profiles |
 | Write a README | Read `notes/readme-writing.md` |
-| Review a PR | Read `notes/code-review.md` |
+| Review a PR | Read `notes/coding-patterns.md` and `notes/code-review.md` |
 | Wake or spawn a local worker/agent, continue a session, or dispatch a hosted wake | Read `notes/local-agent-wakes.md`; for several live attachable child desks, also read `notes/session-forking.md` |
 | Back up raw Pi session history | Read `notes/agent-scoped-session-backup.md`; use explicit IDs on shared machines and reserve `--all` for isolated single-agent runners |
 | Observe or supervise another live agent session | Read `notes/agent-supervision-guide.md`; the workflow is untested and requires exact observation and contact authority |
