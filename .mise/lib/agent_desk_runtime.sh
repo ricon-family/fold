@@ -28,6 +28,7 @@ agent_desk_runtime_scrub_inherited_identity() {
     GH_TOKEN GITHUB_TOKEN GH_CONFIG_DIR \
     GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL \
     GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL \
+    GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR \
     __MISE_DIFF
 }
 
@@ -48,23 +49,24 @@ agent_desk_runtime_signing_keys_match() {
 }
 
 agent_desk_runtime_activate_target() {
-  local actual_home actual_github actual_name actual_email actual_signing_key
+  local actual_home home_root actual_github actual_name actual_email actual_signing_key
   local identity_shell
 
   agent_desk_runtime_scrub_inherited_identity
+  actual_home=$(pwd -P)
+  [ "$actual_home" = "$AGENT_DESK_HOME" ] || \
+    agent_desk_runtime_error "working directory does not match the selected home"
+  home_root=$(git rev-parse --show-toplevel) || \
+    agent_desk_runtime_error "selected home is not a Git worktree"
+  [ "$home_root" = "$actual_home" ] || \
+    agent_desk_runtime_error "selected home must be the Git worktree root"
+
   identity_shell=$(cd "$AGENT_DESK_IDENTITY_SOURCE" && shimmer as "$AGENT_DESK_AGENT") || return $?
   eval "$identity_shell"
   unset identity_shell
 
-  [ -n "${AGENT_HOME:-}" ] || \
-    agent_desk_runtime_error "shimmer did not set AGENT_HOME"
-  actual_home=$(cd "$AGENT_HOME" && pwd -P)
-  if [ "$actual_home" != "$AGENT_DESK_HOME" ]; then
-    printf 'ERROR: authenticated agent home does not match desk home\n' >&2
-    printf '  authenticated home: %s\n' "$actual_home" >&2
-    printf '  desk home:          %s\n' "$AGENT_DESK_HOME" >&2
-    exit 1
-  fi
+  [ -z "${AGENT_HOME+x}" ] || \
+    agent_desk_runtime_error "persona activation must not assign AGENT_HOME"
 
   [ "${GIT_AUTHOR_NAME:-}" = "$AGENT_DESK_EXPECTED_NAME" ] || \
     agent_desk_runtime_error "Git author name does not match the prepared target home"
