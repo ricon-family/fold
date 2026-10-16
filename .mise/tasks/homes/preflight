@@ -226,7 +226,7 @@ fi
 if ! secret_present "github-username"; then
   :
 fi
-if ! secret_present "github-pat"; then
+if ! secret_present "github/token"; then
   :
 fi
 check_gpg_key "$fingerprint"

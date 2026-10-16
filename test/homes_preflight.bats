@@ -21,7 +21,7 @@ fi
 case "${2:-}" in
   test-agent/gpg-fingerprint) echo "ABCDEF1234567890" ;;
   test-agent/github-username) echo "test-agent-ricon" ;;
-  test-agent/github-pat) echo "ghp_not_a_real_token" ;;
+  test-agent/github/token) echo "ghp_not_a_real_token" ;;
   *) echo "missing secret: ${2:-}" >&2; exit 1 ;;
 esac
 SH
@@ -112,7 +112,7 @@ SH
   [ "$status" -eq 1 ]
   [[ "$output" == *"fail   secret:gpg-fingerprint"*"secrets tool unavailable"* ]]
   [[ "$output" == *"fail   secret:github-username"*"secrets tool unavailable"* ]]
-  [[ "$output" == *"fail   secret:github-pat"*"secrets tool unavailable"* ]]
+  [[ "$output" == *"fail   secret:github/token"*"secrets tool unavailable"* ]]
 }
 
 @test "homes:preflight fails closed when gpg is unavailable" {

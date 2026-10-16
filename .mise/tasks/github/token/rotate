@@ -96,7 +96,7 @@ sync_ci() {
   fi
 
   if [ -n "$OPERATOR_AGENT" ]; then
-    operator_token=$("$SECRETS_BIN" get "$OPERATOR_AGENT/github-pat" 2>/dev/null || true)
+    operator_token=$("$SECRETS_BIN" get "$OPERATOR_AGENT/github/token" 2>/dev/null || true)
     if [ -z "$operator_token" ]; then
       echo "ERROR: stored CI-sync PAT missing for operator $OPERATOR_AGENT" >&2
       exit 1
@@ -196,7 +196,7 @@ elif [ "$YES" != "true" ]; then
 fi
 
 if [ "$NO_SYNC_CI" != "true" ] && [ -n "$OPERATOR_AGENT" ]; then
-  if ! "$SECRETS_BIN" get "$OPERATOR_AGENT/github-pat" >/dev/null 2>&1; then
+  if ! "$SECRETS_BIN" get "$OPERATOR_AGENT/github/token" >/dev/null 2>&1; then
     echo "ERROR: stored CI-sync PAT missing for operator $OPERATOR_AGENT" >&2
     exit 1
   fi
@@ -215,7 +215,7 @@ while IFS= read -r agent; do
   fi
 
   if [ "$DRY_RUN" = "true" ]; then
-    if "$SECRETS_BIN" get "$agent/github-pat" >/dev/null 2>&1; then
+    if "$SECRETS_BIN" get "$agent/github/token" >/dev/null 2>&1; then
       printf '  ✓ credentials present; current PAT present\n\n'
     else
       printf '  ⚠ credentials present; current PAT missing\n\n'
@@ -250,7 +250,7 @@ while IFS= read -r agent; do
 
   sync_ci "$agent"
 
-  stored_token=$("$SECRETS_BIN" get "$agent/github-pat")
+  stored_token=$("$SECRETS_BIN" get "$agent/github/token")
   login=""
   verify_attempt=1
   while [ "$verify_attempt" -le "$VERIFY_ATTEMPTS" ]; do

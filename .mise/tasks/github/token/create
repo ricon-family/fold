@@ -176,7 +176,7 @@ while IFS= read -r agent; do
   fi
 
   if [ "$DRY_RUN" = "true" ]; then
-    if "$SECRETS_BIN" get "$agent/github-pat" >/dev/null 2>&1; then
+    if "$SECRETS_BIN" get "$agent/github/token" >/dev/null 2>&1; then
       printf '  ✓ credentials present; current PAT present\n\n'
     else
       printf '  ⚠ credentials present; current PAT missing\n\n'
@@ -211,7 +211,7 @@ while IFS= read -r agent; do
 
   sync_ci "$agent"
 
-  stored_token=$("$SECRETS_BIN" get "$agent/github-pat")
+  stored_token=$("$SECRETS_BIN" get "$agent/github/token")
   login=$(GH_TOKEN="$stored_token" "$GH_BIN" api /user --jq .login 2>/dev/null || true)
   if [ -z "$login" ]; then
     printf '  ✗ verification failed\n'

@@ -21,10 +21,10 @@ set -euo pipefail
 if [ "${1:-}" = "get" ]; then
   printf 'get\t%s\n' "${2:-}" >> "$BATS_TEST_TMPDIR/secrets-log"
   case "${2:-}" in
-    alpha/github-pat) printf 'token-alpha\n' ;;
+    alpha/github/token) printf 'token-alpha\n' ;;
     alpha/gpg-private-key) printf '"-----BEGIN PGP PRIVATE KEY BLOCK-----\nfake-alpha\n-----END PGP PRIVATE KEY BLOCK-----"\n' ;;
     alpha/email-password) printf 'email-alpha\n' ;;
-    beta-bot/github-pat) printf 'token-beta\n' ;;
+    beta-bot/github/token) printf 'token-beta\n' ;;
     beta-bot/email-password) printf 'email-beta\n' ;;
     *) echo "missing secret: ${2:-}" >&2; exit 1 ;;
   esac
@@ -233,7 +233,7 @@ SH
   [[ "$output" != *"ALPHA_GPG_PRIVATE_KEY"* ]]
   [[ "$output" != *"ALPHA_EMAIL_PASSWORD"* ]]
   ! grep -q $'set\t' "$GH_LOG"
-  grep -q $'get\talpha/github-pat' "$BATS_TEST_TMPDIR/secrets-log"
+  grep -q $'get\talpha/github/token' "$BATS_TEST_TMPDIR/secrets-log"
   ! grep -q $'get\talpha/gpg-private-key' "$BATS_TEST_TMPDIR/secrets-log"
   ! grep -q $'get\talpha/email-password' "$BATS_TEST_TMPDIR/secrets-log"
 }
@@ -249,7 +249,7 @@ SH
   grep -q $'set\towner/fold\tALPHA_GITHUB_PAT' "$GH_LOG"
   ! grep -q $'set\towner/fold\tALPHA_GPG_PRIVATE_KEY' "$GH_LOG"
   ! grep -q $'set\towner/fold\tALPHA_EMAIL_PASSWORD' "$GH_LOG"
-  grep -q $'get\talpha/github-pat' "$BATS_TEST_TMPDIR/secrets-log"
+  grep -q $'get\talpha/github/token' "$BATS_TEST_TMPDIR/secrets-log"
   ! grep -q $'get\talpha/gpg-private-key' "$BATS_TEST_TMPDIR/secrets-log"
   ! grep -q $'get\talpha/email-password' "$BATS_TEST_TMPDIR/secrets-log"
   [[ "$output" != *"token-alpha"* ]]

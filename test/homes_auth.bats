@@ -41,7 +41,7 @@ fixture-secret-material
 KEY
     ;;
   test-agent/github-username) echo "test-agent-ricon" ;;
-  test-agent/github-pat) echo "fixture-github-token" ;;
+  test-agent/github/token) echo "fixture-github-token" ;;
   *) echo "missing secret: ${2:-}" >&2; exit 1 ;;
 esac
 SH

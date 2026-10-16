@@ -19,7 +19,7 @@ github_ci_required_agent_secret_sources() {
   local agent="$1" prefix
   validate_agent "$agent"
   prefix=$(github_ci_agent_secret_prefix "$agent")
-  printf '%s_GITHUB_PAT\t%s/github-pat\n' "$prefix" "$agent"
+  printf '%s_GITHUB_PAT\t%s/github/token\n' "$prefix" "$agent"
   printf '%s_GPG_PRIVATE_KEY\t%s/gpg-private-key\n' "$prefix" "$agent"
   printf '%s_EMAIL_PASSWORD\t%s/email-password\n' "$prefix" "$agent"
 }
@@ -28,7 +28,7 @@ github_ci_agent_pat_secret_source() {
   local agent="$1" prefix
   validate_agent "$agent"
   prefix=$(github_ci_agent_secret_prefix "$agent")
-  printf '%s_GITHUB_PAT\t%s/github-pat\n' "$prefix" "$agent"
+  printf '%s_GITHUB_PAT\t%s/github/token\n' "$prefix" "$agent"
 }
 
 github_ci_required_secret_names() {
@@ -64,12 +64,12 @@ github_ci_error_secret_name() {
 github_ci_get_agent_github_pat() {
   local agent="$1" token
 
-  if ! token=$("$SECRETS_BIN" get "$agent/github-pat" 2>/dev/null); then
-    echo "could not read $agent/github-pat" >&2
+  if ! token=$("$SECRETS_BIN" get "$agent/github/token" 2>/dev/null); then
+    echo "could not read $agent/github/token" >&2
     return 1
   fi
   if [ -z "$token" ]; then
-    echo "$agent/github-pat is empty" >&2
+    echo "$agent/github/token is empty" >&2
     return 1
   fi
   printf '%s' "$token"
