@@ -93,8 +93,8 @@ EXPECTED_NAME=$(agent_desk_clean_git_config_get "$HOME_PATH" user.name || true)
 EXPECTED_EMAIL=$(agent_desk_clean_git_config_get "$HOME_PATH" user.email || true)
 EXPECTED_SIGNING_KEY=$(agent_desk_clean_git_config_get "$HOME_PATH" user.signingkey || true)
 EXPECTED_GPGSIGN=$(agent_desk_clean_git_config_bool "$HOME_PATH" commit.gpgsign || true)
-if [ "$EXPECTED_NAME" != "$AGENT" ]; then
-  echo "ERROR: prepared target home Git user.name is not $AGENT: $HOME_PATH" >&2
+if [ -z "$EXPECTED_NAME" ]; then
+  echo "ERROR: prepared target home has no Git name: $HOME_PATH" >&2
   exit 1
 fi
 if [ -z "$EXPECTED_EMAIL" ]; then
@@ -131,6 +131,7 @@ export AGENT_DESK_MODEL=$(agent_desk_single_quote "$MODEL")
 export AGENT_DESK_TITLE=$(agent_desk_single_quote "$TITLE")
 export AGENT_DESK_MESSAGE=$(agent_desk_single_quote "$MESSAGE")
 export AGENT_DESK_SESSION=$(agent_desk_single_quote "$SESSION_ID")
+export AGENT_DESK_EXPECTED_NAME=$(agent_desk_single_quote "$EXPECTED_NAME")
 export AGENT_DESK_EXPECTED_EMAIL=$(agent_desk_single_quote "$EXPECTED_EMAIL")
 export AGENT_DESK_EXPECTED_SIGNING_KEY=$(agent_desk_single_quote "$EXPECTED_SIGNING_KEY")
 export AGENT_DESK_EXPECTED_GITHUB_LOGIN=$(agent_desk_single_quote "$EXPECTED_GITHUB_LOGIN")

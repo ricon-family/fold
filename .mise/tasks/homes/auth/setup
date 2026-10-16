@@ -26,7 +26,6 @@ if [ -z "$HOME_PATH" ]; then
   HOME_PATH="$AGENTS_ROOT/$AGENT/home"
 fi
 
-EMAIL=$(homes_agent_email "$AGENT")
 AGENT_DIR=$(homes_agent_dir_for_home "$HOME_PATH")
 GITCONFIG=$(homes_agent_gitconfig_path_for_dir "$AGENT_DIR")
 INCLUDE_KEY=$(homes_agent_include_key_for_dir "$AGENT" "$AGENT_DIR")
@@ -83,6 +82,8 @@ import_private_key() {
   fi
 }
 
+NAME=$(get_secret_required "git/name")
+EMAIL=$(get_secret_required "git/email")
 fingerprint=$(get_secret_required "git/signing-fingerprint")
 private_key=$(get_secret_required "gpg-private-key")
 private_key=$(homes_strip_wrapping_quotes "$private_key")
@@ -119,24 +120,27 @@ else
     add_action "gpg import" "ok" "imported existing private key"
   fi
 
-  if printf '5\ny\n' | "$GPG_BIN" --batch --command-fd 0 --expert --edit-key "$EMAIL" trust quit >/dev/null 2>&1; then
-    add_action "gpg trust" "ok" "set local trust for $EMAIL"
+  if printf '5\ny\n' | "$GPG_BIN" --batch --command-fd 0 --expert --edit-key "$fingerprint" trust quit >/dev/null 2>&1; then
+    add_action "gpg trust" "ok" "set local trust for stored fingerprint"
   else
     add_action "gpg trust" "warn" "could not set local trust; signing may show untrusted"
   fi
 
   mkdir -p "$AGENT_DIR"
-  cat > "$GITCONFIG" <<GITCONFIG
-[user]
-	name = $AGENT
-	email = $EMAIL
-	signingkey = $fingerprint
-[commit]
-	gpgsign = true
-[tag]
-	gpgsign = true
-GITCONFIG
-  add_action "gitconfig" "ok" "wrote $GITCONFIG"
+  config_tmp=$(mktemp "$GITCONFIG.tmp.XXXXXX")
+  if "$GIT_BIN" config --file "$config_tmp" user.name "$NAME" &&
+    "$GIT_BIN" config --file "$config_tmp" user.email "$EMAIL" &&
+    "$GIT_BIN" config --file "$config_tmp" user.signingkey "$fingerprint" &&
+    "$GIT_BIN" config --file "$config_tmp" gpg.format openpgp &&
+    "$GIT_BIN" config --file "$config_tmp" commit.gpgsign true &&
+    "$GIT_BIN" config --file "$config_tmp" tag.gpgsign true &&
+    mv "$config_tmp" "$GITCONFIG"; then
+    add_action "gitconfig" "ok" "wrote $GITCONFIG"
+  else
+    rm -f "$config_tmp"
+    echo "ERROR: could not write Git signing config" >&2
+    exit 1
+  fi
 
   include_values=""
   if include_values=$("$GIT_BIN" config --global --get-all "$INCLUDE_KEY" 2>/dev/null); then

@@ -23,7 +23,6 @@ validate_agent "$AGENT"
 if [ -z "$HOME_PATH" ]; then
   HOME_PATH="$AGENTS_ROOT/$AGENT/home"
 fi
-EMAIL=$(homes_agent_email "$AGENT")
 AGENT_DIR=$(homes_agent_dir_for_home "$HOME_PATH")
 GITCONFIG=$(homes_agent_gitconfig_path_for_dir "$AGENT_DIR")
 INCLUDE_KEY=$(homes_agent_include_key_for_dir "$AGENT" "$AGENT_DIR")
@@ -64,6 +63,8 @@ check_secrets() {
 
   if ! command -v "$SECRETS_BIN" >/dev/null 2>&1; then
     record_row "Secrets tool" fail "not available"
+    record_row "Git name" fail "secrets tool unavailable"
+    record_row "Git email" fail "secrets tool unavailable"
     record_row "GPG fingerprint" fail "secrets tool unavailable"
     record_row "GPG private key" fail "secrets tool unavailable"
     record_row "GitHub username" fail "secrets tool unavailable"
@@ -81,6 +82,8 @@ check_secrets() {
     fi
     unset value
   done <<'EOF_SECRETS'
+git/name|Git name
+git/email|Git email
 git/signing-fingerprint|GPG fingerprint
 gpg-private-key|GPG private key
 github-username|GitHub username
@@ -89,7 +92,7 @@ EOF_SECRETS
 }
 
 check_signing() {
-  local fingerprint configured_name configured_email configured_key configured_sign include_values
+  local name email fingerprint configured_name configured_email configured_key configured_sign include_values
 
   if ! fingerprint=$("$SECRETS_BIN" get "$AGENT/git/signing-fingerprint" 2>/dev/null) || [ -z "$fingerprint" ]; then
     record_row "GPG secret key" fail "skipped; no stored fingerprint"
@@ -101,12 +104,15 @@ check_signing() {
     record_row "GPG secret key" fail "missing for stored fingerprint"
   fi
 
-  if [ -f "$GITCONFIG" ]; then
+  if ! name=$("$SECRETS_BIN" get "$AGENT/git/name" 2>/dev/null) || [ -z "$name" ] ||
+    ! email=$("$SECRETS_BIN" get "$AGENT/git/email" 2>/dev/null) || [ -z "$email" ]; then
+    record_row "Git config" fail "missing or empty configured Git identity"
+  elif [ -f "$GITCONFIG" ]; then
     configured_name=$("$GIT_BIN" config --file "$GITCONFIG" user.name 2>/dev/null || true)
     configured_email=$("$GIT_BIN" config --file "$GITCONFIG" user.email 2>/dev/null || true)
     configured_key=$("$GIT_BIN" config --file "$GITCONFIG" user.signingkey 2>/dev/null || true)
     configured_sign=$("$GIT_BIN" config --file "$GITCONFIG" commit.gpgsign 2>/dev/null || true)
-    if [ "$configured_name" = "$AGENT" ] && [ "$configured_email" = "$EMAIL" ] && [ -n "${fingerprint:-}" ] && [ "$configured_key" = "$fingerprint" ] && [ "$configured_sign" = "true" ]; then
+    if [ "$configured_name" = "$name" ] && [ "$configured_email" = "$email" ] && [ -n "${fingerprint:-}" ] && [ "$configured_key" = "$fingerprint" ] && [ "$configured_sign" = "true" ]; then
       record_row "Git config" ok "$GITCONFIG"
     else
       record_row "Git config" fail "present but does not match expected agent identity"

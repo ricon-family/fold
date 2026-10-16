@@ -66,20 +66,20 @@ agent_desk_runtime_activate_target() {
     exit 1
   fi
 
-  [ "${GIT_AUTHOR_NAME:-}" = "$AGENT_DESK_AGENT" ] || \
-    agent_desk_runtime_error "Git author name is not $AGENT_DESK_AGENT"
+  [ "${GIT_AUTHOR_NAME:-}" = "$AGENT_DESK_EXPECTED_NAME" ] || \
+    agent_desk_runtime_error "Git author name does not match the prepared target home"
   [ "${GIT_AUTHOR_EMAIL:-}" = "$AGENT_DESK_EXPECTED_EMAIL" ] || \
     agent_desk_runtime_error "Git author email is not $AGENT_DESK_EXPECTED_EMAIL"
-  [ "${GIT_COMMITTER_NAME:-}" = "$AGENT_DESK_AGENT" ] || \
-    agent_desk_runtime_error "Git committer name is not $AGENT_DESK_AGENT"
+  [ "${GIT_COMMITTER_NAME:-}" = "$AGENT_DESK_EXPECTED_NAME" ] || \
+    agent_desk_runtime_error "Git committer name does not match the prepared target home"
   [ "${GIT_COMMITTER_EMAIL:-}" = "$AGENT_DESK_EXPECTED_EMAIL" ] || \
     agent_desk_runtime_error "Git committer email is not $AGENT_DESK_EXPECTED_EMAIL"
 
   actual_name=$(git -C "$AGENT_DESK_HOME" config --get user.name || true)
   actual_email=$(git -C "$AGENT_DESK_HOME" config --get user.email || true)
   actual_signing_key=$(git -C "$AGENT_DESK_HOME" config --get user.signingkey || true)
-  [ "$actual_name" = "$AGENT_DESK_AGENT" ] || \
-    agent_desk_runtime_error "Git config user.name is not $AGENT_DESK_AGENT"
+  [ "$actual_name" = "$AGENT_DESK_EXPECTED_NAME" ] || \
+    agent_desk_runtime_error "Git config user.name does not match the prepared target home"
   [ "$actual_email" = "$AGENT_DESK_EXPECTED_EMAIL" ] || \
     agent_desk_runtime_error "Git config user.email is not $AGENT_DESK_EXPECTED_EMAIL"
   agent_desk_runtime_signing_keys_match \
@@ -112,6 +112,7 @@ for required_input in \
   AGENT_DESK_PACKET \
   AGENT_DESK_MODEL \
   AGENT_DESK_TITLE \
+  AGENT_DESK_EXPECTED_NAME \
   AGENT_DESK_EXPECTED_EMAIL \
   AGENT_DESK_EXPECTED_SIGNING_KEY \
   AGENT_DESK_EXPECTED_GITHUB_LOGIN \

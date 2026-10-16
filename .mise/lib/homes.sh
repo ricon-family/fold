@@ -17,10 +17,6 @@ MODULES_BIN="${MODULES:-modules}"
 MISE_BIN="${MISE:-mise}"
 export GIT_BIN GPG_BIN NOTES_BIN MODULES_BIN MISE_BIN
 
-homes_agent_email() {
-  printf '%s@ricon.family\n' "$1"
-}
-
 homes_default_home() {
   local agent="$1"
   printf '%s/agents/%s/home\n' "$HOME" "$agent"
