@@ -4,6 +4,7 @@
 #USAGE flag "--home <path>" default="" help="Home repo path (default: <agents-root>/<agent>/home)"
 #USAGE flag "--json" default=#false help="Emit machine-readable JSON"
 #USAGE flag "--check" default=#false help="Exit nonzero when the home is not ready"
+#USAGE flag "--auth-prerequisites" default=#false help="Validate effective Git config instead of requiring workspace-specific auth setup"
 #USAGE arg "[agent]" default="" help="Agent name"
 #USAGE example "mise run homes:status iris" header="Show Iris home readiness"
 #USAGE example "mise run homes:status iris --json --check" header="Machine-check Iris home readiness"
@@ -20,6 +21,7 @@ HOME_PATH="${usage_home:-}"
 AGENTS_ROOT=$(homes_resolve_agents_root "${usage_agents_root:-}")
 JSON="${usage_json:-false}"
 CHECK="${usage_check:-false}"
+AUTH_PREREQUISITES="${usage_auth_prerequisites:-false}"
 JQ_BIN="${JQ:-jq}"
 validate_agent "$AGENT"
 
@@ -138,24 +140,21 @@ collect_auth() {
     return 0
   fi
 
+  local auth_args=(run -q homes:auth "$AGENT" --agents-root "$AGENTS_ROOT" --home "$HOME_PATH" --json --check)
+  if [ "$AUTH_PREREQUISITES" = true ]; then
+    auth_args+=(--prerequisites)
+  fi
+
   if timeout_bin=$(homes_timeout_command); then
     if auth_output=$(
-      cd "$ROOT" && "$timeout_bin" "$auth_timeout" mise run -q homes:auth "$AGENT" \
-        --agents-root "$AGENTS_ROOT" \
-        --home "$HOME_PATH" \
-        --json \
-        --check 2>"$auth_stderr"
+      cd "$ROOT" && "$timeout_bin" "$auth_timeout" mise "${auth_args[@]}" 2>"$auth_stderr"
     ); then
       auth_status=0
     else
       auth_status=$?
     fi
   elif auth_output=$(
-    cd "$ROOT" && mise run -q homes:auth "$AGENT" \
-      --agents-root "$AGENTS_ROOT" \
-      --home "$HOME_PATH" \
-      --json \
-      --check 2>"$auth_stderr"
+    cd "$ROOT" && mise "${auth_args[@]}" 2>"$auth_stderr"
   ); then
     auth_status=0
   else

@@ -4,6 +4,7 @@
 #USAGE flag "--home <path>" default="" help="Home repo path (default: <agents-root>/<agent>/home)"
 #USAGE flag "--json" default=#false help="Emit machine-readable JSON"
 #USAGE flag "--check" default=#false help="Exit nonzero when local auth is not ready"
+#USAGE flag "--prerequisites" default=#false help="Check effective Git config and existing credentials without requiring workspace auth setup"
 #USAGE arg "[agent]" default="" help="Agent name"
 set -euo pipefail
 
@@ -18,6 +19,7 @@ HOME_PATH="${usage_home:-}"
 AGENTS_ROOT=$(homes_resolve_agents_root "${usage_agents_root:-}")
 JSON="${usage_json:-false}"
 CHECK="${usage_check:-false}"
+PREREQUISITES="${usage_prerequisites:-false}"
 validate_agent "$AGENT"
 
 if [ -z "$HOME_PATH" ]; then
@@ -66,7 +68,9 @@ check_secrets() {
     record_row "Git name" fail "secrets tool unavailable"
     record_row "Git email" fail "secrets tool unavailable"
     record_row "GPG fingerprint" fail "secrets tool unavailable"
-    record_row "GPG private key" fail "secrets tool unavailable"
+    if [ "$PREREQUISITES" != true ]; then
+      record_row "GPG private key" fail "secrets tool unavailable"
+    fi
     record_row "GitHub username" fail "secrets tool unavailable"
     record_row "GitHub PAT" fail "secrets tool unavailable"
     return 0
@@ -75,6 +79,9 @@ check_secrets() {
   record_row "Secrets tool" ok "available"
   while IFS='|' read -r key label; do
     [ -n "$key" ] || continue
+    if [ "$PREREQUISITES" = true ] && [ "$key" = gpg-private-key ]; then
+      continue
+    fi
     if value=$("$SECRETS_BIN" get "$AGENT/$key" 2>/dev/null) && [ -n "$value" ]; then
       record_row "$label" ok "present"
     else
@@ -89,6 +96,18 @@ gpg-private-key|GPG private key
 github-username|GitHub username
 github/token|GitHub PAT
 EOF_SECRETS
+}
+
+# shellcheck disable=SC2329 # Called by exported check_signing in phase subprocesses.
+check_git_setting() {
+  local context="$1" key="$2" expected="$3" configured
+
+  if [ -n "$expected" ] && configured=$("$GIT_BIN" -C "$context" config --get "$key" 2>/dev/null) &&
+    [ "$configured" = "$expected" ]; then
+    record_row "Git $key" ok "matches configured persona"
+  else
+    record_row "Git $key" fail "missing or does not match configured persona"
+  fi
 }
 
 check_signing() {
@@ -107,6 +126,16 @@ check_signing() {
   if ! name=$("$SECRETS_BIN" get "$AGENT/git/name" 2>/dev/null) || [ -z "$name" ] ||
     ! email=$("$SECRETS_BIN" get "$AGENT/git/email" 2>/dev/null) || [ -z "$email" ]; then
     record_row "Git config" fail "missing or empty configured Git identity"
+  elif [ "$PREREQUISITES" = true ]; then
+    local context="$HOME_PATH"
+    # Check a not-yet-cloned home in the existing account context.
+    [ -d "$context" ] || context="$HOME"
+    check_git_setting "$context" user.name "$name"
+    check_git_setting "$context" user.email "$email"
+    check_git_setting "$context" user.signingkey "${fingerprint:-}"
+    check_git_setting "$context" gpg.format openpgp
+    check_git_setting "$context" commit.gpgsign true
+    check_git_setting "$context" tag.gpgsign true
   elif [ -f "$GITCONFIG" ]; then
     configured_name=$("$GIT_BIN" config --file "$GITCONFIG" user.name 2>/dev/null || true)
     configured_email=$("$GIT_BIN" config --file "$GITCONFIG" user.email 2>/dev/null || true)
@@ -120,6 +149,8 @@ check_signing() {
   else
     record_row "Git config" fail "missing $GITCONFIG"
   fi
+
+  [ "$PREREQUISITES" != true ] || return 0
 
   include_values=""
   if include_values=$("$GIT_BIN" config --global --get-all "$INCLUDE_KEY" 2>/dev/null); then
@@ -195,8 +226,8 @@ check_github() {
 run_phase_check() {
   local check_func="$1" out_file="$2"
   PHASE_OUT="$out_file"
-  export PHASE_OUT AGENT EMAIL AGENT_DIR GITCONFIG INCLUDE_KEY GIT_BIN GPG_BIN GH_BIN SECRETS_BIN
-  export -f homes_render_record_row record_row parse_github_expiry_epoch check_secrets check_signing check_github
+  export PHASE_OUT AGENT EMAIL AGENT_DIR GITCONFIG INCLUDE_KEY GIT_BIN GPG_BIN GH_BIN SECRETS_BIN PREREQUISITES HOME_PATH
+  export -f homes_render_record_row record_row parse_github_expiry_epoch check_secrets check_git_setting check_signing check_github
 
   if [ "$SPINNER_MODE" = "true" ]; then
     PHASE_OUT="$out_file" gum spin --title "$PHASE_SPINNER" -- bash -c '
@@ -246,6 +277,8 @@ is_ready() {
 auth_next() {
   if is_ready; then
     printf 'auth ready\n'
+  elif [ "$PREREQUISITES" = true ]; then
+    printf 'Repair account Git settings, local signer or GitHub credentials explicitly; rerun homes:auth %s --home %s --prerequisites --check\n' "$AGENT" "$HOME_PATH"
   else
     printf 'mise run homes:auth:setup %s --home %s --yes\n' "$AGENT" "$HOME_PATH"
   fi
