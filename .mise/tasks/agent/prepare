@@ -50,6 +50,9 @@ trust_shiv_package_config shiv:rudi
 trust_shiv_package_config shiv:notes
 trust_shiv_package_config shiv:modules
 
+log "git: installing preflight shims"
+mise run -q git:install-shims
+
 if [ -f notes/.manifest ]; then
   ensure_git_crypt
 
