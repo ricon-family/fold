@@ -275,6 +275,9 @@ case "${1:-} ${2:-}" in
     git -C "$home" commit -q -m 'prepared home'
     ;;
   "run homes:email:setup")
+    [ "${EMAIL_ACCOUNTS:-}" = fixture ] || { echo 'persona email environment missing' >&2; exit 1; }
+    [ "${FAKE_EMAIL_INPUTS_FAIL:-false}" != true ] || { echo 'incomplete email inputs' >&2; exit 1; }
+    [[ " $* " == *" --yes "* ]] || exit 0
     home=""
     while [ "$#" -gt 0 ]; do
       if [ "$1" = "--home" ]; then
@@ -317,6 +320,14 @@ SH
   export MISE="$TMPBIN/nested-mise"
   export MISE_LOG="$BATS_TEST_TMPDIR/mise.log"
   : > "$MISE_LOG"
+  cat > "$TMPBIN/prepare-shimmer" <<'SH'
+#!/usr/bin/env bash
+[ "$1" = as ] && [ "$2" = quick ] || exit 2
+[ "${FAKE_PERSONA_FAIL:-false}" != true ] || exit 1
+printf 'export EMAIL_ACCOUNTS=fixture\n'
+SH
+  chmod +x "$TMPBIN/prepare-shimmer"
+  export SHIMMER="$TMPBIN/prepare-shimmer"
 }
 
 write_fake_desks() {
@@ -432,6 +443,31 @@ make_repo() {
   if [ -f "$SHELL_LOG" ]; then
     ! grep -q 'shell run' "$SHELL_LOG"
   fi
+}
+
+@test "agent:desk:prepare checks activated email inputs before creating a desk" {
+  write_fake_mise_for_prepare
+  write_fake_desks
+  export FAKE_EMAIL_INPUTS_FAIL=true
+
+  run fold_task agent:desk:prepare quick --desk-id email-incomplete --repo quick-ricon/home --yes
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *'incomplete email inputs'* ]]
+  [ ! -s "$DESKS_LOG" ]
+  ! grep -q 'homes:adopt-remote' "$MISE_LOG"
+}
+
+@test "agent:desk:prepare stops before creating a desk if persona activation fails" {
+  write_fake_mise_for_prepare
+  write_fake_desks
+  export FAKE_PERSONA_FAIL=true
+
+  run fold_task agent:desk:prepare quick --desk-id persona-failed --repo quick-ricon/home --yes
+
+  [ "$status" -ne 0 ]
+  [ ! -s "$DESKS_LOG" ]
+  ! grep -q 'homes:adopt-remote' "$MISE_LOG"
 }
 
 @test "agent:desk:prepare --skip-email excludes mail from the dry-run plan" {
