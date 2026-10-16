@@ -50,7 +50,7 @@ write_fake_shimmer_and_gh() {
 set -euo pipefail
 printf '%s\n' "$*" >> "$BATS_TEST_TMPDIR/shimmer-log"
 if [ "${1:-}" = "github:token:store" ]; then
-  key="${2:?agent}/github-pat"
+  key="${2:?agent}/github/token"
   path="$FAKE_SECRET_STORE/$(printf '%s' "$key" | tr '/' '__')"
   printf '%s' "${3:?token}" > "$path"
   exit 0

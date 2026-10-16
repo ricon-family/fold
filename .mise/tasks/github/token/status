@@ -104,7 +104,7 @@ while IFS= read -r agent; do
   [ -n "$agent" ] || continue
   validate_agent "$agent"
 
-  key="$agent/github-pat"
+  key="$agent/github/token"
   token=""
   if ! token=$(secrets get "$key" 2>/dev/null); then
     print_row "$agent" "missing" "unknown" "-" "-" "-" "secret not found"

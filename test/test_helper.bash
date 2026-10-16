@@ -128,8 +128,8 @@ case "${1:-}" in
     case "$key" in
       */github-username) printf '%s-ricon\n' "${key%%/*}" ;;
       */github-password) printf 'password-for-%s\n' "${key%%/*}" ;;
-      brownie/github-pat) printf 'ghp_operator\n' ;;
-      */github-pat)
+      brownie/github/token) printf 'ghp_operator\n' ;;
+      */github/token)
         path="$(key_path "$key")"
         if [ -f "$path" ]; then cat "$path"; else printf 'ghp_old\n'; fi ;;
       */github-totp)

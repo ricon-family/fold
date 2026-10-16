@@ -35,7 +35,7 @@ case "${2:-}" in
   test-agent/gpg-fingerprint) echo "ABCDEF1234567890ABCDEF1234567890ABCDEF12" ;;
   test-agent/gpg-private-key) echo "fixture-secret-material" ;;
   test-agent/github-username) echo "test-agent-ricon" ;;
-  test-agent/github-pat) echo "fixture-github-token" ;;
+  test-agent/github/token) echo "fixture-github-token" ;;
   *) echo "missing secret: ${2:-}" >&2; exit 1 ;;
 esac
 SH

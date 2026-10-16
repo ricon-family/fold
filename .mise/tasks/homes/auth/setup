@@ -87,7 +87,7 @@ fingerprint=$(get_secret_required "gpg-fingerprint")
 private_key=$(get_secret_required "gpg-private-key")
 private_key=$(homes_strip_wrapping_quotes "$private_key")
 github_username=$(get_secret_required "github-username")
-github_pat=$(get_secret_required "github-pat")
+github_pat=$(get_secret_required "github/token")
 add_action "secrets" "ok" "required auth secrets present"
 
 homes_validate_gpg_key_data "$private_key"
