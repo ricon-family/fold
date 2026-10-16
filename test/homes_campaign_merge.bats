@@ -138,7 +138,7 @@ teardown() {
     --dry-run
 
   [ "$status" -ne 0 ]
-  [[ "$output" == *"could not read missing/github-pat"* ]]
+  [[ "$output" == *"could not read missing/github/token"* ]]
   [[ "$output" != *"OK  owner/auth-fail"* ]]
   [[ "$output" != *"DRY owner/auth-fail"* ]]
   [[ "$output" != *"MER owner/auth-fail"* ]]

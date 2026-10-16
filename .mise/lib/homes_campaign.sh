@@ -78,10 +78,10 @@ campaign_get_auth_token() {
   local auth="$1" token
   [ "$auth" = "-" ] && return 0
 
-  if ! token=$("$CAMPAIGN_SECRETS_BIN" get "$auth/github-pat" 2>/dev/null); then
-    campaign_die "could not read $auth/github-pat"
+  if ! token=$("$CAMPAIGN_SECRETS_BIN" get "$auth/github/token" 2>/dev/null); then
+    campaign_die "could not read $auth/github/token"
   fi
-  [ -n "$token" ] || campaign_die "$auth/github-pat is empty"
+  [ -n "$token" ] || campaign_die "$auth/github/token is empty"
   printf '%s\n' "$token"
 }
 

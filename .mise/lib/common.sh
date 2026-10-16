@@ -86,12 +86,12 @@ get_agent_github_token() {
   local token
   validate_agent "$agent"
 
-  if ! token=$("$SECRETS_BIN" get "$agent/github-pat" 2>/dev/null); then
-    echo "ERROR: could not read $agent/github-pat" >&2
+  if ! token=$("$SECRETS_BIN" get "$agent/github/token" 2>/dev/null); then
+    echo "ERROR: could not read $agent/github/token" >&2
     exit 1
   fi
   if [ -z "$token" ]; then
-    echo "ERROR: $agent/github-pat is empty" >&2
+    echo "ERROR: $agent/github/token is empty" >&2
     exit 1
   fi
   printf '%s\n' "$token"
