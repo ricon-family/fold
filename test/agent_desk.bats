@@ -94,7 +94,10 @@ if [ "${1:-}" = meta ]; then
 fi
 if [ "${1:-}" = wake ]; then
   {
+    printf 'CWD=%s\n' "$(pwd -P)"
     printf 'AGENT_HOME=%s\n' "${AGENT_HOME:-unset}"
+    printf 'EMAILS_CONFIG=%s\n' "${EMAILS_CONFIG:-unset}"
+    printf 'HIMALAYA_CONFIG=%s\n' "${HIMALAYA_CONFIG:-unset}"
     printf 'AGENT_IDENTITY=%s\n' "${AGENT_IDENTITY:-unset}"
     printf 'GIT_AUTHOR_NAME=%s\n' "${GIT_AUTHOR_NAME:-unset}"
     printf 'GIT_AUTHOR_EMAIL=%s\n' "${GIT_AUTHOR_EMAIL:-unset}"
@@ -194,9 +197,14 @@ case "${1:-}" in
       [ -z "${GIT_CONFIG_COUNT:-}" ]
       [ -z "${GIT_CONFIG_KEY_0:-}" ]
       [ -z "${GIT_CONFIG_VALUE_0:-}" ]
+      [ -z "${GIT_DIR:-}" ]
+      [ -z "${GIT_WORK_TREE:-}" ]
+      [ -z "${GIT_COMMON_DIR:-}" ]
       [ -z "${__MISE_DIFF:-}" ]
     fi
-    printf 'export AGENT_HOME=%q\n' "${FAKE_IDENTITY_HOME:-$PWD}"
+    if [ -n "${FAKE_IDENTITY_HOME:-}" ]; then
+      printf 'export AGENT_HOME=%q\n' "$FAKE_IDENTITY_HOME"
+    fi
     printf 'export GIT_AUTHOR_NAME=%q\n' "${FAKE_ACTIVE_NAME:-quick}"
     printf 'export GIT_AUTHOR_EMAIL=%q\n' "${FAKE_ACTIVE_EMAIL:-quick@ricon.family}"
     printf 'export GIT_COMMITTER_NAME=%q\n' "${FAKE_ACTIVE_NAME:-quick}"
@@ -214,6 +222,7 @@ case "${1:-}" in
     ;;
   agent)
     {
+      printf 'CWD=%s\n' "$(pwd -P)"
       printf 'AGENT_HOME=%s\n' "${AGENT_HOME:-unset}"
       printf 'AGENT_IDENTITY=%s\n' "${AGENT_IDENTITY:-unset}"
       printf 'CHAT_IDENTITY=%s\n' "${CHAT_IDENTITY:-unset}"
@@ -691,7 +700,7 @@ JSON
   [ "$(wc -l < "$work_dir/start-quick-a.sh")" -le 20 ]
 }
 
-@test "agent:desk:wake isolates inherited email selectors to the authenticated desk home" {
+@test "agent:desk:wake binds inherited email selectors to the launcher-selected home" {
   home="$BATS_TEST_TMPDIR/home"
   work_dir="$BATS_TEST_TMPDIR/wake"
   packet="$BATS_TEST_TMPDIR/packet.md"
@@ -713,6 +722,51 @@ JSON
   grep -Fx "EMAILS_CONFIG=$home_real/.emails/himalaya.toml" "$agent_log"
   grep -Fx 'HIMALAYA_CONFIG=unset' "$agent_log"
   grep -Fx '__MISE_DIFF=unset' "$agent_log"
+}
+
+@test "agent:desk:wake keeps the selected home when activation runs elsewhere and emits no home" {
+  home="$BATS_TEST_TMPDIR/home"
+  identity_source="$BATS_TEST_TMPDIR/persona-source"
+  work_dir="$BATS_TEST_TMPDIR/wake"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  make_repo "$home" home
+  mkdir "$identity_source"
+  printf 'hello packet\n' > "$packet"
+  export AGENT_LOG="$BATS_TEST_TMPDIR/agent.log"
+  export REQUIRE_CLEAN_PARENT=true
+  write_target_identity_shimmer
+
+  fold_task agent:desk:wake quick --home "$home" --identity-source "$identity_source" \
+    --shell quick-a --packet "$packet" --model test/model --work-dir "$work_dir" >/dev/null
+  run "$work_dir/start-quick-a.sh"
+
+  [ "$status" -eq 0 ]
+  home_real=$(cd "$home" && pwd -P)
+  grep -Fx "CWD=$home_real" "$AGENT_LOG"
+  grep -Fx "AGENT_HOME=$home_real" "$AGENT_LOG"
+  grep -Fx "EMAILS_CONFIG=$home_real/.emails/himalaya.toml" "$AGENT_LOG"
+}
+
+@test "agent:desk:wake fresh and resume launchers reject a home below the Git root" {
+  home="$BATS_TEST_TMPDIR/home"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  make_repo "$home" home
+  mkdir "$home/nested"
+  printf 'hello packet\n' > "$packet"
+  export AGENT_LOG="$BATS_TEST_TMPDIR/agent.log"
+  write_target_identity_shimmer
+
+  for session in '' session-123; do
+    work_dir="$BATS_TEST_TMPDIR/wake-$session"
+    fold_task agent:desk:wake quick --home "$home/nested" --session "$session" \
+      --shell quick-a --packet "$packet" --model test/model --work-dir "$work_dir" >/dev/null
+    run "$work_dir/start-quick-a.sh"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *'selected home must be the Git worktree root'* ]]
+    [ ! -e "$AGENT_LOG" ]
+    [ ! -e "$SESSIONS_ENV_LOG" ]
+  done
 }
 
 @test "agent:desk:wake scrubs a poisoned parent persona before target activation" {
@@ -743,6 +797,9 @@ JSON
   write_target_identity_shimmer
 
   fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --work-dir "$work_dir" >/dev/null
+  export GIT_DIR="$BATS_TEST_TMPDIR/parent/.git"
+  export GIT_WORK_TREE="$BATS_TEST_TMPDIR/parent"
+  export GIT_COMMON_DIR="$BATS_TEST_TMPDIR/parent/.git"
   run "$work_dir/start-quick-a.sh"
 
   [ "$status" -eq 0 ]
@@ -905,7 +962,7 @@ SH
   [ ! -e "$agent_log" ]
 }
 
-@test "agent:desk:wake launcher rejects identity from another home" {
+@test "agent:desk:wake launcher rejects persona activation assigning a home" {
   home="$BATS_TEST_TMPDIR/home"
   wrong_home="$BATS_TEST_TMPDIR/wrong-home"
   work_dir="$BATS_TEST_TMPDIR/wake"
@@ -922,7 +979,7 @@ SH
   run "$work_dir/start-quick-a.sh"
 
   [ "$status" -ne 0 ]
-  [[ "$output" == *"authenticated agent home does not match desk home"* ]]
+  [[ "$output" == *"persona activation must not assign AGENT_HOME"* ]]
   [ ! -e "$agent_log" ]
 }
 
@@ -973,7 +1030,10 @@ SH
   packet_real=$(cd "$(dirname "$packet")" && pwd -P)/$(basename "$packet")
   grep -F "sessions wake session-123 --model openai-codex/gpt-5.6-sol --context-file $packet_real" "$SESSIONS_LOG"
   grep -F -- "--message [agent desk wake — root handoff] Continue the reviewed lane." "$SESSIONS_LOG"
+  grep -Fx "CWD=$home_real" "$SESSIONS_ENV_LOG"
   grep -Fx "AGENT_HOME=$home_real" "$SESSIONS_ENV_LOG"
+  grep -Fx "EMAILS_CONFIG=$home_real/.emails/himalaya.toml" "$SESSIONS_ENV_LOG"
+  grep -Fx 'HIMALAYA_CONFIG=unset' "$SESSIONS_ENV_LOG"
   grep -Fx 'AGENT_IDENTITY=quick' "$SESSIONS_ENV_LOG"
   grep -Fx 'GIT_AUTHOR_NAME=quick' "$SESSIONS_ENV_LOG"
   grep -Fx 'GIT_AUTHOR_EMAIL=quick@ricon.family' "$SESSIONS_ENV_LOG"
