@@ -23,6 +23,7 @@ source "$ROOT/.mise/lib/homes.sh"
 
 MISE_BIN="${MISE:-mise}"
 DESKS_BIN="${DESKS:-desks}"
+SHIMMER_BIN="${SHIMMER:-shimmer}"
 
 AGENT="${usage_agent:?agent required}"
 DESK_PATH="${usage_desk:-}"
@@ -142,6 +143,9 @@ fi
 
 printf '\nPlan\n'
 printf '1. check auth prerequisites: mise run homes:auth %s --home %s --prerequisites --json --check\n' "$AGENT" "$HOME"
+if [ "$SKIP_EMAIL" != true ]; then
+  printf '   activate %s persona and validate its email inputs before creating a desk\n' "$AGENT"
+fi
 if [ "$CREATE_DESK" = true ]; then
   printf '2. create desk: %s new --id %s\n' "$DESKS_BIN" "$DESK_ID"
 else
@@ -171,6 +175,15 @@ fi
 
 printf '\n== check auth prerequisites ==\n'
 run_nested_mise run homes:auth "$AGENT" --home "$HOME" --prerequisites --json --check
+
+if [ "$SKIP_EMAIL" != true ]; then
+  printf '\n== activate persona and check email inputs ==\n'
+  require_tool "$SHIMMER_BIN"
+  identity_shell=$("$SHIMMER_BIN" as "$AGENT")
+  eval "$identity_shell"
+  unset identity_shell
+  run_nested_mise run homes:email:setup "$AGENT" --home "$HOME_PATH"
+fi
 
 if [ "$CREATE_DESK" = true ]; then
   require_tool "$DESKS_BIN"
