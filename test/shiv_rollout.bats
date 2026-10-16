@@ -57,10 +57,10 @@ if [ "${1:-}" != "get" ]; then
   exit 2
 fi
 case "${2:-}" in
-  baby-joel/github-pat) echo "token-baby-joel" ;;
+  baby-joel/github/token) echo "token-baby-joel" ;;
   quick/github-username) echo "quick-ricon" ;;
-  quick/github-pat) echo "token-quick" ;;
-  zeke/github-pat) echo "token-zeke" ;;
+  quick/github/token) echo "token-quick" ;;
+  zeke/github/token) echo "token-zeke" ;;
   *) echo "missing secret: ${2:-}" >&2; exit 1 ;;
 esac
 SH

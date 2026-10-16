@@ -14,9 +14,9 @@ if [ "${1:-}" != "get" ]; then
 fi
 case "${2:-}" in
   rho/github-username) echo "rho-ricon" ;;
-  rho/github-pat) echo "token-rho" ;;
+  rho/github/token) echo "token-rho" ;;
   quick/github-username) echo "quick-ricon" ;;
-  quick/github-pat) echo "token-quick" ;;
+  quick/github/token) echo "token-quick" ;;
   *) echo "missing secret: ${2:-}" >&2; exit 1 ;;
 esac
 SH

@@ -2,7 +2,7 @@
 #MISE description="Roll out a shiv package pin across fresh repo clones"
 #USAGE flag "-y --yes" default=#false help="Commit and push rollout branches"
 #USAGE flag "--repo <repo>" var=#true default="" help="Repo target (repeatable): OWNER/REPO or OWNER/REPO:push-agent; omitted push-agent uses ambient GitHub auth"
-#USAGE flag "--home <agent>" var=#true default="" help="Agent home target (repeatable); resolves <agent>/github-username to LOGIN/home and pushes with <agent>/github-pat"
+#USAGE flag "--home <agent>" var=#true default="" help="Agent home target (repeatable); resolves <agent>/github-username to LOGIN/home and pushes with <agent>/github/token"
 #USAGE flag "--plan <path>" default="" help="Optional TSV rows: repo<TAB>push-agent; use '-' for stdin; push-agent '-' uses ambient GitHub auth"
 #USAGE flag "--branch <branch>" default="" help="Rollout branch name (default: <operator>/<package>-<version>)"
 #USAGE flag "--base <branch>" default="main" help="Base branch to clone"

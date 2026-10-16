@@ -69,7 +69,7 @@ for arg in "$@"; do
 done
 printf '\n' >> "$SECRET_LOG"
 
-if [ "${1:-}" = "get" ] && [ "${2:-}" = "c0da/github-pat" ]; then
+if [ "${1:-}" = "get" ] && [ "${2:-}" = "c0da/github/token" ]; then
   printf 'test-token\n'
   exit 0
 fi
@@ -113,7 +113,7 @@ teardown() {
     --repo KnickKnackLabs/template
 
   [ "$status" -eq 0 ]
-  grep -F 'args: get c0da/github-pat' "$SECRET_LOG"
+  grep -F 'args: get c0da/github/token' "$SECRET_LOG"
   [ "$(grep -c 'GH_TOKEN=set' "$GIT_LOG")" -eq 2 ]
   [ "$(grep -c 'GH_TOKEN=' "$GIT_LOG")" -eq 4 ]
 }
