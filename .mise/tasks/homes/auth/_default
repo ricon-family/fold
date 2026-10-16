@@ -81,7 +81,7 @@ check_secrets() {
     fi
     unset value
   done <<'EOF_SECRETS'
-gpg-fingerprint|GPG fingerprint
+git/signing-fingerprint|GPG fingerprint
 gpg-private-key|GPG private key
 github-username|GitHub username
 github/token|GitHub PAT
@@ -91,7 +91,7 @@ EOF_SECRETS
 check_signing() {
   local fingerprint configured_name configured_email configured_key configured_sign include_values
 
-  if ! fingerprint=$("$SECRETS_BIN" get "$AGENT/gpg-fingerprint" 2>/dev/null) || [ -z "$fingerprint" ]; then
+  if ! fingerprint=$("$SECRETS_BIN" get "$AGENT/git/signing-fingerprint" 2>/dev/null) || [ -z "$fingerprint" ]; then
     record_row "GPG secret key" fail "skipped; no stored fingerprint"
   elif ! command -v "$GPG_BIN" >/dev/null 2>&1; then
     record_row "GPG secret key" fail "gpg tool unavailable"

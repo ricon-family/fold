@@ -462,34 +462,41 @@ homes_agent_fingerprint() {
   local agent="$1" fingerprint
   validate_agent "$agent"
 
-  if ! fingerprint=$("$SECRETS_BIN" get "$agent/gpg-fingerprint" 2>/dev/null); then
-    echo "ERROR: could not read $agent/gpg-fingerprint" >&2
+  if ! fingerprint=$("$SECRETS_BIN" get "$agent/git/signing-fingerprint" 2>/dev/null); then
+    echo "ERROR: could not read $agent/git/signing-fingerprint" >&2
     exit 1
   fi
   if [ -z "$fingerprint" ]; then
-    echo "ERROR: $agent/gpg-fingerprint is empty" >&2
+    echo "ERROR: $agent/git/signing-fingerprint is empty" >&2
     exit 1
   fi
   printf '%s\n' "$fingerprint"
 }
 
 homes_agent_git() {
-  local agent="$1" sign="$2" email fingerprint
+  local agent="$1" sign="$2" name email fingerprint
   shift 2
 
   validate_agent "$agent"
-  email=$(homes_agent_email "$agent")
+  if ! name=$("$SECRETS_BIN" get "$agent/git/name" 2>/dev/null) || [ -z "$name" ]; then
+    echo "ERROR: missing or empty $agent/git/name" >&2
+    return 1
+  fi
+  if ! email=$("$SECRETS_BIN" get "$agent/git/email" 2>/dev/null) || [ -z "$email" ]; then
+    echo "ERROR: missing or empty $agent/git/email" >&2
+    return 1
+  fi
 
   if [ "$sign" = "true" ]; then
     fingerprint=$(homes_agent_fingerprint "$agent")
     env \
       -u GIT_CONFIG_COUNT \
-      GIT_AUTHOR_NAME="$agent" \
+      GIT_AUTHOR_NAME="$name" \
       GIT_AUTHOR_EMAIL="$email" \
-      GIT_COMMITTER_NAME="$agent" \
+      GIT_COMMITTER_NAME="$name" \
       GIT_COMMITTER_EMAIL="$email" \
       "$GIT_BIN" \
-        -c user.name="$agent" \
+        -c user.name="$name" \
         -c user.email="$email" \
         -c user.signingkey="$fingerprint" \
         -c commit.gpgsign=true \
@@ -498,12 +505,12 @@ homes_agent_git() {
   else
     env \
       -u GIT_CONFIG_COUNT \
-      GIT_AUTHOR_NAME="$agent" \
+      GIT_AUTHOR_NAME="$name" \
       GIT_AUTHOR_EMAIL="$email" \
-      GIT_COMMITTER_NAME="$agent" \
+      GIT_COMMITTER_NAME="$name" \
       GIT_COMMITTER_EMAIL="$email" \
       "$GIT_BIN" \
-        -c user.name="$agent" \
+        -c user.name="$name" \
         -c user.email="$email" \
         -c commit.gpgsign=false \
         -c tag.gpgsign=false \

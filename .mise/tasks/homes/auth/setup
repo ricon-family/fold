@@ -83,7 +83,7 @@ import_private_key() {
   fi
 }
 
-fingerprint=$(get_secret_required "gpg-fingerprint")
+fingerprint=$(get_secret_required "git/signing-fingerprint")
 private_key=$(get_secret_required "gpg-private-key")
 private_key=$(homes_strip_wrapping_quotes "$private_key")
 github_username=$(get_secret_required "github-username")

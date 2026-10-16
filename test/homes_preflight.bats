@@ -19,7 +19,7 @@ if [ "${1:-}" != "get" ]; then
   exit 2
 fi
 case "${2:-}" in
-  test-agent/gpg-fingerprint) echo "ABCDEF1234567890" ;;
+  test-agent/git/signing-fingerprint) echo "ABCDEF1234567890" ;;
   test-agent/github-username) echo "test-agent-ricon" ;;
   test-agent/github/token) echo "ghp_not_a_real_token" ;;
   *) echo "missing secret: ${2:-}" >&2; exit 1 ;;
@@ -97,7 +97,7 @@ SH
   [[ "$output" == *"Homes preflight"* ]]
   [[ "$output" == *"ok     home repo"*"git repository present"* ]]
   [[ "$output" == *"ok     worktree"*"clean"* ]]
-  [[ "$output" == *"ok     secret:gpg-fingerprint"*"present"* ]]
+  [[ "$output" == *"ok     secret:git/signing-fingerprint"*"present"* ]]
   [[ "$output" == *"ok     gpg secret key"*"present for stored fingerprint"* ]]
   [[ "$output" == *"overall: pass"* ]]
 }
@@ -110,7 +110,7 @@ SH
   run fold_task homes:preflight test-agent --home "$home"
 
   [ "$status" -eq 1 ]
-  [[ "$output" == *"fail   secret:gpg-fingerprint"*"secrets tool unavailable"* ]]
+  [[ "$output" == *"fail   secret:git/signing-fingerprint"*"secrets tool unavailable"* ]]
   [[ "$output" == *"fail   secret:github-username"*"secrets tool unavailable"* ]]
   [[ "$output" == *"fail   secret:github/token"*"secrets tool unavailable"* ]]
 }

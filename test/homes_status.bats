@@ -32,7 +32,7 @@ if [ "${1:-}" != "get" ]; then
   exit 2
 fi
 case "${2:-}" in
-  test-agent/gpg-fingerprint) echo "ABCDEF1234567890ABCDEF1234567890ABCDEF12" ;;
+  test-agent/git/signing-fingerprint) echo "ABCDEF1234567890ABCDEF1234567890ABCDEF12" ;;
   test-agent/gpg-private-key) echo "fixture-secret-material" ;;
   test-agent/github-username) echo "test-agent-ricon" ;;
   test-agent/github/token) echo "fixture-github-token" ;;

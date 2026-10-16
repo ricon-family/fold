@@ -186,8 +186,8 @@ SH
   export GIT="$path"
 }
 
-write_mock_secrets_test_agent_github() {
-  local path="$BATS_TEST_TMPDIR/secrets-github"
+write_mock_secrets_test_agent() {
+  local path="$BATS_TEST_TMPDIR/secrets-agent"
   cat > "$path" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -197,6 +197,8 @@ if [ "${1:-}" != "get" ]; then
 fi
 case "${2:-}" in
   test-agent/github/token) echo "fixture-github-token" ;;
+  test-agent/git/name) echo "Persona Author" ;;
+  test-agent/git/email) echo "commits@example.test" ;;
   *) echo "missing secret: ${2:-}" >&2; exit 1 ;;
 esac
 SH
@@ -385,6 +387,7 @@ TOML
   create_publishable_home "$home"
   create_bare_remote "$remote"
   write_mock_notes_no_changes
+  write_mock_secrets_test_agent
   write_archive_guard_git
 
   run fold_task homes:publish-fresh test-agent \
@@ -398,6 +401,10 @@ TOML
   parents=$(git --git-dir="$remote" rev-list --parents -n1 refs/heads/main)
   set -- $parents
   [ "$#" -eq 1 ]
+
+  identity=$(git --git-dir="$remote" log -1 --format='%an <%ae>;%cn <%ce>')
+  [ "$identity" = "Persona Author <commits@example.test>;Persona Author <commits@example.test>" ]
+
   assert_remote_blob_matches_source "$home" "$remote" notes/.manifest
   assert_remote_blob_matches_source "$home" "$remote" notes/abcdef12
   assert_remote_blob_matches_source "$home" "$remote" .modules/manifest
@@ -478,9 +485,10 @@ TOML
   git -C "$home" diff --quiet --cached
 }
 
-@test "homes:commit-local --yes commits bootstrap surfaces with agent identity" {
+@test "homes:commit-local --yes uses configured Git identity rather than the handle" {
   home="$BATS_TEST_TMPDIR/home"
   create_simple_home "$home"
+  write_mock_secrets_test_agent
   printf '\nlocal edit\n' >> "$home/AGENTS.md"
 
   run fold_task homes:commit-local test-agent \
@@ -491,10 +499,27 @@ TOML
 
   [ "$status" -eq 0 ]
   git -C "$home" diff --quiet
-  author=$(git -C "$home" log -1 --format='%an <%ae>')
-  [ "$author" = "test-agent <test-agent@ricon.family>" ]
+  identity=$(git -C "$home" log -1 --format='%an <%ae>;%cn <%ce>')
+  [ "$identity" = "Persona Author <commits@example.test>;Persona Author <commits@example.test>" ]
   subject=$(git -C "$home" log -1 --format='%s')
   [ "$subject" = "bootstrap test-agent home" ]
+}
+
+@test "homes:commit-local refuses unavailable or empty Git identity instead of deriving it" {
+  home="$BATS_TEST_TMPDIR/home"
+  create_simple_home "$home"
+  original_head=$(git -C "$home" rev-parse HEAD)
+  printf '\nlocal edit\n' >> "$home/AGENTS.md"
+
+  for provider in /usr/bin/false /usr/bin/true; do
+    export SECRETS="$provider"
+
+    run fold_task homes:commit-local test-agent --home "$home" --no-gpg-sign --yes
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"missing or empty test-agent/git/name"* ]]
+    [ "$(git -C "$home" rev-parse HEAD)" = "$original_head" ]
+  done
 }
 
 @test "homes:commit-local --yes fails when notes remain dirty after staging" {
@@ -546,7 +571,7 @@ TOML
   export FAKE_REMOTE_SOURCE="$remote"
   export FAKE_GIT_AUTH_LOG="$BATS_TEST_TMPDIR/git-auth.log"
   : > "$FAKE_GIT_AUTH_LOG"
-  write_mock_secrets_test_agent_github
+  write_mock_secrets_test_agent
   write_mock_git_requires_gh_token_for_adopt
 
   run fold_task homes:adopt-remote test-agent \
