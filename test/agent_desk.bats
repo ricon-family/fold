@@ -197,16 +197,16 @@ case "${1:-}" in
       [ -z "${__MISE_DIFF:-}" ]
     fi
     printf 'export AGENT_HOME=%q\n' "${FAKE_IDENTITY_HOME:-$PWD}"
-    printf 'export GIT_AUTHOR_NAME=quick\n'
-    printf 'export GIT_AUTHOR_EMAIL=quick@ricon.family\n'
-    printf 'export GIT_COMMITTER_NAME=quick\n'
-    printf 'export GIT_COMMITTER_EMAIL=quick@ricon.family\n'
+    printf 'export GIT_AUTHOR_NAME=%q\n' "${FAKE_ACTIVE_NAME:-quick}"
+    printf 'export GIT_AUTHOR_EMAIL=%q\n' "${FAKE_ACTIVE_EMAIL:-quick@ricon.family}"
+    printf 'export GIT_COMMITTER_NAME=%q\n' "${FAKE_ACTIVE_NAME:-quick}"
+    printf 'export GIT_COMMITTER_EMAIL=%q\n' "${FAKE_ACTIVE_EMAIL:-quick@ricon.family}"
     printf 'export GH_TOKEN=quick-target-token\n'
     printf 'export GIT_CONFIG_COUNT=4\n'
     printf 'export GIT_CONFIG_KEY_0=user.name\n'
-    printf 'export GIT_CONFIG_VALUE_0=quick\n'
+    printf 'export GIT_CONFIG_VALUE_0=%q\n' "${FAKE_ACTIVE_NAME:-quick}"
     printf 'export GIT_CONFIG_KEY_1=user.email\n'
-    printf 'export GIT_CONFIG_VALUE_1=quick@ricon.family\n'
+    printf 'export GIT_CONFIG_VALUE_1=%q\n' "${FAKE_ACTIVE_EMAIL:-quick@ricon.family}"
     printf 'export GIT_CONFIG_KEY_2=user.signingkey\n'
     printf 'export GIT_CONFIG_VALUE_2=%q\n' "${FAKE_ACTIVE_SIGNING_KEY:-AABBCCDDEEFF0011}"
     printf 'export GIT_CONFIG_KEY_3=commit.gpgsign\n'
@@ -699,6 +699,65 @@ JSON
   grep -Fx 'GIT_COMMITTER_NAME=quick' "$agent_log"
   grep -Fx 'GIT_COMMITTER_EMAIL=quick@ricon.family' "$agent_log"
   grep -Fx 'GH_TOKEN=quick-target-token' "$agent_log"
+}
+
+@test "agent:desk:wake verifies configured Git identity independently of the handle" {
+  home="$BATS_TEST_TMPDIR/home"
+  work_dir="$BATS_TEST_TMPDIR/wake"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  agent_log="$BATS_TEST_TMPDIR/agent.log"
+  make_repo "$home" home
+  export FAKE_ACTIVE_NAME='Persona "Author"'
+  export FAKE_ACTIVE_EMAIL=commits@example.test
+  git -C "$home" config user.name "$FAKE_ACTIVE_NAME"
+  git -C "$home" config user.email "$FAKE_ACTIVE_EMAIL"
+  printf 'hello packet\n' > "$packet"
+  export AGENT_LOG="$agent_log"
+  write_target_identity_shimmer
+
+  fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model test/model --work-dir "$work_dir" >/dev/null
+  run "$work_dir/start-quick-a.sh"
+
+  [ "$status" -eq 0 ]
+  grep -Fx "GIT_AUTHOR_NAME=$FAKE_ACTIVE_NAME" "$agent_log"
+  grep -Fx "GIT_COMMITTER_NAME=$FAKE_ACTIVE_NAME" "$agent_log"
+  grep -Fx 'GIT_AUTHOR_EMAIL=commits@example.test' "$agent_log"
+  grep -Fx 'GIT_COMMITTER_EMAIL=commits@example.test' "$agent_log"
+  grep -Fx 'AGENT_IDENTITY=quick' "$agent_log"
+}
+
+@test "agent:desk:wake rejects a matching handle with the wrong configured Git name" {
+  home="$BATS_TEST_TMPDIR/home"
+  work_dir="$BATS_TEST_TMPDIR/wake"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  agent_log="$BATS_TEST_TMPDIR/agent.log"
+  make_repo "$home" home
+  git -C "$home" config user.name 'Persona Author'
+  printf 'hello packet\n' > "$packet"
+  export AGENT_LOG="$agent_log"
+  write_target_identity_shimmer
+
+  fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model test/model --work-dir "$work_dir" >/dev/null
+  run "$work_dir/start-quick-a.sh"
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *'Git author name does not match the prepared target home'* ]]
+  [ ! -e "$agent_log" ]
+}
+
+@test "agent:desk:wake refuses an empty prepared Git name" {
+  home="$BATS_TEST_TMPDIR/home"
+  work_dir="$BATS_TEST_TMPDIR/wake"
+  packet="$BATS_TEST_TMPDIR/packet.md"
+  make_repo "$home" home
+  git -C "$home" config user.name ''
+  printf 'hello packet\n' > "$packet"
+
+  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model test/model --work-dir "$work_dir"
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *'prepared target home has no Git name'* ]]
+  [ ! -e "$work_dir/start-quick-a.sh" ]
 }
 
 @test "agent:desk:wake accepts the prepared fingerprint through its active long key ID" {

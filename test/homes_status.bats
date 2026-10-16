@@ -32,7 +32,9 @@ if [ "${1:-}" != "get" ]; then
   exit 2
 fi
 case "${2:-}" in
-  test-agent/gpg-fingerprint) echo "ABCDEF1234567890ABCDEF1234567890ABCDEF12" ;;
+  test-agent/git/name) echo "Persona Author" ;;
+  test-agent/git/email) echo "commits@example.test" ;;
+  test-agent/git/signing-fingerprint) echo "ABCDEF1234567890ABCDEF1234567890ABCDEF12" ;;
   test-agent/gpg-private-key) echo "fixture-secret-material" ;;
   test-agent/github-username) echo "test-agent-ricon" ;;
   test-agent/github/token) echo "fixture-github-token" ;;
@@ -140,8 +142,8 @@ configure_ready_auth() {
   mkdir -p "$AGENTS_ROOT/test-agent"
   cat > "$AGENTS_ROOT/test-agent/.gitconfig" <<'GITCONFIG'
 [user]
-	name = test-agent
-	email = test-agent@ricon.family
+	name = Persona Author
+	email = commits@example.test
 	signingkey = ABCDEF1234567890ABCDEF1234567890ABCDEF12
 [commit]
 	gpgsign = true

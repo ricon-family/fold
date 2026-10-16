@@ -220,7 +220,7 @@ record ok "agent" "$AGENT"
 check_repo
 
 fingerprint=""
-if secret_present "gpg-fingerprint"; then
+if secret_present "git/signing-fingerprint"; then
   fingerprint="$LAST_SECRET_VALUE"
 fi
 if ! secret_present "github-username"; then

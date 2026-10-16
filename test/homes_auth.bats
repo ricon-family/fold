@@ -31,8 +31,13 @@ if [ "${1:-}" != "get" ]; then
   echo "unexpected secrets command: $*" >&2
   exit 2
 fi
+if [ "${2:-}" = "${FAKE_MISSING_GIT_FIELD:-}" ]; then
+  exit 1
+fi
 case "${2:-}" in
-  test-agent/gpg-fingerprint) echo "ABCDEF1234567890ABCDEF1234567890ABCDEF12" ;;
+  test-agent/git/name) printf '%s\n' "${FAKE_GIT_NAME-Persona Author}" ;;
+  test-agent/git/email) printf '%s\n' "${FAKE_GIT_EMAIL-commits@example.test}" ;;
+  test-agent/git/signing-fingerprint) echo "ABCDEF1234567890ABCDEF1234567890ABCDEF12" ;;
   test-agent/gpg-private-key)
     cat <<'KEY'
 -----BEGIN PGP FIXTURE KEY BLOCK-----
@@ -90,6 +95,7 @@ if has_arg "--import" "$@"; then
 fi
 
 if has_arg "--edit-key" "$@"; then
+  printf '%s\n' "$@" > "${FAKE_GPG_STATE:?}.trust"
   exit 0
 fi
 
@@ -130,8 +136,8 @@ configure_ready_auth() {
   mkdir -p "$AGENTS_ROOT/test-agent"
   cat > "$AGENTS_ROOT/test-agent/.gitconfig" <<'GITCONFIG'
 [user]
-	name = test-agent
-	email = test-agent@ricon.family
+	name = Persona Author
+	email = commits@example.test
 	signingkey = ABCDEF1234567890ABCDEF1234567890ABCDEF12
 [commit]
 	gpgsign = true
@@ -274,10 +280,13 @@ GITCONFIG
   [ "$status" -eq 0 ]
   [ -f "$FAKE_GPG_STATE" ]
   [ -f "$AGENTS_ROOT/test-agent/.gitconfig" ]
-  [ "$(git config --file "$AGENTS_ROOT/test-agent/.gitconfig" user.name)" = "test-agent" ]
-  [ "$(git config --file "$AGENTS_ROOT/test-agent/.gitconfig" user.email)" = "test-agent@ricon.family" ]
+  [ "$(git config --file "$AGENTS_ROOT/test-agent/.gitconfig" user.name)" = "Persona Author" ]
+  [ "$(git config --file "$AGENTS_ROOT/test-agent/.gitconfig" user.email)" = "commits@example.test" ]
   [ "$(git config --file "$AGENTS_ROOT/test-agent/.gitconfig" user.signingkey)" = "ABCDEF1234567890ABCDEF1234567890ABCDEF12" ]
   [ "$(git config --file "$AGENTS_ROOT/test-agent/.gitconfig" commit.gpgsign)" = "true" ]
+  [ "$(git config --file "$AGENTS_ROOT/test-agent/.gitconfig" gpg.format)" = openpgp ]
+  grep -Fx 'ABCDEF1234567890ABCDEF1234567890ABCDEF12' "$FAKE_GPG_STATE.trust"
+  ! grep -Fx 'commits@example.test' "$FAKE_GPG_STATE.trust"
   git config --global --get-all "includeIf.gitdir:$AGENTS_ROOT/test-agent/.path" | grep -Fx "$AGENTS_ROOT/test-agent/.gitconfig"
   [[ "$output" == *"github token"*"valid as test-agent-ricon"* ]]
   [[ "$output" != *"fixture-github-token"* ]]
@@ -287,6 +296,69 @@ GITCONFIG
   [ "$status" -eq 0 ]
   [[ "$output" == *'"ready":true'* ]]
   [[ "$output" == *"valid as test-agent-ricon; expires in"* ]]
+}
+
+@test "homes:auth rejects handle-derived identity when configured persona differs" {
+  configure_ready_auth
+  config="$AGENTS_ROOT/test-agent/.gitconfig"
+  git config --file "$config" user.name test-agent
+  git config --file "$config" user.email test-agent@ricon.family
+
+  run fold_task_stdout_only homes:auth test-agent --agents-root "$AGENTS_ROOT" --json --check
+
+  [ "$status" -eq 1 ]
+  assert_json_output
+  [[ "$output" == *'"name":"Git config","status":"fail"'* ]]
+}
+
+@test "homes:auth refuses readiness when configured Git email is unavailable" {
+  configure_ready_auth
+  export FAKE_MISSING_GIT_FIELD=test-agent/git/email
+
+  run fold_task_stdout_only homes:auth test-agent --agents-root "$AGENTS_ROOT" --json --check
+
+  [ "$status" -eq 1 ]
+  assert_json_output
+  [[ "$output" == *'missing or empty configured Git identity'* ]]
+}
+
+@test "homes:auth:setup refuses missing Git identity before any local mutation" {
+  export FAKE_MISSING_GIT_FIELD=test-agent/git/name
+
+  run fold_task homes:auth:setup test-agent --agents-root "$AGENTS_ROOT" --yes
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'missing test-agent/git/name'* ]]
+  [ ! -f "$FAKE_GPG_STATE" ]
+  [ ! -f "$AGENTS_ROOT/test-agent/.gitconfig" ]
+  [ ! -s "$GIT_CONFIG_GLOBAL" ]
+}
+
+@test "homes:auth:setup refuses empty Git email before any local mutation" {
+  export FAKE_GIT_EMAIL=''
+
+  run fold_task homes:auth:setup test-agent --agents-root "$AGENTS_ROOT" --yes
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'test-agent/git/email is empty'* ]]
+  [ ! -f "$FAKE_GPG_STATE" ]
+  [ ! -f "$AGENTS_ROOT/test-agent/.gitconfig" ]
+  [ ! -s "$GIT_CONFIG_GLOBAL" ]
+}
+
+@test "homes:auth:setup preserves configured name punctuation through Git config serialization" {
+  export FAKE_GIT_NAME='A "Quoted" \\ Name # team'
+
+  run fold_task homes:auth:setup test-agent --agents-root "$AGENTS_ROOT" --yes
+
+  [ "$status" -eq 0 ]
+  [ "$(git config --file "$AGENTS_ROOT/test-agent/.gitconfig" user.name)" = "$FAKE_GIT_NAME" ]
+
+  run fold_task homes:auth test-agent --agents-root "$AGENTS_ROOT" --json --check
+
+  [ "$status" -eq 0 ]
+  assert_json_output
+  [[ "$output" == *'"ready":true'* ]]
 }
 
 @test "homes:auth:setup --home targets the supplied home parent" {
@@ -302,7 +374,7 @@ GITCONFIG
   [ -f "$FAKE_GPG_STATE" ]
   [ -f "$custom_agent_dir/.gitconfig" ]
   [ ! -f "$AGENTS_ROOT/test-agent/.gitconfig" ]
-  [ "$(git config --file "$custom_agent_dir/.gitconfig" user.name)" = "test-agent" ]
+  [ "$(git config --file "$custom_agent_dir/.gitconfig" user.name)" = "Persona Author" ]
   git config --global --get-all "includeIf.gitdir:$custom_agent_dir/.path" | grep -Fx "$custom_agent_dir/.gitconfig"
 
   run fold_task homes:auth test-agent \
