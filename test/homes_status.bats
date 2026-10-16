@@ -259,6 +259,28 @@ SH
     commit -q -m "initial public notes home"
 }
 
+@test "homes:status auth prerequisites accept account defaults without a workspace config or include" {
+  unset GIT_CONFIG_COUNT GIT_CONFIG_PARAMETERS GIT_CONFIG
+  home="$AGENTS_ROOT/test-agent/home"
+  create_ready_home "$home"
+  git config --global user.name 'Persona Author'
+  git config --global user.email commits@example.test
+  git config --global user.signingkey ABCDEF1234567890ABCDEF1234567890ABCDEF12
+  git config --global gpg.format openpgp
+  git config --global commit.gpgsign true
+  git config --global tag.gpgsign true
+  touch "$FAKE_GPG_STATE"
+  cp "$GIT_CONFIG_GLOBAL" "$BATS_TEST_TMPDIR/before.gitconfig"
+
+  run fold_task_stdout_only homes:status test-agent --home "$home" --auth-prerequisites --json --check
+
+  [ "$status" -eq 0 ]
+  assert_json_output
+  [[ "$output" == *'"ready":true'* ]]
+  [ ! -e "$AGENTS_ROOT/test-agent/.gitconfig" ]
+  cmp -s "$GIT_CONFIG_GLOBAL" "$BATS_TEST_TMPDIR/before.gitconfig"
+}
+
 @test "homes:status reports a ready configured home" {
   home="$AGENTS_ROOT/test-agent/home"
   create_ready_home "$home"

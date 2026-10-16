@@ -31,6 +31,9 @@ if [ "${1:-}" != "get" ]; then
   echo "unexpected secrets command: $*" >&2
   exit 2
 fi
+if [ -n "${FAKE_SECRET_LOG:-}" ]; then
+  printf '%s\n' "${2:-}" >> "$FAKE_SECRET_LOG"
+fi
 if [ "${2:-}" = "${FAKE_MISSING_GIT_FIELD:-}" ]; then
   exit 1
 fi
@@ -56,6 +59,9 @@ SH
   cat > "$TMPBIN/gpg" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
+if [ -n "${FAKE_GPG_LOG:-}" ]; then
+  printf '%s\n' "$*" >> "$FAKE_GPG_LOG"
+fi
 has_arg() {
   local wanted="$1" arg
   shift
@@ -146,6 +152,84 @@ configure_ready_auth() {
 GITCONFIG
   touch "$FAKE_GPG_STATE"
   git config --global --add "includeIf.gitdir:$AGENTS_ROOT/test-agent/.path" "$AGENTS_ROOT/test-agent/.gitconfig"
+}
+
+configure_auth_prerequisites() {
+  unset GIT_CONFIG_COUNT GIT_CONFIG_PARAMETERS GIT_CONFIG
+  git config --global user.name 'Persona Author'
+  git config --global user.email commits@example.test
+  git config --global user.signingkey ABCDEF1234567890ABCDEF1234567890ABCDEF12
+  git config --global gpg.format openpgp
+  git config --global commit.gpgsign true
+  git config --global tag.gpgsign true
+  touch "$FAKE_GPG_STATE"
+  export FAKE_SECRET_LOG="$BATS_TEST_TMPDIR/secret-requests"
+  export FAKE_GPG_LOG="$BATS_TEST_TMPDIR/gpg-requests"
+}
+
+@test "homes:auth prerequisites accept account defaults without retrieving private key material or changing auth" {
+  configure_auth_prerequisites
+  export FAKE_MISSING_GIT_FIELD=test-agent/gpg-private-key
+  cp "$GIT_CONFIG_GLOBAL" "$BATS_TEST_TMPDIR/before.gitconfig"
+
+  run fold_task_stdout_only homes:auth test-agent --home "$AGENTS_ROOT/new/home" --prerequisites --json --check
+
+  [ "$status" -eq 0 ]
+  assert_json_output
+  [[ "$output" == *'"ready":true'* ]]
+  ! grep -q 'gpg-private-key' "$FAKE_SECRET_LOG"
+  ! grep -Eq -- '--import|--edit-key|--sign' "$FAKE_GPG_LOG"
+  [ ! -e "$FAKE_GPG_STATE.trust" ]
+  [ ! -e "$AGENTS_ROOT/new" ]
+  cmp -s "$GIT_CONFIG_GLOBAL" "$BATS_TEST_TMPDIR/before.gitconfig"
+  [[ "$output" != *'fixture-github-token'* ]]
+}
+
+@test "homes:auth prerequisites refuse a missing local signer without importing or trusting it" {
+  configure_auth_prerequisites
+  rm "$FAKE_GPG_STATE"
+  cp "$GIT_CONFIG_GLOBAL" "$BATS_TEST_TMPDIR/before.gitconfig"
+
+  run fold_task_stdout_only homes:auth test-agent --prerequisites --json --check
+
+  [ "$status" -eq 1 ]
+  assert_json_output
+  [[ "$output" == *'missing for stored fingerprint'* ]]
+  [[ "$output" != *'homes:auth:setup'* ]]
+  [ ! -e "$FAKE_GPG_STATE" ]
+  [ ! -e "$FAKE_GPG_STATE.trust" ]
+  ! grep -Eq -- '--import|--edit-key|--sign' "$FAKE_GPG_LOG"
+  cmp -s "$GIT_CONFIG_GLOBAL" "$BATS_TEST_TMPDIR/before.gitconfig"
+}
+
+@test "homes:auth prerequisites require every persona Git setting" {
+  configure_auth_prerequisites
+
+  for key in user.name user.email user.signingkey gpg.format commit.gpgsign tag.gpgsign; do
+    expected=$(git config --global --get "$key")
+    git config --global "$key" wrong-value
+
+    run fold_task_stdout_only homes:auth test-agent --prerequisites --json --check
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"\"name\":\"Git $key\",\"status\":\"fail\""* ]]
+    [ "$(git config --global --get "$key")" = wrong-value ]
+    git config --global "$key" "$expected"
+  done
+}
+
+@test "homes:auth prerequisites inspect the existing target home's effective Git settings" {
+  configure_auth_prerequisites
+  home="$AGENTS_ROOT/new/home"
+  mkdir -p "$home"
+  git init -q "$home"
+  git -C "$home" config user.name Other
+
+  run fold_task_stdout_only homes:auth test-agent --home "$home" --prerequisites --json --check
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'"name":"Git user.name","status":"fail"'* ]]
+  [ "$(git -C "$home" config user.name)" = Other ]
 }
 
 @test "homes includeIf helper preserves the existing default tilde key" {

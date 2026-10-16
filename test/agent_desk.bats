@@ -239,21 +239,14 @@ write_fake_mise_for_prepare() {
 set -euo pipefail
 printf 'mise %s\n' "$*" >> "${MISE_LOG:?}"
 case "${1:-} ${2:-}" in
-  "run homes:auth:setup")
-    home=""
-    while [ "$#" -gt 0 ]; do
-      if [ "$1" = "--home" ]; then
-        home="${2:-}"
-        break
-      fi
-      shift
-    done
-    if [ -z "$home" ]; then
-      echo "homes:auth:setup missing --home" >&2
-      exit 2
+  "run homes:auth")
+    [[ " $* " == *" --prerequisites "* ]] || exit 2
+    [[ " $* " == *" --check "* ]] || exit 2
+    if [ "${FAKE_AUTH_PREREQUISITES_FAIL:-false}" = true ]; then
+      printf '{"ready":false}\n'
+      exit 1
     fi
-    mkdir -p "$(dirname "$home")"
-    printf '[user]\n\tname = fixture\n' > "$(dirname "$home")/.gitconfig"
+    printf '{"ready":true}\n'
     ;;
   "run homes:adopt-remote")
     home=""
@@ -268,8 +261,8 @@ case "${1:-} ${2:-}" in
       echo "homes:adopt-remote missing --home" >&2
       exit 2
     fi
-    if [ ! -f "$(dirname "$home")/.gitconfig" ]; then
-      echo "auth not set up before adopt" >&2
+    if ! grep -q 'mise run homes:auth .* --prerequisites --json --check' "$MISE_LOG"; then
+      echo "auth prerequisites not checked before adopt" >&2
       exit 1
     fi
     mkdir -p "$home"
@@ -310,10 +303,8 @@ case "${1:-} ${2:-}" in
       echo "homes:status missing --home" >&2
       exit 2
     fi
-    if [ ! -f "$(dirname "$home")/.gitconfig" ]; then
-      printf '{"ready":false,"next":"mise run homes:auth:setup --yes"}\n'
-      exit 1
-    fi
+    [[ " $* " == *" --auth-prerequisites "* ]] || exit 2
+    [ -d "$home/.git" ] || exit 1
     printf '{"ready":true}\n'
     ;;
   *)
@@ -401,7 +392,7 @@ make_repo() {
   [[ "$output" == *"home:    $desk_path/home"* ]]
   [[ "$output" == *"repo:    quick-ricon/home"* ]]
   [[ "$output" == *"dry-run: rerun with --yes"* ]]
-  [[ "$output" == *"setup auth: mise run homes:auth:setup quick --home $desk_path/home --yes"* ]]
+  [[ "$output" == *"check auth prerequisites: mise run homes:auth quick --home $HOME --prerequisites --json --check"* ]]
   [[ "$output" == *"setup email: mise run homes:email:setup quick --home $desk_path/home --yes"* ]]
   [[ "$output" == *"mise run agent:desk:wake quick --desk $desk_path --shell quick-probe --packet /tmp/packet.md --model '<model>' --yes"* ]]
   [ ! -e "$desk/home" ]
@@ -422,19 +413,20 @@ make_repo() {
     --yes
 
   [ "$status" -eq 0 ]
-  [[ "$output" == *"== setup home auth =="* ]]
+  [[ "$output" == *"== check auth prerequisites =="* ]]
   [[ "$output" == *"== adopt home =="* ]]
   [[ "$output" == *"== setup home email =="* ]]
   [[ "$output" == *"== verify home readiness =="* ]]
   [[ "$output" == *"Ready. Next wake command:"* ]]
-  auth_line=$(grep -nF "mise run homes:auth:setup quick --home $desk_path/home --yes" "$MISE_LOG" | cut -d: -f1)
+  auth_line=$(grep -nF "mise run homes:auth quick --home $HOME --prerequisites --json --check" "$MISE_LOG" | cut -d: -f1)
   adopt_line=$(grep -nF "mise run homes:adopt-remote quick --home $desk_path/home --branch main --yes --repo quick-ricon/home" "$MISE_LOG" | cut -d: -f1)
   email_line=$(grep -nF "mise run homes:email:setup quick --home $desk_path/home --yes" "$MISE_LOG" | cut -d: -f1)
-  status_line=$(grep -nF "mise run homes:status quick --home $desk_path/home --json --check" "$MISE_LOG" | cut -d: -f1)
+  status_line=$(grep -nF "mise run homes:status quick --home $desk_path/home --auth-prerequisites --json --check" "$MISE_LOG" | cut -d: -f1)
   [ "$auth_line" -lt "$adopt_line" ]
   [ "$adopt_line" -lt "$email_line" ]
   [ "$email_line" -lt "$status_line" ]
-  [ -f "$desk/.gitconfig" ]
+  [ ! -e "$desk/.gitconfig" ]
+  ! grep -q 'homes:auth:setup' "$MISE_LOG"
   [ -d "$desk/home/.git" ]
   [ -f "$desk/home/.emails/himalaya.toml" ]
   if [ -f "$SHELL_LOG" ]; then
@@ -467,8 +459,8 @@ make_repo() {
   [[ "$output" == *"Ready. Next wake command:"* ]]
   [[ "$output" != *"homes:email:setup"* ]]
   ! grep -q 'homes:email:setup' "$MISE_LOG"
-  grep -F "homes:status quick --home $desk/home --json --check" "$MISE_LOG"
-  [ -f "$desk/.gitconfig" ]
+  grep -F "homes:status quick --home $desk/home --auth-prerequisites --json --check" "$MISE_LOG"
+  [ ! -e "$desk/.gitconfig" ]
   [ -d "$desk/home/.git" ]
   [ ! -e "$desk/home/.emails" ]
   [ ! -e "$SHELL_RUN_MARKER" ]
@@ -490,7 +482,7 @@ make_repo() {
   desk="$FAKE_DESKS_ROOT/$desk_id"
   grep -F "desks new --id $desk_id" "$DESKS_LOG" >/dev/null
   grep -F "desks path $desk_id" "$DESKS_LOG" >/dev/null
-  auth_line=$(grep -nF "mise run homes:auth:setup quick --home $desk/home --yes" "$MISE_LOG" | cut -d: -f1)
+  auth_line=$(grep -nF "mise run homes:auth quick --home $HOME --prerequisites --json --check" "$MISE_LOG" | cut -d: -f1)
   adopt_line=$(grep -nF "mise run homes:adopt-remote quick --home $desk/home --branch main --yes --repo quick-ricon/home" "$MISE_LOG" | cut -d: -f1)
   email_line=$(grep -nF "mise run homes:email:setup quick --home $desk/home --yes" "$MISE_LOG" | cut -d: -f1)
   [ "$auth_line" -lt "$adopt_line" ]
@@ -498,8 +490,36 @@ make_repo() {
   [[ "$output" == *"desk id: $desk_id"* ]]
   [[ "$output" == *"mise run agent:desk:wake quick --desk $desk --shell $desk_id --packet /tmp/packet.md --model '<model>' --yes"* ]]
   [ -f "$desk/.desk/registry.json" ]
-  [ -f "$desk/.gitconfig" ]
+  [ ! -e "$desk/.gitconfig" ]
   [ -d "$desk/home/.git" ]
+}
+
+@test "agent:desk:prepare refuses missing auth prerequisites before creating a desk or provisioning" {
+  write_fake_mise_for_prepare
+  write_fake_desks
+  export FAKE_AUTH_PREREQUISITES_FAIL=true
+
+  run fold_task agent:desk:prepare quick --desk-id blocked --repo quick-ricon/home --yes
+
+  [ "$status" -ne 0 ]
+  grep -q 'homes:auth .* --prerequisites --json --check' "$MISE_LOG"
+  ! grep -Eq 'homes:auth:setup|homes:adopt-remote|homes:email:setup|homes:status' "$MISE_LOG"
+  [ ! -s "$DESKS_LOG" ]
+  [ ! -e "$FAKE_DESKS_ROOT/blocked" ]
+}
+
+@test "agent:desk:prepare preserves an existing workspace Git config" {
+  desk="$BATS_TEST_TMPDIR/desks/existing-config"
+  mkdir -p "$desk"
+  printf '# existing workspace settings\n' > "$desk/.gitconfig"
+  cp "$desk/.gitconfig" "$BATS_TEST_TMPDIR/before.gitconfig"
+  write_fake_mise_for_prepare
+
+  run fold_task agent:desk:prepare quick --desk "$desk" --repo quick-ricon/home --yes
+
+  [ "$status" -eq 0 ]
+  cmp -s "$desk/.gitconfig" "$BATS_TEST_TMPDIR/before.gitconfig"
+  ! grep -q 'homes:auth:setup' "$MISE_LOG"
 }
 
 @test "agent:desk:prepare refuses to mutate a missing explicit desk path" {
