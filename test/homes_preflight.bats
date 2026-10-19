@@ -87,13 +87,15 @@ SH
   [[ "$output" != *"ghp_secretfixturetoken"* ]]
 }
 
-@test "homes:preflight passes a clean already-provisioned home" {
+@test "homes:preflight inspects AGENT_HOME without confirmation" {
   home="$BATS_TEST_TMPDIR/home"
   create_clean_home "$home"
 
-  run fold_task homes:preflight test-agent --home "$home"
+  export AGENT_HOME="$home"
+  run fold_task homes:preflight test-agent
 
   [ "$status" -eq 0 ]
+  [[ "$output" == *"home:  $home"* ]]
   [[ "$output" == *"Homes preflight"* ]]
   [[ "$output" == *"ok     home repo"*"git repository present"* ]]
   [[ "$output" == *"ok     worktree"*"clean"* ]]

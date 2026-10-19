@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Show aggregate read-only readiness for an agent home"
-#USAGE flag "--agents-root <path>" default="" help="Agents workspace root (default: ~/agents)"
-#USAGE flag "--home <path>" default="" help="Home repo path (default: <agents-root>/<agent>/home)"
+#USAGE flag "--home <path>" default="" help="Target home repo (default: AGENT_HOME; required when unset)"
 #USAGE flag "--json" default=#false help="Emit machine-readable JSON"
 #USAGE flag "--check" default=#false help="Exit nonzero when the home is not ready"
 #USAGE flag "--auth-prerequisites" default=#false help="Validate effective Git config instead of requiring workspace-specific auth setup"
@@ -17,17 +16,12 @@ source "$ROOT/.mise/lib/homes.sh"
 source "$ROOT/.mise/lib/homes_render.sh"
 
 AGENT="${usage_agent:-iris}"
-HOME_PATH="${usage_home:-}"
-AGENTS_ROOT=$(homes_resolve_agents_root "${usage_agents_root:-}")
+HOME_PATH=$(homes_resolve_home "${usage_home:-}")
 JSON="${usage_json:-false}"
 CHECK="${usage_check:-false}"
 AUTH_PREREQUISITES="${usage_auth_prerequisites:-false}"
 JQ_BIN="${JQ:-jq}"
 validate_agent "$AGENT"
-
-if [ -z "$HOME_PATH" ]; then
-  HOME_PATH="$AGENTS_ROOT/$AGENT/home"
-fi
 
 TEXT_MODE=true
 [ "$JSON" = "true" ] && TEXT_MODE=false
@@ -140,7 +134,7 @@ collect_auth() {
     return 0
   fi
 
-  local auth_args=(run -q homes:auth "$AGENT" --agents-root "$AGENTS_ROOT" --home "$HOME_PATH" --json --check)
+  local auth_args=(run -q homes:auth "$AGENT" --home "$HOME_PATH" --json --check)
   if [ "$AUTH_PREREQUISITES" = true ]; then
     auth_args+=(--prerequisites)
   fi
@@ -203,7 +197,7 @@ check_home() {
 
   if [ ! -e "$HOME_PATH" ]; then
     HOME_EXISTS=false
-    record_fail "Home path" "missing $HOME_PATH" "mise run homes:adopt-remote $AGENT --repo <owner/repo> --yes"
+    record_fail "Home path" "missing $HOME_PATH" "mise run homes:adopt-remote $AGENT --home $HOME_PATH --repo <owner/repo> --yes"
     return 0
   fi
   HOME_EXISTS=true

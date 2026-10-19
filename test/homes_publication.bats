@@ -332,15 +332,16 @@ node = "20"
 TOML
 }
 
-@test "homes:publish-fresh dry-run verifies encrypted blobs without pushing" {
+@test "homes:publish-fresh dry-run verifies local blobs without contacting the remote" {
   home="$BATS_TEST_TMPDIR/home"
   remote="$BATS_TEST_TMPDIR/home.git"
   create_publishable_home "$home"
   create_bare_remote "$remote"
   write_mock_notes_no_changes
 
+  write_mock_git_leaking_ls_remote_failure
+  export AGENT_HOME="$home"
   run fold_task homes:publish-fresh test-agent \
-    --home "$home" \
     --remote-url "$remote" \
     --no-gpg-sign
 
@@ -351,7 +352,7 @@ TOML
   [ "$status" -ne 0 ]
 }
 
-@test "homes:publish-fresh dry-run fails when the remote is unreachable" {
+@test "homes:publish-fresh --yes fails when the remote is unreachable" {
   home="$BATS_TEST_TMPDIR/home"
   create_publishable_home "$home"
   write_mock_notes_no_changes
@@ -359,7 +360,7 @@ TOML
   run fold_task homes:publish-fresh test-agent \
     --home "$home" \
     --remote-url "$BATS_TEST_TMPDIR/missing.git" \
-    --no-gpg-sign
+    --no-gpg-sign --yes
 
   [ "$status" -eq 1 ]
   [[ "$output" == *"remote is not reachable"* ]]
@@ -374,7 +375,7 @@ TOML
   run fold_task homes:publish-fresh test-agent \
     --home "$home" \
     --remote-url "https://x-access-token:ghp_secretfixturetoken@github.com/test-agent/home.git" \
-    --no-gpg-sign
+    --no-gpg-sign --yes
 
   [ "$status" -eq 1 ]
   [[ "$output" == *"[REDACTED_GITHUB_TOKEN]"* ]]
@@ -476,7 +477,8 @@ TOML
   before=$(git -C "$home" rev-parse HEAD)
   printf '\nlocal edit\n' >> "$home/AGENTS.md"
 
-  run fold_task homes:commit-local test-agent --home "$home" --no-gpg-sign
+  export AGENT_HOME="$home"
+  run fold_task homes:commit-local test-agent --no-gpg-sign
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"dry-run: would stage bootstrap surfaces"* ]]
@@ -627,6 +629,23 @@ TOML
   [ ! -f "$home/PARTIAL_CLONE" ]
 }
 
+@test "homes smoke and trust preview the explicit home without running mise" {
+  home="$BATS_TEST_TMPDIR/home"
+  create_mise_home_with_module_configs "$home"
+  write_mock_mise_trust_logger
+  export AGENT_HOME="$BATS_TEST_TMPDIR/other-home"
+
+  for task in homes:smoke homes:trust-mise; do
+    run fold_task "$task" test-agent --home "$home"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"home:  $home"* ]]
+    [[ "$output" == *"dry-run: would trust"* ]]
+    [ ! -s "$MISE_TRUST_LOG" ]
+    [ ! -e "$AGENT_HOME" ]
+  done
+}
+
 @test "homes:smoke --skip-mise passes a clean simple home" {
   home="$BATS_TEST_TMPDIR/home"
   create_simple_home "$home"
@@ -644,7 +663,7 @@ TOML
   create_mise_home_with_module_configs "$home"
   write_mock_mise_trust_logger
 
-  run fold_task homes:smoke test-agent --home "$home"
+  run fold_task homes:smoke test-agent --home "$home" --yes
 
   [ "$status" -eq 0 ]
   grep -F "trust $(cd "$home" && pwd -P)" "$MISE_TRUST_LOG" >/dev/null
@@ -657,7 +676,7 @@ TOML
   create_mise_home_with_module_configs "$home"
   write_mock_mise_trust_logger
 
-  run fold_task homes:trust-mise test-agent --home "$home"
+  run fold_task homes:trust-mise test-agent --home "$home" --yes
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"Homes trust-mise"* ]]

@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 #MISE description="Trust mise configs for an agent home and present modules"
-#USAGE flag "--home <path>" default="" help="Home repo path (default: ~/agents/<agent>/home)"
+#USAGE flag "--home <path>" default="" help="Target home repo (default: AGENT_HOME; required when unset)"
+#USAGE flag "-y --yes" default=#false help="Trust the target home and present module configs"
 #USAGE arg "<agent>" help="Agent name"
-#USAGE example "mise run homes:trust-mise c0da --home /path/to/desk/home" header="Trust a desk-scoped home wake surface"
+#USAGE example "mise run homes:trust-mise c0da --home /path/to/desk/home" header="Preview trust for a desk-scoped home"
+#USAGE example "mise run homes:trust-mise c0da --home /path/to/desk/home --yes" header="Trust the home and present modules"
 set -euo pipefail
 
 ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
@@ -10,7 +12,8 @@ ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
 source "$ROOT/.mise/lib/homes.sh"
 
 AGENT="${usage_agent:?agent required}"
-HOME_PATH=$(homes_resolve_home "$AGENT" "${usage_home:-}")
+HOME_PATH=$(homes_resolve_home "${usage_home:-}")
+YES="${usage_yes:-false}"
 
 validate_agent "$AGENT"
 homes_require_git_repo "$HOME_PATH"
@@ -18,5 +21,11 @@ homes_require_git_repo "$HOME_PATH"
 printf 'Homes trust-mise\n\n'
 printf 'agent: %s\n' "$AGENT"
 printf 'home:  %s\n\n' "$HOME_PATH"
+
+if [ "$YES" != "true" ]; then
+  echo "dry-run: would trust mise configs in this home and its present modules"
+  echo "rerun with --yes to mutate"
+  exit 0
+fi
 
 homes_trust_mise_surface "$HOME_PATH"

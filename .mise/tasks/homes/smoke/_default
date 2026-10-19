@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 #MISE description="Smoke-check an agent home after bootstrap or adoption"
-#USAGE flag "--home <path>" default="" help="Home repo path (default: ~/agents/<agent>/home)"
-#USAGE flag "--skip-mise" default=#false help="Skip mise trust/install, agent:prepare, and welcome"
+#USAGE flag "--home <path>" default="" help="Target home repo (default: AGENT_HOME; required when unset)"
+#USAGE flag "--skip-mise" default=#false help="Run read-only repo/notes/module checks without preparation or welcome"
+#USAGE flag "-y --yes" default=#false help="Run mise trust/install, agent:prepare, welcome, and readiness checks"
 #USAGE arg "<agent>" help="Agent name"
-#USAGE example "mise run homes:smoke iris --home ~/agents/iris/home" header="Smoke an agent home"
+#USAGE example "mise run homes:smoke iris --home /path/to/desk/home" header="Preview preparation and smoke checks"
+#USAGE example "mise run homes:smoke iris --yes" header="Prepare and smoke-check AGENT_HOME"
+#USAGE example "mise run homes:smoke iris --skip-mise" header="Inspect AGENT_HOME without preparation"
 set -euo pipefail
 
 ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
@@ -11,7 +14,8 @@ ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
 source "$ROOT/.mise/lib/homes.sh"
 
 AGENT="${usage_agent:?agent required}"
-HOME_PATH=$(homes_resolve_home "$AGENT" "${usage_home:-}")
+HOME_PATH=$(homes_resolve_home "${usage_home:-}")
+YES="${usage_yes:-false}"
 SKIP_MISE="${usage_skip_mise:-false}"
 
 validate_agent "$AGENT"
@@ -21,6 +25,13 @@ homes_require_git_repo "$HOME_PATH"
 printf 'Homes smoke\n\n'
 printf 'agent: %s\n' "$AGENT"
 printf 'home:  %s\n\n' "$HOME_PATH"
+
+if [ "$SKIP_MISE" != "true" ] && [ "$YES" != "true" ]; then
+  echo "dry-run: would trust/install mise tools, run agent:prepare, trust present modules,"
+  echo "run welcome (which may access live services), then inspect repo/notes/modules"
+  echo "rerun with --yes to execute, or --skip-mise for read-only checks"
+  exit 0
+fi
 
 printf '== repo ==\n'
 "$GIT_BIN" -C "$HOME_PATH" status --short --branch

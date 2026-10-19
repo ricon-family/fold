@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 #MISE description="Replace a local home with a fresh remote clone"
 #USAGE flag "-y --yes" default=#false help="Move existing local home aside and clone the remote"
-#USAGE flag "--home <path>" default="" help="Home repo path (default: ~/agents/<agent>/home)"
+#USAGE flag "--home <path>" default="" help="Target home repo (default: AGENT_HOME; required when unset)"
 #USAGE flag "--repo <repo>" default="" help="GitHub repo label OWNER/REPO; used to derive remote URL when --remote-url is omitted"
 #USAGE flag "--remote-url <url>" default="" help="Remote URL to clone; overrides --repo and is useful for local bare-repo tests"
 #USAGE flag "--branch <branch>" default="main" help="Remote branch to clone"
 #USAGE flag "--no-prepare" default=#false help="Skip mise trust/install and agent:prepare after clone"
 #USAGE arg "<agent>" help="Agent name"
-#USAGE example "mise run homes:adopt-remote iris --home ~/agents/iris/home --repo iris-ricon/home" header="Dry-run local adoption"
-#USAGE example "mise run homes:adopt-remote iris --home ~/agents/iris/home --repo iris-ricon/home --yes" header="Move old home aside and clone fresh remote"
+#USAGE example "mise run homes:adopt-remote iris --home /path/to/desk/home --repo iris-ricon/home" header="Dry-run local adoption"
+#USAGE example "mise run homes:adopt-remote iris --home /path/to/desk/home --repo iris-ricon/home --yes" header="Move old home aside and clone fresh remote"
 set -euo pipefail
 
 ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
@@ -16,7 +16,7 @@ ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
 source "$ROOT/.mise/lib/homes.sh"
 
 AGENT="${usage_agent:?agent required}"
-HOME_PATH=$(homes_resolve_home "$AGENT" "${usage_home:-}")
+HOME_PATH=$(homes_resolve_home "${usage_home:-}")
 REPO="${usage_repo:-}"
 REMOTE_URL=$(homes_resolve_remote_url "$REPO" "${usage_remote_url:-}")
 BRANCH="${usage_branch:-main}"
@@ -54,10 +54,6 @@ run_prepare() {
 validate_agent "$AGENT"
 validate_branch "$BRANCH"
 require_tool "$GIT_BIN" date
-if [ "$USE_AGENT_GITHUB_AUTH" = "true" ]; then
-  require_tool "$SECRETS_BIN"
-fi
-
 printf 'Homes adopt-remote\n\n'
 printf 'agent:  %s\n' "$AGENT"
 printf 'home:   %s\n' "$HOME_PATH"
@@ -65,7 +61,17 @@ printf 'remote: %s\n' "$(homes_redact_url "$REMOTE_URL")"
 printf 'branch: %s\n' "$BRANCH"
 printf 'mode:   %s\n\n' "$( [ "$YES" = "true" ] && echo mutate || echo dry-run )"
 
+if [ "$YES" != "true" ]; then
+  echo "dry-run: would move any existing clean home aside and clone the remote"
+  if [ "$NO_PREPARE" != "true" ]; then
+    echo "then trust/install its mise tools, run agent:prepare, and trust present modules"
+  fi
+  echo "rerun with --yes to mutate"
+  exit 0
+fi
+
 if [ "$USE_AGENT_GITHUB_AUTH" = "true" ]; then
+  require_tool "$SECRETS_BIN"
   if ! homes_agent_github_remote_branch_exists "$AGENT" "$REMOTE_URL" "$BRANCH"; then
     echo "ERROR: remote branch not found or inaccessible with $AGENT GitHub token: $BRANCH" >&2
     exit 1
@@ -82,12 +88,6 @@ fi
 
 if [ -d "$HOME_PATH/.git" ]; then
   homes_require_clean_worktree "$HOME_PATH"
-fi
-
-if [ "$YES" != "true" ]; then
-  echo "dry-run: would move any existing clean home aside and clone the remote"
-  echo "rerun with --yes to mutate"
-  exit 0
 fi
 
 backup=""

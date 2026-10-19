@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 #MISE description="Set up local auth/signing for an already-provisioned agent home"
 #USAGE flag "-y --yes" default=#false help="Import GPG material and write local git signing config"
-#USAGE flag "--agents-root <path>" default="" help="Agents workspace root (default: ~/agents)"
-#USAGE flag "--home <path>" default="" help="Home repo path (default: <agents-root>/<agent>/home)"
+#USAGE flag "--home <path>" default="" help="Target home repo (default: AGENT_HOME; required when unset)"
 #USAGE flag "--json" default=#false help="Emit machine-readable JSON"
 #USAGE arg "<agent>" help="Agent name"
 #USAGE example "mise run homes:auth:setup iris" header="Dry-run Iris local auth setup"
@@ -15,17 +14,10 @@ source "$ROOT/.mise/lib/homes.sh"
 
 AGENT="${usage_agent:?agent required}"
 YES="${usage_yes:-false}"
-HOME_PATH="${usage_home:-}"
-AGENTS_ROOT=$(homes_resolve_agents_root "${usage_agents_root:-}")
+HOME_PATH=$(homes_resolve_home "${usage_home:-}")
 JSON="${usage_json:-false}"
 
 validate_agent "$AGENT"
-require_tool "$GIT_BIN" "$GPG_BIN" "$SECRETS_BIN" "$GH_BIN" mktemp grep sed
-
-if [ -z "$HOME_PATH" ]; then
-  HOME_PATH="$AGENTS_ROOT/$AGENT/home"
-fi
-
 AGENT_DIR=$(homes_agent_dir_for_home "$HOME_PATH")
 GITCONFIG=$(homes_agent_gitconfig_path_for_dir "$AGENT_DIR")
 INCLUDE_KEY=$(homes_agent_include_key_for_dir "$AGENT" "$AGENT_DIR")
@@ -82,6 +74,69 @@ import_private_key() {
   fi
 }
 
+print_result() {
+  if [ "$JSON" = "true" ]; then
+    print_json
+  else
+    require_tool gum
+    printf 'Homes auth setup: %s\nhome: %s\n\n' "$AGENT" "$HOME_PATH"
+    printf 'mode: %s\n\n' "$MODE"
+    {
+      printf 'Action\tStatus\tDetail\n'
+      for ((i = 0; i < ${#ACTION_NAMES[@]}; i++)); do
+        case "${ACTION_STATUSES[$i]}" in
+          ok) signal="✓" ;;
+          warn) signal="⚠" ;;
+          plan) signal="→" ;;
+          *) signal="✗" ;;
+        esac
+        printf '%s\t%s %s\t%s\n' "${ACTION_NAMES[$i]}" "$signal" "${ACTION_STATUSES[$i]}" "${ACTION_DETAILS[$i]}"
+      done
+    } | gum table --print --separator $'\t' --border rounded
+    printf '\n'
+    if [ "$YES" = "true" ]; then
+      printf 'next: mise run homes:auth %s --home %s\n' "$AGENT" "$HOME_PATH"
+    else
+      printf 'dry-run: rerun with --yes to mutate local GPG and git config\n'
+    fi
+  fi
+}
+
+print_json() {
+  printf '{'
+  printf '"agent":'; homes_json_string "$AGENT"
+  printf ',"home":'; homes_json_string "$HOME_PATH"
+  printf ',"agent_dir":'; homes_json_string "$AGENT_DIR"
+  printf ',"gitconfig":'; homes_json_string "$GITCONFIG"
+  printf ',"mode":'; homes_json_string "$MODE"
+  printf ',"actions":['
+  local i
+  for ((i = 0; i < ${#ACTION_NAMES[@]}; i++)); do
+    [ "$i" -gt 0 ] && printf ','
+    printf '{"name":'; homes_json_string "${ACTION_NAMES[$i]}"
+    printf ',"status":'; homes_json_string "${ACTION_STATUSES[$i]}"
+    printf ',"detail":'; homes_json_string "${ACTION_DETAILS[$i]}"
+    printf '}'
+  done
+  printf ']}'
+  printf '\n'
+}
+
+if [ "$YES" != "true" ]; then
+  add_action "secrets" "plan" "would retrieve the selected persona's auth fields"
+  add_action "github token" "plan" "would validate GitHub identity"
+  add_action "gpg import" "plan" "would import existing private key if missing and set local trust"
+  add_action "gitconfig" "plan" "would write $GITCONFIG"
+  add_action "git includeIf" "plan" "would ensure $INCLUDE_KEY"
+  print_result
+  exit 0
+fi
+
+require_tool "$GIT_BIN" "$GPG_BIN" "$SECRETS_BIN" "$GH_BIN" mktemp grep sed
+if [ "$JSON" != "true" ]; then
+  printf 'Executing auth setup for home: %s\n' "$HOME_PATH"
+fi
+
 NAME=$(get_secret_required "git/name")
 EMAIL=$(get_secret_required "git/email")
 fingerprint=$(get_secret_required "git/signing-fingerprint")
@@ -100,108 +155,51 @@ if "$GPG_BIN" --list-secret-keys "$fingerprint" >/dev/null 2>&1; then
   key_present=true
 fi
 
-if [ "$YES" != "true" ]; then
-  if $key_present; then
-    add_action "gpg import" "ok" "secret key already present"
-  else
-    add_action "gpg import" "plan" "would import existing private key"
-  fi
-  add_action "gitconfig" "plan" "would write $GITCONFIG"
-  add_action "git includeIf" "plan" "would ensure $INCLUDE_KEY"
+if $key_present; then
+  add_action "gpg import" "ok" "secret key already present"
 else
-  if $key_present; then
-    add_action "gpg import" "ok" "secret key already present"
-  else
-    import_private_key "$private_key"
-    if ! "$GPG_BIN" --list-secret-keys "$fingerprint" >/dev/null 2>&1; then
-      echo "ERROR: imported GPG key but stored fingerprint is still unavailable" >&2
-      exit 1
-    fi
-    add_action "gpg import" "ok" "imported existing private key"
-  fi
-
-  if printf '5\ny\n' | "$GPG_BIN" --batch --command-fd 0 --expert --edit-key "$fingerprint" trust quit >/dev/null 2>&1; then
-    add_action "gpg trust" "ok" "set local trust for stored fingerprint"
-  else
-    add_action "gpg trust" "warn" "could not set local trust; signing may show untrusted"
-  fi
-
-  mkdir -p "$AGENT_DIR"
-  config_tmp=$(mktemp "$GITCONFIG.tmp.XXXXXX")
-  if "$GIT_BIN" config --file "$config_tmp" user.name "$NAME" &&
-    "$GIT_BIN" config --file "$config_tmp" user.email "$EMAIL" &&
-    "$GIT_BIN" config --file "$config_tmp" user.signingkey "$fingerprint" &&
-    "$GIT_BIN" config --file "$config_tmp" gpg.format openpgp &&
-    "$GIT_BIN" config --file "$config_tmp" commit.gpgsign true &&
-    "$GIT_BIN" config --file "$config_tmp" tag.gpgsign true &&
-    mv "$config_tmp" "$GITCONFIG"; then
-    add_action "gitconfig" "ok" "wrote $GITCONFIG"
-  else
-    rm -f "$config_tmp"
-    echo "ERROR: could not write Git signing config" >&2
+  import_private_key "$private_key"
+  if ! "$GPG_BIN" --list-secret-keys "$fingerprint" >/dev/null 2>&1; then
+    echo "ERROR: imported GPG key but stored fingerprint is still unavailable" >&2
     exit 1
   fi
-
-  include_values=""
-  if include_values=$("$GIT_BIN" config --global --get-all "$INCLUDE_KEY" 2>/dev/null); then
-    :
-  else
-    include_values=""
-  fi
-  if printf '%s\n' "$include_values" | grep -Fxq "$GITCONFIG"; then
-    add_action "git includeIf" "ok" "already configured"
-  else
-    "$GIT_BIN" config --global --add "$INCLUDE_KEY" "$GITCONFIG"
-    add_action "git includeIf" "ok" "added $INCLUDE_KEY"
-  fi
-
+  add_action "gpg import" "ok" "imported existing private key"
 fi
 
-print_json() {
-  printf '{'
-  printf '"agent":'; homes_json_string "$AGENT"
-  printf ',"home":'; homes_json_string "$HOME_PATH"
-  printf ',"agents_root":'; homes_json_string "$AGENTS_ROOT"
-  printf ',"agent_dir":'; homes_json_string "$AGENT_DIR"
-  printf ',"gitconfig":'; homes_json_string "$GITCONFIG"
-  printf ',"mode":'; homes_json_string "$MODE"
-  printf ',"actions":['
-  local i
-  for ((i = 0; i < ${#ACTION_NAMES[@]}; i++)); do
-    [ "$i" -gt 0 ] && printf ','
-    printf '{"name":'; homes_json_string "${ACTION_NAMES[$i]}"
-    printf ',"status":'; homes_json_string "${ACTION_STATUSES[$i]}"
-    printf ',"detail":'; homes_json_string "${ACTION_DETAILS[$i]}"
-    printf '}'
-  done
-  printf ']}'
-  printf '\n'
-}
-
-if [ "$JSON" = "true" ]; then
-  print_json
+if printf '5\ny\n' | "$GPG_BIN" --batch --command-fd 0 --expert --edit-key "$fingerprint" trust quit >/dev/null 2>&1; then
+  add_action "gpg trust" "ok" "set local trust for stored fingerprint"
 else
-  require_tool gum
-  printf 'Homes auth setup: %s\n\n' "$AGENT"
-  printf 'mode: %s\n\n' "$MODE"
-  {
-    printf 'Action\tStatus\tDetail\n'
-    for ((i = 0; i < ${#ACTION_NAMES[@]}; i++)); do
-      case "${ACTION_STATUSES[$i]}" in
-        ok) signal="✓" ;;
-        warn) signal="⚠" ;;
-        plan) signal="→" ;;
-        *) signal="✗" ;;
-      esac
-      printf '%s\t%s %s\t%s\n' "${ACTION_NAMES[$i]}" "$signal" "${ACTION_STATUSES[$i]}" "${ACTION_DETAILS[$i]}"
-    done
-  } | gum table --print --separator $'\t' --border rounded
-  printf '\n'
-  if [ "$YES" = "true" ]; then
-    printf 'next: mise run homes:auth %s --home %s\n' "$AGENT" "$HOME_PATH"
-  else
-    printf 'dry-run: rerun with --yes to mutate local GPG and git config\n'
-  fi
+  add_action "gpg trust" "warn" "could not set local trust; signing may show untrusted"
 fi
 
+mkdir -p "$AGENT_DIR"
+config_tmp=$(mktemp "$GITCONFIG.tmp.XXXXXX")
+if "$GIT_BIN" config --file "$config_tmp" user.name "$NAME" &&
+  "$GIT_BIN" config --file "$config_tmp" user.email "$EMAIL" &&
+  "$GIT_BIN" config --file "$config_tmp" user.signingkey "$fingerprint" &&
+  "$GIT_BIN" config --file "$config_tmp" gpg.format openpgp &&
+  "$GIT_BIN" config --file "$config_tmp" commit.gpgsign true &&
+  "$GIT_BIN" config --file "$config_tmp" tag.gpgsign true &&
+  mv "$config_tmp" "$GITCONFIG"; then
+  add_action "gitconfig" "ok" "wrote $GITCONFIG"
+else
+  rm -f "$config_tmp"
+  echo "ERROR: could not write Git signing config" >&2
+  exit 1
+fi
+
+include_values=""
+if include_values=$("$GIT_BIN" config --global --get-all "$INCLUDE_KEY" 2>/dev/null); then
+  :
+else
+  include_values=""
+fi
+if printf '%s\n' "$include_values" | grep -Fxq "$GITCONFIG"; then
+  add_action "git includeIf" "ok" "already configured"
+else
+  "$GIT_BIN" config --global --add "$INCLUDE_KEY" "$GITCONFIG"
+  add_action "git includeIf" "ok" "added $INCLUDE_KEY"
+fi
+
+print_result
 unset private_key github_pat

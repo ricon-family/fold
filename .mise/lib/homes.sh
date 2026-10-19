@@ -17,31 +17,16 @@ MODULES_BIN="${MODULES:-modules}"
 MISE_BIN="${MISE:-mise}"
 export GIT_BIN GPG_BIN NOTES_BIN MODULES_BIN MISE_BIN
 
-homes_default_home() {
-  local agent="$1"
-  printf '%s/agents/%s/home\n' "$HOME" "$agent"
-}
-
 homes_resolve_home() {
-  local agent="$1" home_path="$2"
-  if [ -n "$home_path" ]; then
-    printf '%s\n' "$home_path"
-  else
-    homes_default_home "$agent"
+  local home_path="${1:-${AGENT_HOME:-}}"
+  if [ -z "$home_path" ]; then
+    echo "ERROR: provide --home or set AGENT_HOME" >&2
+    return 1
   fi
-}
-
-homes_default_agents_root() {
-  printf '%s/agents\n' "$HOME"
-}
-
-homes_resolve_agents_root() {
-  local agents_root="$1"
-  if [ -n "$agents_root" ]; then
-    printf '%s\n' "$agents_root"
-  else
-    homes_default_agents_root
-  fi
+  case "$home_path" in
+    /*) printf '%s\n' "$home_path" ;;
+    *) printf '%s/%s\n' "$PWD" "$home_path" ;;
+  esac
 }
 
 homes_agent_dir() {

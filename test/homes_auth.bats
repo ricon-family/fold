@@ -10,6 +10,7 @@ setup() {
   FAKE_GH_LOG="$BATS_TEST_TMPDIR/gh.log"
   mkdir -p "$TMPBIN" "$AGENTS_ROOT"
   export TMPBIN AGENTS_ROOT FAKE_GPG_STATE FAKE_GH_LOG
+  export AGENT_HOME="$AGENTS_ROOT/test-agent/home"
   export GIT_CONFIG_GLOBAL="$BATS_TEST_TMPDIR/global.gitconfig"
   : > "$GIT_CONFIG_GLOBAL"
   write_homes_auth_mocks
@@ -242,7 +243,7 @@ configure_auth_prerequisites() {
 @test "homes:auth reports ready when local auth is configured" {
   configure_ready_auth
 
-  run fold_task homes:auth test-agent --agents-root "$AGENTS_ROOT"
+  run fold_task homes:auth test-agent
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"Homes auth: test-agent"* ]]
@@ -258,7 +259,7 @@ configure_auth_prerequisites() {
 }
 
 @test "homes:auth --json reports missing local setup without leaking token" {
-  run fold_task homes:auth test-agent --agents-root "$AGENTS_ROOT" --json
+  run fold_task homes:auth test-agent --json
 
   [ "$status" -eq 0 ]
   [[ "$output" == *'"agent":"test-agent"'* ]]
@@ -277,7 +278,7 @@ configure_auth_prerequisites() {
 }
 
 @test "homes:auth --json --check exits nonzero with clean JSON" {
-  run fold_task_stdout_only homes:auth test-agent --agents-root "$AGENTS_ROOT" --json --check
+  run fold_task_stdout_only homes:auth test-agent --json --check
 
   [ "$status" -eq 1 ]
   assert_json_output
@@ -290,7 +291,7 @@ configure_auth_prerequisites() {
 }
 
 @test "homes:auth --check exits nonzero when auth is not ready" {
-  run fold_task homes:auth test-agent --agents-root "$AGENTS_ROOT" --check
+  run fold_task homes:auth test-agent --check
 
   [ "$status" -eq 1 ]
   [[ "$output" == *"# Next"* ]]
@@ -299,12 +300,18 @@ configure_auth_prerequisites() {
 }
 
 
-@test "homes:auth:setup dry-run does not import or write local config" {
-  run fold_task homes:auth:setup test-agent --agents-root "$AGENTS_ROOT"
+@test "homes:auth:setup previews AGENT_HOME without secrets, network, GPG, or config writes" {
+  export FAKE_SECRET_LOG="$BATS_TEST_TMPDIR/secrets.log"
+  export FAKE_GPG_LOG="$BATS_TEST_TMPDIR/gpg.log"
+  run fold_task homes:auth:setup test-agent
 
   [ "$status" -eq 0 ]
+  [[ "$output" == *"home: $AGENT_HOME"* ]]
   [[ "$output" == *"mode: dry-run"* ]]
   [[ "$output" == *"would import existing private key"* ]]
+  [ ! -e "$FAKE_SECRET_LOG" ]
+  [ ! -e "$FAKE_GPG_LOG" ]
+  [ ! -e "$FAKE_GH_LOG" ]
   [[ "$output" == *"dry-run: rerun with --yes"* ]]
   [ ! -f "$FAKE_GPG_STATE" ]
   [ ! -f "$AGENTS_ROOT/test-agent/.gitconfig" ]
@@ -313,13 +320,28 @@ configure_auth_prerequisites() {
   [[ "$output" != *"PGP FIXTURE KEY"* ]]
 }
 
-@test "homes:auth:setup dry-run does not leak private key data when parse fails" {
+@test "homes:auth:setup emits a JSON plan for an explicit home without accessing auth" {
+  target="$BATS_TEST_TMPDIR/selected desk/home"
+  export SECRETS=/usr/bin/false GPG=/usr/bin/false GH=/usr/bin/false
+
+  run fold_task homes:auth:setup test-agent --home "$target" --json
+
+  [ "$status" -eq 0 ]
+  assert_json_output
+  printf '%s' "$output" | jq -e --arg home "$target" \
+    '.home == $home and .mode == "dry-run" and all(.actions[]; .status == "plan")'
+  [ ! -e "$target" ]
+  [ ! -s "$GIT_CONFIG_GLOBAL" ]
+  [ ! -e "$FAKE_GH_LOG" ]
+}
+
+@test "homes:auth:setup --yes does not leak private key data when parse fails" {
   parse_tmp="$BATS_TEST_TMPDIR/parse-tmp"
   mkdir -p "$parse_tmp"
   export TMPDIR="$parse_tmp"
   export FAKE_GPG_DRY_RUN_FAIL=true
 
-  run fold_task homes:auth:setup test-agent --agents-root "$AGENTS_ROOT"
+  run fold_task homes:auth:setup test-agent --yes
 
   [ "$status" -eq 1 ]
   [ -z "$(find "$parse_tmp" -type f -print -quit)" ]
@@ -331,7 +353,7 @@ configure_auth_prerequisites() {
 @test "homes:auth:setup --yes validates GitHub before mutating local auth" {
   export FAKE_GH_LOGIN="wrong-agent"
 
-  run fold_task homes:auth:setup test-agent --agents-root "$AGENTS_ROOT" --yes
+  run fold_task homes:auth:setup test-agent --yes
 
   [ "$status" -eq 1 ]
   [ ! -f "$FAKE_GPG_STATE" ]
@@ -348,7 +370,7 @@ configure_auth_prerequisites() {
   export TMPDIR="$import_tmp"
   export FAKE_GPG_IMPORT_FAIL=true
 
-  run fold_task homes:auth:setup test-agent --agents-root "$AGENTS_ROOT" --yes
+  run fold_task homes:auth:setup test-agent --yes
 
   [ "$status" -eq 1 ]
   [ ! -f "$FAKE_GPG_STATE" ]
@@ -359,7 +381,7 @@ configure_auth_prerequisites() {
 }
 
 @test "homes:auth:setup --yes imports key, writes gitconfig, and configures includeIf" {
-  run fold_task homes:auth:setup test-agent --agents-root "$AGENTS_ROOT" --yes
+  run fold_task homes:auth:setup test-agent --yes
 
   [ "$status" -eq 0 ]
   [ -f "$FAKE_GPG_STATE" ]
@@ -376,7 +398,7 @@ configure_auth_prerequisites() {
   [[ "$output" != *"fixture-github-token"* ]]
   [[ "$output" != *"PGP FIXTURE KEY"* ]]
 
-  run fold_task homes:auth test-agent --agents-root "$AGENTS_ROOT" --json
+  run fold_task homes:auth test-agent --json
   [ "$status" -eq 0 ]
   [[ "$output" == *'"ready":true'* ]]
   [[ "$output" == *"valid as test-agent-ricon; expires in"* ]]
@@ -388,7 +410,7 @@ configure_auth_prerequisites() {
   git config --file "$config" user.name test-agent
   git config --file "$config" user.email test-agent@ricon.family
 
-  run fold_task_stdout_only homes:auth test-agent --agents-root "$AGENTS_ROOT" --json --check
+  run fold_task_stdout_only homes:auth test-agent --json --check
 
   [ "$status" -eq 1 ]
   assert_json_output
@@ -399,7 +421,7 @@ configure_auth_prerequisites() {
   configure_ready_auth
   export FAKE_MISSING_GIT_FIELD=test-agent/git/email
 
-  run fold_task_stdout_only homes:auth test-agent --agents-root "$AGENTS_ROOT" --json --check
+  run fold_task_stdout_only homes:auth test-agent --json --check
 
   [ "$status" -eq 1 ]
   assert_json_output
@@ -409,7 +431,7 @@ configure_auth_prerequisites() {
 @test "homes:auth:setup refuses missing Git identity before any local mutation" {
   export FAKE_MISSING_GIT_FIELD=test-agent/git/name
 
-  run fold_task homes:auth:setup test-agent --agents-root "$AGENTS_ROOT" --yes
+  run fold_task homes:auth:setup test-agent --yes
 
   [ "$status" -eq 1 ]
   [[ "$output" == *'missing test-agent/git/name'* ]]
@@ -421,7 +443,7 @@ configure_auth_prerequisites() {
 @test "homes:auth:setup refuses empty Git email before any local mutation" {
   export FAKE_GIT_EMAIL=''
 
-  run fold_task homes:auth:setup test-agent --agents-root "$AGENTS_ROOT" --yes
+  run fold_task homes:auth:setup test-agent --yes
 
   [ "$status" -eq 1 ]
   [[ "$output" == *'test-agent/git/email is empty'* ]]
@@ -433,12 +455,12 @@ configure_auth_prerequisites() {
 @test "homes:auth:setup preserves configured name punctuation through Git config serialization" {
   export FAKE_GIT_NAME='A "Quoted" \\ Name # team'
 
-  run fold_task homes:auth:setup test-agent --agents-root "$AGENTS_ROOT" --yes
+  run fold_task homes:auth:setup test-agent --yes
 
   [ "$status" -eq 0 ]
   [ "$(git config --file "$AGENTS_ROOT/test-agent/.gitconfig" user.name)" = "$FAKE_GIT_NAME" ]
 
-  run fold_task homes:auth test-agent --agents-root "$AGENTS_ROOT" --json --check
+  run fold_task homes:auth test-agent --json --check
 
   [ "$status" -eq 0 ]
   assert_json_output
@@ -450,7 +472,6 @@ configure_auth_prerequisites() {
   custom_home="$custom_agent_dir/home"
 
   run fold_task homes:auth:setup test-agent \
-    --agents-root "$AGENTS_ROOT" \
     --home "$custom_home" \
     --yes
 
@@ -462,7 +483,6 @@ configure_auth_prerequisites() {
   git config --global --get-all "includeIf.gitdir:$custom_agent_dir/.path" | grep -Fx "$custom_agent_dir/.gitconfig"
 
   run fold_task homes:auth test-agent \
-    --agents-root "$AGENTS_ROOT" \
     --home "$custom_home" \
     --json
   [ "$status" -eq 0 ]
