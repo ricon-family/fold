@@ -140,22 +140,6 @@ SH
 }
 
 configure_ready_auth() {
-  mkdir -p "$AGENTS_ROOT/test-agent"
-  cat > "$AGENTS_ROOT/test-agent/.gitconfig" <<'GITCONFIG'
-[user]
-	name = Persona Author
-	email = commits@example.test
-	signingkey = ABCDEF1234567890ABCDEF1234567890ABCDEF12
-[commit]
-	gpgsign = true
-[tag]
-	gpgsign = true
-GITCONFIG
-  touch "$FAKE_GPG_STATE"
-  git config --global --add "includeIf.gitdir:$AGENTS_ROOT/test-agent/.path" "$AGENTS_ROOT/test-agent/.gitconfig"
-}
-
-configure_auth_prerequisites() {
   unset GIT_CONFIG_COUNT GIT_CONFIG_PARAMETERS GIT_CONFIG
   git config --global user.name 'Persona Author'
   git config --global user.email commits@example.test
@@ -168,12 +152,12 @@ configure_auth_prerequisites() {
   export FAKE_GPG_LOG="$BATS_TEST_TMPDIR/gpg-requests"
 }
 
-@test "homes:auth prerequisites accept account defaults without retrieving private key material or changing auth" {
-  configure_auth_prerequisites
+@test "homes:auth accepts account defaults without retrieving private key material or changing auth" {
+  configure_ready_auth
   export FAKE_MISSING_GIT_FIELD=test-agent/gpg-private-key
   cp "$GIT_CONFIG_GLOBAL" "$BATS_TEST_TMPDIR/before.gitconfig"
 
-  run fold_task_stdout_only homes:auth test-agent --home "$AGENTS_ROOT/new/home" --prerequisites --json --check
+  run fold_task_stdout_only homes:auth test-agent --home "$AGENTS_ROOT/new/home" --json --check
 
   [ "$status" -eq 0 ]
   assert_json_output
@@ -186,12 +170,12 @@ configure_auth_prerequisites() {
   [[ "$output" != *'fixture-github-token'* ]]
 }
 
-@test "homes:auth prerequisites refuse a missing local signer without importing or trusting it" {
-  configure_auth_prerequisites
+@test "homes:auth refuses a missing local signer without importing or trusting it" {
+  configure_ready_auth
   rm "$FAKE_GPG_STATE"
   cp "$GIT_CONFIG_GLOBAL" "$BATS_TEST_TMPDIR/before.gitconfig"
 
-  run fold_task_stdout_only homes:auth test-agent --prerequisites --json --check
+  run fold_task_stdout_only homes:auth test-agent --json --check
 
   [ "$status" -eq 1 ]
   assert_json_output
@@ -203,14 +187,14 @@ configure_auth_prerequisites() {
   cmp -s "$GIT_CONFIG_GLOBAL" "$BATS_TEST_TMPDIR/before.gitconfig"
 }
 
-@test "homes:auth prerequisites require every persona Git setting" {
-  configure_auth_prerequisites
+@test "homes:auth requires every persona Git setting" {
+  configure_ready_auth
 
   for key in user.name user.email user.signingkey gpg.format commit.gpgsign tag.gpgsign; do
     expected=$(git config --global --get "$key")
     git config --global "$key" wrong-value
 
-    run fold_task_stdout_only homes:auth test-agent --prerequisites --json --check
+    run fold_task_stdout_only homes:auth test-agent --json --check
 
     [ "$status" -eq 1 ]
     [[ "$output" == *"\"name\":\"Git $key\",\"status\":\"fail\""* ]]
@@ -219,25 +203,18 @@ configure_auth_prerequisites() {
   done
 }
 
-@test "homes:auth prerequisites inspect the existing target home's effective Git settings" {
-  configure_auth_prerequisites
+@test "homes:auth inspects the existing target home's effective Git settings" {
+  configure_ready_auth
   home="$AGENTS_ROOT/new/home"
   mkdir -p "$home"
   git init -q "$home"
   git -C "$home" config user.name Other
 
-  run fold_task_stdout_only homes:auth test-agent --home "$home" --prerequisites --json --check
+  run fold_task_stdout_only homes:auth test-agent --home "$home" --json --check
 
   [ "$status" -eq 1 ]
   [[ "$output" == *'"name":"Git user.name","status":"fail"'* ]]
   [ "$(git -C "$home" config user.name)" = Other ]
-}
-
-@test "homes includeIf helper preserves the existing default tilde key" {
-  run bash -c 'source "$1"; homes_agent_include_key test-agent "$HOME/agents"' _ "$REPO_DIR/.mise/lib/homes.sh"
-
-  [ "$status" -eq 0 ]
-  [ "$output" = "includeIf.gitdir:~/agents/test-agent/.path" ]
 }
 
 @test "homes:auth reports ready when local auth is configured" {
@@ -250,7 +227,7 @@ configure_auth_prerequisites() {
   [[ "$output" == *"# Secrets"* ]]
   [[ "$output" == *"# Signing"* ]]
   [[ "$output" == *"# GitHub"* ]]
-  [[ "$output" == *"Git config"*"ok"* ]]
+  [[ "$output" == *"Git user.name"*"ok"* ]]
   [[ "$output" == *"GitHub token"*"valid as test-agent-ricon"* ]]
   [[ "$output" == *"expires in"* ]]
   [[ "$output" == *"# Next"* ]]
@@ -268,9 +245,9 @@ configure_auth_prerequisites() {
   [[ "$output" == *'"name":"Signing"'* ]]
   [[ "$output" == *'"name":"GitHub"'* ]]
   assert_json_output
-  [[ "$output" == *'"name":"Git config","status":"fail"'* ]]
+  [[ "$output" == *'"name":"Git user.name","status":"fail"'* ]]
   [[ "$output" == *"valid as test-agent-ricon; expires in"* ]]
-  [[ "$output" == *"homes:auth:setup test-agent"* ]]
+  [[ "$output" == *"Activate the selected persona"* ]]
   [[ "$output" != *"Homes auth:"* ]]
   [[ "$output" != *"# Secrets"* ]]
   [[ "$output" != *"Checking:"* ]]
@@ -283,7 +260,7 @@ configure_auth_prerequisites() {
   [ "$status" -eq 1 ]
   assert_json_output
   [[ "$output" == *'"ready":false'* ]]
-  [[ "$output" == *"homes:auth:setup test-agent"* ]]
+  [[ "$output" == *"Activate the selected persona"* ]]
   [[ "$output" != *"Homes auth:"* ]]
   [[ "$output" != *"# Secrets"* ]]
   [[ "$output" != *"Checking:"* ]]
@@ -295,7 +272,7 @@ configure_auth_prerequisites() {
 
   [ "$status" -eq 1 ]
   [[ "$output" == *"# Next"* ]]
-  [[ "$output" == *"homes:auth:setup test-agent"* ]]
+  [[ "$output" == *"Activate the selected persona"* ]]
   [[ "$output" != *"fixture-github-token"* ]]
 }
 
@@ -380,41 +357,32 @@ configure_auth_prerequisites() {
   [[ "$output" != *"PGP FIXTURE KEY"* ]]
 }
 
-@test "homes:auth:setup --yes imports key, writes gitconfig, and configures includeIf" {
+@test "homes:auth:setup --yes prepares the key without creating a home or changing Git config" {
+  printf '# existing account settings\n' > "$GIT_CONFIG_GLOBAL"
+  cp "$GIT_CONFIG_GLOBAL" "$BATS_TEST_TMPDIR/before.gitconfig"
+
   run fold_task homes:auth:setup test-agent --yes
 
   [ "$status" -eq 0 ]
   [ -f "$FAKE_GPG_STATE" ]
-  [ -f "$AGENTS_ROOT/test-agent/.gitconfig" ]
-  [ "$(git config --file "$AGENTS_ROOT/test-agent/.gitconfig" user.name)" = "Persona Author" ]
-  [ "$(git config --file "$AGENTS_ROOT/test-agent/.gitconfig" user.email)" = "commits@example.test" ]
-  [ "$(git config --file "$AGENTS_ROOT/test-agent/.gitconfig" user.signingkey)" = "ABCDEF1234567890ABCDEF1234567890ABCDEF12" ]
-  [ "$(git config --file "$AGENTS_ROOT/test-agent/.gitconfig" commit.gpgsign)" = "true" ]
-  [ "$(git config --file "$AGENTS_ROOT/test-agent/.gitconfig" gpg.format)" = openpgp ]
   grep -Fx 'ABCDEF1234567890ABCDEF1234567890ABCDEF12' "$FAKE_GPG_STATE.trust"
-  ! grep -Fx 'commits@example.test' "$FAKE_GPG_STATE.trust"
-  git config --global --get-all "includeIf.gitdir:$AGENTS_ROOT/test-agent/.path" | grep -Fx "$AGENTS_ROOT/test-agent/.gitconfig"
+  [ ! -e "$AGENTS_ROOT/test-agent" ]
+  cmp -s "$GIT_CONFIG_GLOBAL" "$BATS_TEST_TMPDIR/before.gitconfig"
   [[ "$output" == *"github token"*"valid as test-agent-ricon"* ]]
   [[ "$output" != *"fixture-github-token"* ]]
   [[ "$output" != *"PGP FIXTURE KEY"* ]]
-
-  run fold_task homes:auth test-agent --json
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'"ready":true'* ]]
-  [[ "$output" == *"valid as test-agent-ricon; expires in"* ]]
 }
 
 @test "homes:auth rejects handle-derived identity when configured persona differs" {
   configure_ready_auth
-  config="$AGENTS_ROOT/test-agent/.gitconfig"
-  git config --file "$config" user.name test-agent
-  git config --file "$config" user.email test-agent@ricon.family
+  git config --global user.name test-agent
+  git config --global user.email test-agent@ricon.family
 
   run fold_task_stdout_only homes:auth test-agent --json --check
 
   [ "$status" -eq 1 ]
   assert_json_output
-  [[ "$output" == *'"name":"Git config","status":"fail"'* ]]
+  [[ "$output" == *'"name":"Git user.name","status":"fail"'* ]]
 }
 
 @test "homes:auth refuses readiness when configured Git email is unavailable" {
@@ -428,65 +396,52 @@ configure_auth_prerequisites() {
   [[ "$output" == *'missing or empty configured Git identity'* ]]
 }
 
-@test "homes:auth:setup refuses missing Git identity before any local mutation" {
-  export FAKE_MISSING_GIT_FIELD=test-agent/git/name
+@test "homes:auth:setup refuses a missing signer before any local mutation" {
+  export FAKE_MISSING_GIT_FIELD=test-agent/git/signing-fingerprint
 
   run fold_task homes:auth:setup test-agent --yes
 
   [ "$status" -eq 1 ]
-  [[ "$output" == *'missing test-agent/git/name'* ]]
+  [[ "$output" == *'missing test-agent/git/signing-fingerprint'* ]]
   [ ! -f "$FAKE_GPG_STATE" ]
   [ ! -f "$AGENTS_ROOT/test-agent/.gitconfig" ]
   [ ! -s "$GIT_CONFIG_GLOBAL" ]
 }
 
-@test "homes:auth:setup refuses empty Git email before any local mutation" {
-  export FAKE_GIT_EMAIL=''
-
-  run fold_task homes:auth:setup test-agent --yes
-
-  [ "$status" -eq 1 ]
-  [[ "$output" == *'test-agent/git/email is empty'* ]]
-  [ ! -f "$FAKE_GPG_STATE" ]
-  [ ! -f "$AGENTS_ROOT/test-agent/.gitconfig" ]
-  [ ! -s "$GIT_CONFIG_GLOBAL" ]
-}
-
-@test "homes:auth:setup preserves configured name punctuation through Git config serialization" {
+@test "homes:auth accepts process-scoped identity over different account defaults" {
+  configure_ready_auth
+  git config --global user.name 'Account Owner'
+  git config --global user.email owner@example.test
   export FAKE_GIT_NAME='A "Quoted" \\ Name # team'
+  export GIT_CONFIG_COUNT=2
+  export GIT_CONFIG_KEY_0=user.name GIT_CONFIG_VALUE_0="$FAKE_GIT_NAME"
+  export GIT_CONFIG_KEY_1=user.email GIT_CONFIG_VALUE_1=commits@example.test
+  cp "$GIT_CONFIG_GLOBAL" "$BATS_TEST_TMPDIR/before.gitconfig"
 
-  run fold_task homes:auth:setup test-agent --yes
-
-  [ "$status" -eq 0 ]
-  [ "$(git config --file "$AGENTS_ROOT/test-agent/.gitconfig" user.name)" = "$FAKE_GIT_NAME" ]
-
-  run fold_task homes:auth test-agent --json --check
+  run fold_task_stdout_only homes:auth test-agent --json --check
 
   [ "$status" -eq 0 ]
   assert_json_output
   [[ "$output" == *'"ready":true'* ]]
+  cmp -s "$GIT_CONFIG_GLOBAL" "$BATS_TEST_TMPDIR/before.gitconfig"
 }
 
-@test "homes:auth:setup --home targets the supplied home parent" {
-  custom_agent_dir="$BATS_TEST_TMPDIR/custom-workspace/test-agent"
-  custom_home="$custom_agent_dir/home"
+@test "homes:auth:setup preserves existing workspace configs and conditional includes" {
+  custom_dir="$BATS_TEST_TMPDIR/selected desk"
+  custom_home="$custom_dir/home"
+  mkdir -p "$custom_dir"
+  printf '# existing workspace settings\n' > "$custom_dir/.gitconfig"
+  git config --global --add "includeIf.gitdir:$custom_dir/.path" "$custom_dir/.gitconfig"
+  cp "$custom_dir/.gitconfig" "$BATS_TEST_TMPDIR/before.workspace"
+  cp "$GIT_CONFIG_GLOBAL" "$BATS_TEST_TMPDIR/before.gitconfig"
 
-  run fold_task homes:auth:setup test-agent \
-    --home "$custom_home" \
-    --yes
+  run fold_task homes:auth:setup test-agent --home "$custom_home" --yes --json
 
   [ "$status" -eq 0 ]
+  assert_json_output
+  printf '%s' "$output" | jq -e --arg home "$custom_home" '.home == $home'
   [ -f "$FAKE_GPG_STATE" ]
-  [ -f "$custom_agent_dir/.gitconfig" ]
-  [ ! -f "$AGENTS_ROOT/test-agent/.gitconfig" ]
-  [ "$(git config --file "$custom_agent_dir/.gitconfig" user.name)" = "Persona Author" ]
-  git config --global --get-all "includeIf.gitdir:$custom_agent_dir/.path" | grep -Fx "$custom_agent_dir/.gitconfig"
-
-  run fold_task homes:auth test-agent \
-    --home "$custom_home" \
-    --json
-  [ "$status" -eq 0 ]
-  [[ "$output" == *'"ready":true'* ]]
-  [[ "$output" == *"$custom_agent_dir/.gitconfig"* ]]
-  [[ "$output" != *"$AGENTS_ROOT/test-agent/.gitconfig"* ]]
+  [ ! -e "$custom_home" ]
+  cmp -s "$custom_dir/.gitconfig" "$BATS_TEST_TMPDIR/before.workspace"
+  cmp -s "$GIT_CONFIG_GLOBAL" "$BATS_TEST_TMPDIR/before.gitconfig"
 }

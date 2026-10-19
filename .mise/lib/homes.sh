@@ -29,40 +29,6 @@ homes_resolve_home() {
   esac
 }
 
-homes_agent_dir() {
-  local agent="$1" agents_root="$2"
-  printf '%s/%s\n' "$agents_root" "$agent"
-}
-
-homes_agent_dir_for_home() {
-  local home_path="$1"
-  dirname "$home_path"
-}
-
-homes_agent_gitconfig_path_for_dir() {
-  local agent_dir="$1"
-  printf '%s/.gitconfig\n' "$agent_dir"
-}
-
-homes_agent_gitconfig_path() {
-  local agent="$1" agents_root="$2"
-  homes_agent_gitconfig_path_for_dir "$(homes_agent_dir "$agent" "$agents_root")"
-}
-
-homes_agent_include_key_for_dir() {
-  local agent="$1" agent_dir="$2"
-  if [ "$agent_dir" = "$HOME/agents/$agent" ]; then
-    printf 'includeIf.gitdir:~/agents/%s/.path\n' "$agent"
-    return 0
-  fi
-  printf 'includeIf.gitdir:%s/.path\n' "$agent_dir"
-}
-
-homes_agent_include_key() {
-  local agent="$1" agents_root="$2"
-  homes_agent_include_key_for_dir "$agent" "$(homes_agent_dir "$agent" "$agents_root")"
-}
-
 homes_infer_agent_from_home() {
   local home_path="$1" base parent
   [ -n "$home_path" ] || return 1
