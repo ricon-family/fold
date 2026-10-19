@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #MISE description="Show local auth/signing readiness for an agent home"
-#USAGE flag "--agents-root <path>" default="" help="Agents workspace root (default: ~/agents)"
-#USAGE flag "--home <path>" default="" help="Home repo path (default: <agents-root>/<agent>/home)"
+#USAGE flag "--agents-root <path>" default="" help="Legacy compatibility flag; no longer selects a home"
+#USAGE flag "--home <path>" default="" help="Target home repo (default: AGENT_HOME; required when unset)"
 #USAGE flag "--json" default=#false help="Emit machine-readable JSON"
 #USAGE flag "--check" default=#false help="Exit nonzero when local auth is not ready"
 #USAGE flag "--prerequisites" default=#false help="Check effective Git config and existing credentials without requiring workspace auth setup"
@@ -15,16 +15,12 @@ source "$ROOT/.mise/lib/homes.sh"
 source "$ROOT/.mise/lib/homes_render.sh"
 
 AGENT="${usage_agent:-iris}"
-HOME_PATH="${usage_home:-}"
-AGENTS_ROOT=$(homes_resolve_agents_root "${usage_agents_root:-}")
+HOME_PATH=$(homes_resolve_home "${usage_home:-}")
 JSON="${usage_json:-false}"
 CHECK="${usage_check:-false}"
 PREREQUISITES="${usage_prerequisites:-false}"
 validate_agent "$AGENT"
 
-if [ -z "$HOME_PATH" ]; then
-  HOME_PATH="$AGENTS_ROOT/$AGENT/home"
-fi
 AGENT_DIR=$(homes_agent_dir_for_home "$HOME_PATH")
 GITCONFIG=$(homes_agent_gitconfig_path_for_dir "$AGENT_DIR")
 INCLUDE_KEY=$(homes_agent_include_key_for_dir "$AGENT" "$AGENT_DIR")
@@ -312,7 +308,7 @@ print_json() {
 }
 
 if [ "$TEXT_MODE" = "true" ]; then
-  printf 'Homes auth: %s\n\n' "$AGENT"
+  printf 'Homes auth: %s\nhome: %s\n\n' "$AGENT" "$HOME_PATH"
 fi
 
 run_phase "Secrets" "Checking: secrets" check_secrets

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #MISE description="Commit local agent home bootstrap state"
 #USAGE flag "-y --yes" default=#false help="Stage and commit local home changes"
-#USAGE flag "--home <path>" default="" help="Home repo path (default: ~/agents/<agent>/home)"
+#USAGE flag "--home <path>" default="" help="Target home repo (default: AGENT_HOME; required when unset)"
 #USAGE flag "--message <message>" default="" help="Commit message (default: bootstrap <agent> home)"
 #USAGE flag "--no-gpg-sign" default=#false help="Do not GPG-sign the commit (intended for tests or emergency recovery)"
 #USAGE arg "<agent>" help="Agent name"
-#USAGE example "mise run homes:commit-local iris --home ~/agents/iris/home" header="Dry-run local home commit"
-#USAGE example "mise run homes:commit-local iris --home ~/agents/iris/home --yes" header="Stage and commit local home state"
+#USAGE example "mise run homes:commit-local iris --home /path/to/desk/home" header="Dry-run local home commit"
+#USAGE example "mise run homes:commit-local iris --home /path/to/desk/home --yes" header="Stage and commit local home state"
 set -euo pipefail
 
 ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
@@ -14,7 +14,7 @@ ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
 source "$ROOT/.mise/lib/homes.sh"
 
 AGENT="${usage_agent:?agent required}"
-HOME_PATH=$(homes_resolve_home "$AGENT" "${usage_home:-}")
+HOME_PATH=$(homes_resolve_home "${usage_home:-}")
 YES="${usage_yes:-false}"
 MESSAGE="${usage_message:-}"
 NO_GPG_SIGN="${usage_no_gpg_sign:-false}"

@@ -10,6 +10,7 @@ setup() {
   FAKE_GH_LOG="$BATS_TEST_TMPDIR/gh.log"
   mkdir -p "$TMPBIN" "$AGENTS_ROOT"
   export TMPBIN AGENTS_ROOT FAKE_GPG_STATE FAKE_GH_LOG
+  export AGENT_HOME="$AGENTS_ROOT/test-agent/home"
   export GIT_CONFIG_GLOBAL="$BATS_TEST_TMPDIR/global.gitconfig"
   : > "$GIT_CONFIG_GLOBAL"
   write_homes_auth_mocks
@@ -299,12 +300,18 @@ configure_auth_prerequisites() {
 }
 
 
-@test "homes:auth:setup dry-run does not import or write local config" {
+@test "homes:auth:setup previews AGENT_HOME without secrets, network, GPG, or config writes" {
+  export FAKE_SECRET_LOG="$BATS_TEST_TMPDIR/secrets.log"
+  export FAKE_GPG_LOG="$BATS_TEST_TMPDIR/gpg.log"
   run fold_task homes:auth:setup test-agent --agents-root "$AGENTS_ROOT"
 
   [ "$status" -eq 0 ]
+  [[ "$output" == *"home: $AGENT_HOME"* ]]
   [[ "$output" == *"mode: dry-run"* ]]
   [[ "$output" == *"would import existing private key"* ]]
+  [ ! -e "$FAKE_SECRET_LOG" ]
+  [ ! -e "$FAKE_GPG_LOG" ]
+  [ ! -e "$FAKE_GH_LOG" ]
   [[ "$output" == *"dry-run: rerun with --yes"* ]]
   [ ! -f "$FAKE_GPG_STATE" ]
   [ ! -f "$AGENTS_ROOT/test-agent/.gitconfig" ]
@@ -313,13 +320,28 @@ configure_auth_prerequisites() {
   [[ "$output" != *"PGP FIXTURE KEY"* ]]
 }
 
-@test "homes:auth:setup dry-run does not leak private key data when parse fails" {
+@test "homes:auth:setup emits a JSON plan for an explicit home without accessing auth" {
+  target="$BATS_TEST_TMPDIR/selected desk/home"
+  export SECRETS=/usr/bin/false GPG=/usr/bin/false GH=/usr/bin/false
+
+  run fold_task homes:auth:setup test-agent --home "$target" --json
+
+  [ "$status" -eq 0 ]
+  assert_json_output
+  printf '%s' "$output" | jq -e --arg home "$target" \
+    '.home == $home and .mode == "dry-run" and all(.actions[]; .status == "plan")'
+  [ ! -e "$target" ]
+  [ ! -s "$GIT_CONFIG_GLOBAL" ]
+  [ ! -e "$FAKE_GH_LOG" ]
+}
+
+@test "homes:auth:setup --yes does not leak private key data when parse fails" {
   parse_tmp="$BATS_TEST_TMPDIR/parse-tmp"
   mkdir -p "$parse_tmp"
   export TMPDIR="$parse_tmp"
   export FAKE_GPG_DRY_RUN_FAIL=true
 
-  run fold_task homes:auth:setup test-agent --agents-root "$AGENTS_ROOT"
+  run fold_task homes:auth:setup test-agent --agents-root "$AGENTS_ROOT" --yes
 
   [ "$status" -eq 1 ]
   [ -z "$(find "$parse_tmp" -type f -print -quit)" ]

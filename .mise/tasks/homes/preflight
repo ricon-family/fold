@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 #MISE description="Preflight an already-provisioned agent home bootstrap"
-#USAGE flag "--home <path>" default="" help="Home repo path (default: ~/agents/<agent>/home)"
+#USAGE flag "--home <path>" default="" help="Target home repo (default: AGENT_HOME; required when unset)"
 #USAGE arg "<agent>" help="Agent name"
-#USAGE example "mise run homes:preflight iris --home ~/agents/iris/home" header="Preflight a specific home path"
-#USAGE example "mise run homes:preflight iris" header="Preflight the default agent home path"
+#USAGE example "mise run homes:preflight iris --home /path/to/desk/home" header="Preflight a specific home path"
+#USAGE example "mise run homes:preflight iris" header="Preflight AGENT_HOME"
 set -euo pipefail
 
 ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
 # shellcheck disable=SC1091 # repo-local shared helpers
-source "$ROOT/.mise/lib/common.sh"
+source "$ROOT/.mise/lib/homes.sh"
 
 AGENT="${usage_agent:?agent required}"
-HOME_PATH="${usage_home:-}"
+HOME_PATH=$(homes_resolve_home "${usage_home:-}")
 GIT_BIN="${GIT:-git}"
 GPG_BIN="${GPG:-gpg}"
 NOTES_BIN="${NOTES:-notes}"
@@ -205,10 +205,6 @@ check_modules() {
 }
 
 validate_agent "$AGENT"
-if [ -z "$HOME_PATH" ]; then
-  HOME_PATH="$HOME/agents/$AGENT/home"
-fi
-
 printf 'Homes preflight\n\n'
 printf 'agent: %s\n' "$AGENT"
 printf 'home:  %s\n' "$HOME_PATH"

@@ -62,9 +62,11 @@ add_work_account() {
 }
 
 @test "homes:email:setup dry-run validates environment without secret retrieval or writes" {
-  run fold_task homes:email:setup test-agent --home "$HOME_REPO"
+  export AGENT_HOME="$HOME_REPO"
+  run fold_task homes:email:setup test-agent
 
   [ "$status" -eq 0 ]
+  [[ "$output" == *"home:   $HOME_REPO"* ]]
   [[ "$output" == *'mode:   dry-run'* ]]
   [ ! -e "$HOME_REPO/.emails" ]
   [ ! -s "$SECRET_LOG" ]

@@ -286,7 +286,8 @@ SH
   create_ready_home "$home"
   configure_ready_auth
 
-  run fold_task homes:status test-agent --agents-root "$AGENTS_ROOT" --home "$home"
+  export AGENT_HOME="$home"
+  run fold_task homes:status test-agent
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"Homes status: test-agent"* ]]

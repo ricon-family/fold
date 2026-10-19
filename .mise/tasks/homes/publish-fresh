@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #MISE description="Push a fresh encrypted root commit for an agent home"
 #USAGE flag "-y --yes" default=#false help="Create and push the fresh root commit"
-#USAGE flag "--home <path>" default="" help="Home repo path (default: ~/agents/<agent>/home)"
+#USAGE flag "--home <path>" default="" help="Target home repo (default: AGENT_HOME; required when unset)"
 #USAGE flag "--repo <repo>" default="" help="GitHub repo label OWNER/REPO; used to derive remote URL when --remote-url is omitted"
 #USAGE flag "--remote-url <url>" default="" help="Remote URL to push; overrides --repo and is useful for local bare-repo tests"
 #USAGE flag "--branch <branch>" default="main" help="Remote branch to create"
@@ -9,8 +9,8 @@
 #USAGE flag "--private" default=#false help="Document intended remote privacy; this task does not create repos"
 #USAGE flag "--no-gpg-sign" default=#false help="Do not GPG-sign the fresh root commit (intended for tests or emergency recovery)"
 #USAGE arg "<agent>" help="Agent name"
-#USAGE example "mise run homes:publish-fresh iris --home ~/agents/iris/home --repo iris-ricon/home" header="Dry-run GitHub publish"
-#USAGE example "mise run homes:publish-fresh iris --home ~/agents/iris/home --repo iris-ricon/home --private --yes" header="Push fresh encrypted root commit"
+#USAGE example "mise run homes:publish-fresh iris --home /path/to/desk/home --repo iris-ricon/home" header="Dry-run GitHub publish"
+#USAGE example "mise run homes:publish-fresh iris --home /path/to/desk/home --repo iris-ricon/home --private --yes" header="Push fresh encrypted root commit"
 set -euo pipefail
 
 ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
@@ -18,7 +18,7 @@ ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
 source "$ROOT/.mise/lib/homes.sh"
 
 AGENT="${usage_agent:?agent required}"
-HOME_PATH=$(homes_resolve_home "$AGENT" "${usage_home:-}")
+HOME_PATH=$(homes_resolve_home "${usage_home:-}")
 REPO="${usage_repo:-}"
 REMOTE_URL=$(homes_resolve_remote_url "$REPO" "${usage_remote_url:-}")
 BRANCH="${usage_branch:-main}"
@@ -71,16 +71,16 @@ printf '\n'
 
 homes_assert_publishable_tree "$HOME_PATH"
 
-homes_require_remote_reachable "$REMOTE_URL"
-if homes_remote_branch_exists "$REMOTE_URL" "$BRANCH"; then
-  echo "ERROR: remote branch already exists: $BRANCH" >&2
-  exit 1
-fi
-
 if [ "$YES" != "true" ]; then
   echo "dry-run: would create a fresh root commit from HEAD^{tree} and push it"
   echo "rerun with --yes to mutate"
   exit 0
+fi
+
+homes_require_remote_reachable "$REMOTE_URL"
+if homes_remote_branch_exists "$REMOTE_URL" "$BRANCH"; then
+  echo "ERROR: remote branch already exists: $BRANCH" >&2
+  exit 1
 fi
 
 tree=$("$GIT_BIN" -C "$HOME_PATH" rev-parse 'HEAD^{tree}')

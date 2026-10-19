@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #MISE description="Provision declared persona email accounts in one home-local config"
 #USAGE flag "-y --yes" default=#false help="Create or validate the ignored local email config"
-#USAGE flag "--home <path>" default="" help="Home repo path (default: ~/agents/<agent>/home)"
+#USAGE flag "--home <path>" default="" help="Target home repo (default: AGENT_HOME; required when unset)"
 #USAGE arg "<agent>" help="Target home handle; activate its persona before invoking this task"
 #USAGE example "mise run homes:email:setup quick --home /path/to/desk/home" header="Validate activated email inputs without writing"
 #USAGE example "mise run homes:email:setup quick --home /path/to/desk/home --yes" header="Provision all declared accounts"
@@ -9,13 +9,13 @@ set -euo pipefail
 umask 077
 
 ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
-# shellcheck source=.mise/lib/common.sh
-source "$ROOT/.mise/lib/common.sh"
+# shellcheck source=.mise/lib/homes.sh
+source "$ROOT/.mise/lib/homes.sh"
 # shellcheck source=.mise/lib/homes_email.sh
 source "$ROOT/.mise/lib/homes_email.sh"
 
 AGENT="${usage_agent:?agent required}"
-HOME_PATH="${usage_home:-$HOME/agents/$AGENT/home}"
+HOME_PATH=$(homes_resolve_home "${usage_home:-}")
 YES="${usage_yes:-false}"
 EMAILS_BIN="${EMAILS:-emails}"
 GPG_BIN="${GPG:-gpg}"
@@ -23,11 +23,6 @@ GIT_BIN="${GIT:-git}"
 
 validate_agent "$AGENT"
 require_tool "$EMAILS_BIN" "$GPG_BIN" "$GIT_BIN" jq
-[ -n "$HOME_PATH" ] || HOME_PATH="$HOME/agents/$AGENT/home"
-case "$HOME_PATH" in
-  /*) ;;
-  *) HOME_PATH="$PWD/$HOME_PATH" ;;
-esac
 
 if ! bundle=$(jq -nce -f "$ROOT/.mise/lib/homes_email.jq" 2>/dev/null); then
   homes_email_fail 'incomplete or invalid activated email environment; activate the intended persona first'
@@ -40,7 +35,7 @@ done <<< "$signers"
 printf 'Homes email setup: %s\n\nhome:   %s\nconfig: %s/.emails/himalaya.toml\n' "$AGENT" "$HOME_PATH" "$HOME_PATH"
 printf 'accounts: %s\n' "$EMAIL_ACCOUNTS"
 if [ "$YES" != true ]; then
-  printf 'mode:   dry-run\n\nEmail inputs and signing keys validated; no config written.\n'
+  printf 'mode:   dry-run\n\nEmail inputs and signing keys validated; would create or validate this config.\nRerun with --yes to execute.\n'
   exit 0
 fi
 printf 'mode:   mutate\n'
