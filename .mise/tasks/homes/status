@@ -3,7 +3,6 @@
 #USAGE flag "--home <path>" default="" help="Target home repo (default: AGENT_HOME; required when unset)"
 #USAGE flag "--json" default=#false help="Emit machine-readable JSON"
 #USAGE flag "--check" default=#false help="Exit nonzero when the home is not ready"
-#USAGE flag "--auth-prerequisites" default=#false help="Validate effective Git config instead of requiring workspace-specific auth setup"
 #USAGE arg "[agent]" default="" help="Agent name"
 #USAGE example "mise run homes:status iris" header="Show Iris home readiness"
 #USAGE example "mise run homes:status iris --json --check" header="Machine-check Iris home readiness"
@@ -19,7 +18,6 @@ AGENT="${usage_agent:-iris}"
 HOME_PATH=$(homes_resolve_home "${usage_home:-}")
 JSON="${usage_json:-false}"
 CHECK="${usage_check:-false}"
-AUTH_PREREQUISITES="${usage_auth_prerequisites:-false}"
 JQ_BIN="${JQ:-jq}"
 validate_agent "$AGENT"
 
@@ -135,9 +133,6 @@ collect_auth() {
   fi
 
   local auth_args=(run -q homes:auth "$AGENT" --home "$HOME_PATH" --json --check)
-  if [ "$AUTH_PREREQUISITES" = true ]; then
-    auth_args+=(--prerequisites)
-  fi
 
   if timeout_bin=$(homes_timeout_command); then
     if auth_output=$(

@@ -249,7 +249,6 @@ set -euo pipefail
 printf 'mise %s\n' "$*" >> "${MISE_LOG:?}"
 case "${1:-} ${2:-}" in
   "run homes:auth")
-    [[ " $* " == *" --prerequisites "* ]] || exit 2
     [[ " $* " == *" --check "* ]] || exit 2
     if [ "${FAKE_AUTH_PREREQUISITES_FAIL:-false}" = true ]; then
       printf '{"ready":false}\n'
@@ -270,7 +269,7 @@ case "${1:-} ${2:-}" in
       echo "homes:adopt-remote missing --home" >&2
       exit 2
     fi
-    if ! grep -q 'mise run homes:auth .* --prerequisites --json --check' "$MISE_LOG"; then
+    if ! grep -q 'mise run homes:auth .* --json --check' "$MISE_LOG"; then
       echo "auth prerequisites not checked before adopt" >&2
       exit 1
     fi
@@ -315,7 +314,6 @@ case "${1:-} ${2:-}" in
       echo "homes:status missing --home" >&2
       exit 2
     fi
-    [[ " $* " == *" --auth-prerequisites "* ]] || exit 2
     [ -d "$home/.git" ] || exit 1
     printf '{"ready":true}\n'
     ;;
@@ -412,7 +410,7 @@ make_repo() {
   [[ "$output" == *"home:    $desk_path/home"* ]]
   [[ "$output" == *"repo:    quick-ricon/home"* ]]
   [[ "$output" == *"dry-run: rerun with --yes"* ]]
-  [[ "$output" == *"check auth prerequisites: mise run homes:auth quick --home $HOME --prerequisites --json --check"* ]]
+  [[ "$output" == *"check auth prerequisites: mise run homes:auth quick --home $HOME --json --check"* ]]
   [[ "$output" == *"setup email: mise run homes:email:setup quick --home $desk_path/home --yes"* ]]
   [[ "$output" == *"mise run agent:desk:wake quick --desk $desk_path --shell quick-probe --packet /tmp/packet.md --model '<model>' --yes"* ]]
   [ ! -e "$desk/home" ]
@@ -438,10 +436,10 @@ make_repo() {
   [[ "$output" == *"== setup home email =="* ]]
   [[ "$output" == *"== verify home readiness =="* ]]
   [[ "$output" == *"Ready. Next wake command:"* ]]
-  auth_line=$(grep -nF "mise run homes:auth quick --home $HOME --prerequisites --json --check" "$MISE_LOG" | cut -d: -f1)
+  auth_line=$(grep -nF "mise run homes:auth quick --home $HOME --json --check" "$MISE_LOG" | cut -d: -f1)
   adopt_line=$(grep -nF "mise run homes:adopt-remote quick --home $desk_path/home --branch main --yes --repo quick-ricon/home" "$MISE_LOG" | cut -d: -f1)
   email_line=$(grep -nF "mise run homes:email:setup quick --home $desk_path/home --yes" "$MISE_LOG" | cut -d: -f1)
-  status_line=$(grep -nF "mise run homes:status quick --home $desk_path/home --auth-prerequisites --json --check" "$MISE_LOG" | cut -d: -f1)
+  status_line=$(grep -nF "mise run homes:status quick --home $desk_path/home --json --check" "$MISE_LOG" | cut -d: -f1)
   [ "$auth_line" -lt "$adopt_line" ]
   [ "$adopt_line" -lt "$email_line" ]
   [ "$email_line" -lt "$status_line" ]
@@ -504,7 +502,7 @@ make_repo() {
   [[ "$output" == *"Ready. Next wake command:"* ]]
   [[ "$output" != *"homes:email:setup"* ]]
   ! grep -q 'homes:email:setup' "$MISE_LOG"
-  grep -F "homes:status quick --home $desk/home --auth-prerequisites --json --check" "$MISE_LOG"
+  grep -F "homes:status quick --home $desk/home --json --check" "$MISE_LOG"
   [ ! -e "$desk/.gitconfig" ]
   [ -d "$desk/home/.git" ]
   [ ! -e "$desk/home/.emails" ]
@@ -527,7 +525,7 @@ make_repo() {
   desk="$FAKE_DESKS_ROOT/$desk_id"
   grep -F "desks new --id $desk_id" "$DESKS_LOG" >/dev/null
   grep -F "desks path $desk_id" "$DESKS_LOG" >/dev/null
-  auth_line=$(grep -nF "mise run homes:auth quick --home $HOME --prerequisites --json --check" "$MISE_LOG" | cut -d: -f1)
+  auth_line=$(grep -nF "mise run homes:auth quick --home $HOME --json --check" "$MISE_LOG" | cut -d: -f1)
   adopt_line=$(grep -nF "mise run homes:adopt-remote quick --home $desk/home --branch main --yes --repo quick-ricon/home" "$MISE_LOG" | cut -d: -f1)
   email_line=$(grep -nF "mise run homes:email:setup quick --home $desk/home --yes" "$MISE_LOG" | cut -d: -f1)
   [ "$auth_line" -lt "$adopt_line" ]
@@ -547,7 +545,7 @@ make_repo() {
   run fold_task agent:desk:prepare quick --desk-id blocked --repo quick-ricon/home --yes
 
   [ "$status" -ne 0 ]
-  grep -q 'homes:auth .* --prerequisites --json --check' "$MISE_LOG"
+  grep -q 'homes:auth .* --json --check' "$MISE_LOG"
   ! grep -Eq 'homes:auth:setup|homes:adopt-remote|homes:email:setup|homes:status' "$MISE_LOG"
   [ ! -s "$DESKS_LOG" ]
   [ ! -e "$FAKE_DESKS_ROOT/blocked" ]

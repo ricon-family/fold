@@ -142,7 +142,7 @@ if [ -n "$DRY_RUN_NOTE" ]; then
 fi
 
 printf '\nPlan\n'
-printf '1. check auth prerequisites: mise run homes:auth %s --home %s --prerequisites --json --check\n' "$AGENT" "$HOME"
+printf '1. check auth prerequisites: mise run homes:auth %s --home %s --json --check\n' "$AGENT" "$HOME"
 if [ "$SKIP_EMAIL" != true ]; then
   printf '   activate %s persona and validate its email inputs before creating a desk\n' "$AGENT"
 fi
@@ -164,7 +164,7 @@ if [ "$SKIP_EMAIL" = "true" ]; then
 else
   printf '4. setup email: mise run homes:email:setup %s --home %s --yes\n' "$AGENT" "$HOME_PATH"
 fi
-printf '5. verify: mise run homes:status %s --home %s --auth-prerequisites --json --check\n' "$AGENT" "$HOME_PATH"
+printf '5. verify: mise run homes:status %s --home %s --json --check\n' "$AGENT" "$HOME_PATH"
 printf '6. wake later: '
 render_next_wake
 
@@ -174,7 +174,7 @@ if [ "$YES" != "true" ]; then
 fi
 
 printf '\n== check auth prerequisites ==\n'
-run_nested_mise run homes:auth "$AGENT" --home "$HOME" --prerequisites --json --check
+run_nested_mise run homes:auth "$AGENT" --home "$HOME" --json --check
 
 if [ "$SKIP_EMAIL" != true ]; then
   printf '\n== activate persona and check email inputs ==\n'
@@ -210,7 +210,7 @@ if [ "$SKIP_EMAIL" != "true" ]; then
 fi
 
 printf '\n== verify home readiness ==\n'
-run_nested_mise run homes:status "$AGENT" --home "$HOME_PATH" --auth-prerequisites --json --check
+run_nested_mise run homes:status "$AGENT" --home "$HOME_PATH" --json --check
 
 printf '\nReady. Next wake command:\n'
 render_next_wake

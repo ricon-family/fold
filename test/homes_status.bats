@@ -139,19 +139,14 @@ SH
 }
 
 configure_ready_auth() {
-  mkdir -p "$AGENTS_ROOT/test-agent"
-  cat > "$AGENTS_ROOT/test-agent/.gitconfig" <<'GITCONFIG'
-[user]
-	name = Persona Author
-	email = commits@example.test
-	signingkey = ABCDEF1234567890ABCDEF1234567890ABCDEF12
-[commit]
-	gpgsign = true
-[tag]
-	gpgsign = true
-GITCONFIG
+  unset GIT_CONFIG_COUNT GIT_CONFIG_PARAMETERS GIT_CONFIG
+  git config --global user.name 'Persona Author'
+  git config --global user.email commits@example.test
+  git config --global user.signingkey ABCDEF1234567890ABCDEF1234567890ABCDEF12
+  git config --global gpg.format openpgp
+  git config --global commit.gpgsign true
+  git config --global tag.gpgsign true
   touch "$FAKE_GPG_STATE"
-  git config --global --add "includeIf.gitdir:$AGENTS_ROOT/test-agent/.path" "$AGENTS_ROOT/test-agent/.gitconfig"
 }
 
 create_module_clone() {
@@ -259,7 +254,7 @@ SH
     commit -q -m "initial public notes home"
 }
 
-@test "homes:status auth prerequisites accept account defaults without a workspace config or include" {
+@test "homes:status accepts account defaults without a workspace config or include" {
   unset GIT_CONFIG_COUNT GIT_CONFIG_PARAMETERS GIT_CONFIG
   home="$AGENTS_ROOT/test-agent/home"
   create_ready_home "$home"
@@ -272,7 +267,7 @@ SH
   touch "$FAKE_GPG_STATE"
   cp "$GIT_CONFIG_GLOBAL" "$BATS_TEST_TMPDIR/before.gitconfig"
 
-  run fold_task_stdout_only homes:status test-agent --home "$home" --auth-prerequisites --json --check
+  run fold_task_stdout_only homes:status test-agent --home "$home" --json --check
 
   [ "$status" -eq 0 ]
   assert_json_output
@@ -380,7 +375,7 @@ SH
   [ "$status" -eq 1 ]
   assert_json_output
   [[ "$output" == *'"ready":false'* ]]
-  [[ "$output" == *"homes:auth:setup test-agent"* ]]
+  [[ "$output" == *"Activate the selected persona"* ]]
   [[ "$output" == *'"name":"Auth: Signing"'* ]]
   [[ "$output" == *'"name":"GPG secret key","status":"fail"'* ]]
   [[ "$output" != *"Homes status:"* ]]
