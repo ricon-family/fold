@@ -310,7 +310,7 @@ SH
   advance_module_to_tracked_main "$home/modules/fold" "$BATS_TEST_TMPDIR/fold.git"
   add_prepare_modules_and_optional_or_home "$home"
 
-  run fold_task_stdout_only homes:status test-agent --agents-root "$AGENTS_ROOT" --home "$home" --json --check
+  run fold_task_stdout_only homes:status test-agent --home "$home" --json --check
 
   [ "$status" -eq 0 ]
   assert_json_output
@@ -328,7 +328,7 @@ SH
   printf '[tools]\nnode = "20"\n' > "$home/modules/fold/mise.toml"
   touch "$home/modules/fold/.mise-untrusted"
 
-  run fold_task_stdout_only homes:status test-agent --agents-root "$AGENTS_ROOT" --home "$home" --json --check
+  run fold_task_stdout_only homes:status test-agent --home "$home" --json --check
 
   [ "$status" -eq 1 ]
   assert_json_output
@@ -342,7 +342,7 @@ SH
   create_public_notes_home "$home"
   configure_ready_auth
 
-  run fold_task_stdout_only homes:status test-agent --agents-root "$AGENTS_ROOT" --home "$home" --json --check
+  run fold_task_stdout_only homes:status test-agent --home "$home" --json --check
 
   [ "$status" -eq 0 ]
   assert_json_output
@@ -357,7 +357,7 @@ SH
   create_ready_home "$home"
   configure_ready_auth
 
-  run fold_task homes:status test-agent --agents-root "$AGENTS_ROOT" --home "$home" --json --check
+  run fold_task homes:status test-agent --home "$home" --json --check
 
   [ "$status" -eq 0 ]
   assert_json_output
@@ -375,7 +375,7 @@ SH
   home="$AGENTS_ROOT/test-agent/home"
   create_ready_home "$home"
 
-  run fold_task_stdout_only homes:status test-agent --agents-root "$AGENTS_ROOT" --home "$home" --json --check
+  run fold_task_stdout_only homes:status test-agent --home "$home" --json --check
 
   [ "$status" -eq 1 ]
   assert_json_output
@@ -393,7 +393,6 @@ SH
   configure_ready_auth
 
   run fold_task_stdout_only homes:status test-agent \
-    --agents-root "$AGENTS_ROOT" \
     --home "$AGENTS_ROOT/test-agent/home" \
     --json \
     --check
@@ -414,7 +413,7 @@ SH
   export FAKE_GH_SLEEP=5
   export HOMES_STATUS_AUTH_TIMEOUT=1
 
-  run fold_task_stdout_only homes:status test-agent --agents-root "$AGENTS_ROOT" --home "$home" --json --check
+  run fold_task_stdout_only homes:status test-agent --home "$home" --json --check
 
   [ "$status" -eq 1 ]
   assert_json_output

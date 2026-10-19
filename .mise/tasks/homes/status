@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 #MISE description="Show aggregate read-only readiness for an agent home"
-#USAGE flag "--agents-root <path>" default="" help="Legacy compatibility flag; no longer selects a home"
 #USAGE flag "--home <path>" default="" help="Target home repo (default: AGENT_HOME; required when unset)"
 #USAGE flag "--json" default=#false help="Emit machine-readable JSON"
 #USAGE flag "--check" default=#false help="Exit nonzero when the home is not ready"

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Set up local auth/signing for an already-provisioned agent home"
 #USAGE flag "-y --yes" default=#false help="Import GPG material and write local git signing config"
-#USAGE flag "--agents-root <path>" default="" help="Legacy workspace root metadata; does not select the target home"
 #USAGE flag "--home <path>" default="" help="Target home repo (default: AGENT_HOME; required when unset)"
 #USAGE flag "--json" default=#false help="Emit machine-readable JSON"
 #USAGE arg "<agent>" help="Agent name"
@@ -16,7 +15,6 @@ source "$ROOT/.mise/lib/homes.sh"
 AGENT="${usage_agent:?agent required}"
 YES="${usage_yes:-false}"
 HOME_PATH=$(homes_resolve_home "${usage_home:-}")
-AGENTS_ROOT="${usage_agents_root:-}"
 JSON="${usage_json:-false}"
 
 validate_agent "$AGENT"
@@ -108,7 +106,6 @@ print_json() {
   printf '{'
   printf '"agent":'; homes_json_string "$AGENT"
   printf ',"home":'; homes_json_string "$HOME_PATH"
-  printf ',"agents_root":'; homes_json_string "$AGENTS_ROOT"
   printf ',"agent_dir":'; homes_json_string "$AGENT_DIR"
   printf ',"gitconfig":'; homes_json_string "$GITCONFIG"
   printf ',"mode":'; homes_json_string "$MODE"

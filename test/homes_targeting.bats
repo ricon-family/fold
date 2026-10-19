@@ -16,18 +16,6 @@ load test_helper
   done
 }
 
-@test "legacy --agents-root alone does not select a home" {
-  export AGENT_HOME=
-
-  for task in homes:auth homes:status homes:auth:setup; do
-    run fold_task "$task" test-agent --agents-root "$BATS_TEST_TMPDIR/old-layout"
-
-    [ "$status" -ne 0 ]
-    [[ "$output" == *"provide --home or set AGENT_HOME"* ]]
-    [ ! -e "$BATS_TEST_TMPDIR/old-layout" ]
-  done
-}
-
 @test "adoption previews AGENT_HOME without accessing secrets or the remote" {
   export AGENT_HOME="$BATS_TEST_TMPDIR/new-desk/home"
   export GIT=/usr/bin/false SECRETS=/usr/bin/false
