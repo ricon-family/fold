@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Maintained target-identity boundary for agent desk wakes.
 set -euo pipefail
 
 agent_desk_runtime_error() {
@@ -17,7 +16,7 @@ agent_desk_runtime_require() {
 agent_desk_runtime_select_home() {
   local actual_home home_root
 
-  # Clear launch context only; Shimmer reconciles persona values and ownership.
+  # Keep persona values and their ownership record together for activation.
   unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR
   unset AGENT_HOME AGENT_IDENTITY CHAT_IDENTITY EMAILS_CONFIG HIMALAYA_CONFIG
   unset GITHUB_TOKEN GH_CONFIG_DIR __MISE_DIFF

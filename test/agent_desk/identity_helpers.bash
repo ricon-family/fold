@@ -134,7 +134,7 @@ SH
 setup_switching_personas() {
   local variable persona shimmer_root
 
-  # Isolate this fixture process; the production runtime must preserve ownership.
+  # Start fixture personas without the test runner's inherited credentials.
   while IFS= read -r variable; do
     case "$variable" in GIT_CONFIG_*|EMAIL_*|BLOBS_*) unset "$variable" ;; esac
   done < <(compgen -A variable)

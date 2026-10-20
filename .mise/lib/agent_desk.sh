@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# Shared helpers for agent desk diagnostic mise tasks.
-#
-# This is a lib, not a mise task. Keep helpers read-only unless the calling
-# task is explicitly mutating.
 
 # shellcheck disable=SC1091
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
