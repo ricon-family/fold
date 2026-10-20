@@ -168,12 +168,15 @@ agent_desk_home_github_login() {
     https://github.com/*)
       path=${origin#https://github.com/}
       ;;
+
     git@github.com:*)
       path=${origin#git@github.com:}
       ;;
+
     ssh://git@github.com/*)
       path=${origin#ssh://git@github.com/}
       ;;
+
     *)
       echo "ERROR: target home origin is not a canonical GitHub OWNER/home URL" >&2
       return 1

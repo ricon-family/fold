@@ -69,11 +69,8 @@ agent_desk_runtime_activate_persona() {
   local identity_shell
 
   if identity_shell=$(
-    if cd "$AGENT_DESK_IDENTITY_SOURCE"; then
-      shimmer as "$AGENT_DESK_AGENT"
-    else
-      exit $?
-    fi
+    cd "$AGENT_DESK_IDENTITY_SOURCE" || exit $?
+    shimmer as "$AGENT_DESK_AGENT"
   ); then
     eval "$identity_shell"
   else
@@ -164,11 +161,13 @@ unset required_input
 
 case "$AGENT_DESK_MODE" in
   fresh) ;;
+
   resume)
     agent_desk_runtime_require AGENT_DESK_SESSION
     agent_desk_runtime_require AGENT_DESK_MESSAGE
     agent_desk_runtime_require AGENT_DESK_SESSIONS_BIN
     ;;
+
   *)
     agent_desk_runtime_error "unknown wake mode: $AGENT_DESK_MODE"
     ;;
@@ -185,6 +184,7 @@ case "$AGENT_DESK_MODE" in
     exec shimmer agent --model "$AGENT_DESK_MODEL" "[$AGENT_DESK_TITLE]
 ${packet}"
     ;;
+
   resume)
     exec "$AGENT_DESK_SESSIONS_BIN" wake "$AGENT_DESK_SESSION" \
       --model "$AGENT_DESK_MODEL" \

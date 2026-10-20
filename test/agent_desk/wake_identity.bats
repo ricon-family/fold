@@ -401,9 +401,11 @@ case "${1:-}" in
     printf 'unset GIT_AUTHOR_NAME AGENT_HOME\n'
     exit 23
     ;;
+
   agent)
     printf 'agent started\n' >> "${AGENT_LOG:?}"
     ;;
+
   *) exit 2 ;;
 esac
 SH

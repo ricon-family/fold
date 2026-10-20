@@ -23,9 +23,11 @@ case "${1:-}" in
     fi
     echo "running"
     ;;
+
   history)
     printf 'line one\nline two\nline three\n'
     ;;
+
   run)
     if [ "${SHELL_RUN_MODE:-ok}" = fail ]; then
       echo "probe did not execute" >&2
@@ -37,6 +39,7 @@ case "${1:-}" in
     fi
     echo "${5:-}"
     ;;
+
   *)
     echo "unexpected shell command: $*" >&2
     exit 2

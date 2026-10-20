@@ -60,6 +60,7 @@ case "${1:-}" in
     printf 'export GIT_CONFIG_KEY_3=commit.gpgsign\n'
     printf 'export GIT_CONFIG_VALUE_3=true\n'
     ;;
+
   agent)
     {
       printf 'CWD=%s\n' "$(pwd -P)"
@@ -88,6 +89,7 @@ case "${1:-}" in
       printf '%s' "${4:-}" > "$AGENT_MESSAGE_LOG"
     fi
     ;;
+
   *) exit 2 ;;
 esac
 SH
@@ -191,6 +193,7 @@ if [ "${1:-}" != export ] || [ "${2:-}" != --prefix ]; then
 fi
 case "${3:-}" in
   junior/|quick/) cat "$FIXTURE_PERSONAS/${3%/}.json" ;;
+
   *) exit 2 ;;
 esac
 SH

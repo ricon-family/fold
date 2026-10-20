@@ -14,6 +14,7 @@ case "${1:-} ${2:-}" in
     fi
     printf '{"ready":true}\n'
     ;;
+
   "run homes:adopt-remote")
     home=""
     while [ "$#" -gt 0 ]; do
@@ -40,6 +41,7 @@ case "${1:-} ${2:-}" in
     git -C "$home" add AGENTS.md
     git -C "$home" commit -q -m 'prepared home'
     ;;
+
   "run homes:email:setup")
     if [ "${EMAIL_ACCOUNTS:-}" != fixture ]; then
       echo 'persona email environment missing' >&2
@@ -67,6 +69,7 @@ case "${1:-} ${2:-}" in
     mkdir -p "$home/.emails"
     printf 'fixture email config\n' > "$home/.emails/himalaya.toml"
     ;;
+
   "run homes:status")
     home=""
     while [ "$#" -gt 0 ]; do
@@ -85,6 +88,7 @@ case "${1:-} ${2:-}" in
     fi
     printf '{"ready":true}\n'
     ;;
+
   *)
     echo "unexpected mise command: $*" >&2
     exit 2
@@ -125,6 +129,7 @@ case "${1:-}" in
     mkdir -p "$root/$id/.desk"
     printf '{"id":"%s"}\n' "$id" > "$root/$id/.desk/registry.json"
     ;;
+
   path)
     id="${2:?id required}"
     if [ ! -d "$root/$id" ]; then
@@ -133,6 +138,7 @@ case "${1:-}" in
     fi
     printf '%s/%s\n' "$root" "$id"
     ;;
+
   *)
     echo "unexpected desks command: $*" >&2
     exit 2

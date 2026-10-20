@@ -20,6 +20,7 @@ if [ "${1:-}" = meta ]; then
     .meta.agent.name)
       printf '%s\n' "${FAKE_SESSION_AGENT:-quick}"
       ;;
+
     .cwd)
       meta_cwd="${FAKE_SESSION_META_CWD:-${FAKE_SESSION_CWD:-}}"
       if [ -z "$meta_cwd" ]; then
@@ -28,6 +29,7 @@ if [ "${1:-}" = meta ]; then
       fi
       printf '%s\n' "$meta_cwd"
       ;;
+
     *)
       echo "unexpected sessions meta field: ${4:-}" >&2
       exit 2
@@ -61,6 +63,7 @@ if [ -f "${SHELL_RUN_MARKER:?}" ]; then
     ready)
       session_ready=true
       ;;
+
     deadline-edge)
       if [ "$call_count" -ge 3 ]; then
         session_ready=true

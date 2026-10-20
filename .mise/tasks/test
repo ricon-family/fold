@@ -25,11 +25,13 @@ case "${1:-all}" in
       exit 2
     fi
     ;;
+
   bats)
     shift
     run_codebase=false
     run_welcome=false
     ;;
+
   codebase)
     shift
     if [ "$#" -ne 0 ]; then
@@ -39,6 +41,7 @@ case "${1:-all}" in
     run_bats=false
     run_welcome=false
     ;;
+
   *) ;;
 esac
 
