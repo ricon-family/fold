@@ -44,7 +44,7 @@ esac
 
 if $run_bats; then
   printf '\n== bats ==\n'
-  bats --print-output-on-failure "$@"
+  bats --recursive --print-output-on-failure "$@"
 fi
 
 if $run_codebase; then

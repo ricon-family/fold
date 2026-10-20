@@ -35,6 +35,15 @@ write_passing_test() {
   [[ "$output" != *'== welcome smoke =='* ]]
 }
 
+@test "the default test target discovers nested wake suites" {
+  run fold_task test bats --jobs 1 \
+    --filter '^agent:desk:wake requires an explicit model before rendering$'
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'1..1'* ]]
+  [[ "$output" == *'ok 1 agent:desk:wake requires an explicit model before rendering'* ]]
+}
+
 @test "the codebase mode runs only configured Codebase lints" {
   run fold_task test codebase
 

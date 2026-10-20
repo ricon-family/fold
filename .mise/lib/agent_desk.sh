@@ -131,10 +131,6 @@ agent_desk_parse_repo_spec() {
   printf '%s\t%s\n' "${spec%%=*}" "${spec#*=}"
 }
 
-agent_desk_single_quote() {
-  printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\''/g")"
-}
-
 agent_desk_clean_git_config_get() {
   local repo="$1" key="$2"
   env \

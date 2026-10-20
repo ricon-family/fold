@@ -14,23 +14,22 @@ agent_desk_runtime_require() {
   fi
 }
 
-agent_desk_runtime_scrub_inherited_identity() {
-  local variable
+agent_desk_runtime_select_home() {
+  local actual_home home_root
 
-  while IFS= read -r variable; do
-    [ -n "$variable" ] || continue
-    unset "$variable"
-  done < <(compgen -A variable GIT_CONFIG_ || true)
+  # Clear launch context only; Shimmer reconciles persona values and ownership.
+  unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR
+  unset AGENT_HOME AGENT_IDENTITY CHAT_IDENTITY EMAILS_CONFIG HIMALAYA_CONFIG
+  unset GITHUB_TOKEN GH_CONFIG_DIR __MISE_DIFF
 
-  unset \
-    AGENT_HOME AGENT_IDENTITY CHAT_IDENTITY \
-    SHIMMER_PERSONA_STATE \
-    EMAILS_CONFIG HIMALAYA_CONFIG \
-    GH_TOKEN GITHUB_TOKEN GH_CONFIG_DIR \
-    GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL \
-    GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL \
-    GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR \
-    __MISE_DIFF
+  cd "$AGENT_DESK_HOME"
+  actual_home=$(pwd -P)
+  [ "$actual_home" = "$AGENT_DESK_HOME" ] || \
+    agent_desk_runtime_error "working directory does not match the selected home"
+  home_root=$(git rev-parse --show-toplevel) || \
+    agent_desk_runtime_error "selected home is not a Git worktree"
+  [ "$home_root" = "$actual_home" ] || \
+    agent_desk_runtime_error "selected home must be the Git worktree root"
 }
 
 agent_desk_runtime_signing_keys_match() {
@@ -49,18 +48,8 @@ agent_desk_runtime_signing_keys_match() {
   return 1
 }
 
-agent_desk_runtime_activate_target() {
-  local actual_home home_root actual_github actual_name actual_email actual_signing_key
+agent_desk_runtime_activate_persona() {
   local identity_shell
-
-  agent_desk_runtime_scrub_inherited_identity
-  actual_home=$(pwd -P)
-  [ "$actual_home" = "$AGENT_DESK_HOME" ] || \
-    agent_desk_runtime_error "working directory does not match the selected home"
-  home_root=$(git rev-parse --show-toplevel) || \
-    agent_desk_runtime_error "selected home is not a Git worktree"
-  [ "$home_root" = "$actual_home" ] || \
-    agent_desk_runtime_error "selected home must be the Git worktree root"
 
   identity_shell=$(cd "$AGENT_DESK_IDENTITY_SOURCE" && shimmer as "$AGENT_DESK_AGENT") || return $?
   eval "$identity_shell"
@@ -68,6 +57,10 @@ agent_desk_runtime_activate_target() {
 
   [ -z "${AGENT_HOME+x}" ] || \
     agent_desk_runtime_error "persona activation must not assign AGENT_HOME"
+}
+
+agent_desk_runtime_verify_git_and_github() {
+  local actual_github actual_name actual_email actual_signing_key
 
   [ "${GIT_AUTHOR_NAME:-}" = "$AGENT_DESK_EXPECTED_NAME" ] || \
     agent_desk_runtime_error "Git author name does not match the prepared target home"
@@ -99,10 +92,12 @@ agent_desk_runtime_activate_target() {
   [ "$actual_github" = "$AGENT_DESK_EXPECTED_GITHUB_LOGIN" ] || \
     agent_desk_runtime_error \
       "GitHub login is $actual_github, expected $AGENT_DESK_EXPECTED_GITHUB_LOGIN"
+}
 
+agent_desk_runtime_bind_home() {
   unset HIMALAYA_CONFIG __MISE_DIFF
-  export EMAILS_CONFIG="$actual_home/.emails/himalaya.toml"
-  export AGENT_HOME="$actual_home"
+  export EMAILS_CONFIG="$AGENT_DESK_HOME/.emails/himalaya.toml"
+  export AGENT_HOME="$AGENT_DESK_HOME"
   export AGENT_IDENTITY="$AGENT_DESK_AGENT"
   export CHAT_IDENTITY="$AGENT_DESK_AGENT"
 }
@@ -134,8 +129,10 @@ case "$AGENT_DESK_MODE" in
   *) agent_desk_runtime_error "unknown wake mode: $AGENT_DESK_MODE" ;;
 esac
 
-cd "$AGENT_DESK_HOME"
-agent_desk_runtime_activate_target
+agent_desk_runtime_select_home
+agent_desk_runtime_activate_persona
+agent_desk_runtime_verify_git_and_github
+agent_desk_runtime_bind_home
 
 case "$AGENT_DESK_MODE" in
   fresh)
