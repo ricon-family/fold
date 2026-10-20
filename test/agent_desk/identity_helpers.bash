@@ -2,11 +2,12 @@ write_fake_gh() {
   cat > "$TMPBIN/gh" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
-if [ "${1:-}" = api ] && [ "${2:-}" = user ] && [ "${3:-}" = --jq ] && [ "${4:-}" = .login ]; then
-  [ "${GH_TOKEN:-}" = quick-target-token ] || {
+if [ "${1:-}" = api ] && [ "${2:-}" = user ] &&
+   [ "${3:-}" = --jq ] && [ "${4:-}" = .login ]; then
+  if [ "${GH_TOKEN:-}" != quick-target-token ]; then
     echo "wrong GitHub token" >&2
     exit 1
-  }
+  fi
   printf '%s\n' "${FAKE_GITHUB_LOGIN:-quick-ricon}"
   exit 0
 fi
@@ -136,7 +137,11 @@ setup_switching_personas() {
 
   # Start fixture personas without the test runner's inherited credentials.
   while IFS= read -r variable; do
-    case "$variable" in GIT_CONFIG_*|EMAIL_*|BLOBS_*) unset "$variable" ;; esac
+    case "$variable" in
+      GIT_CONFIG_*|EMAIL_*|BLOBS_*)
+        unset "$variable"
+        ;;
+    esac
   done < <(compgen -A variable)
   unset SHIMMER_PERSONA_STATE GH_TOKEN GITHUB_TOKEN GH_CONFIG_DIR
   unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL
@@ -181,7 +186,9 @@ setup_switching_personas() {
   cat > "$TMPBIN/secrets" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
-[ "${1:-}" = export ] && [ "${2:-}" = --prefix ] || exit 2
+if [ "${1:-}" != export ] || [ "${2:-}" != --prefix ]; then
+  exit 2
+fi
 case "${3:-}" in
   junior/|quick/) cat "$FIXTURE_PERSONAS/${3%/}.json" ;;
   *) exit 2 ;;
@@ -190,7 +197,9 @@ SH
   cat > "$TMPBIN/gpg" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
-[[ " $* " == *" --list-secret-keys "* ]] || exit 2
+if [[ " $* " != *" --list-secret-keys "* ]]; then
+  exit 2
+fi
 printf 'sec:u:4096:1:AABBCCDDEEFF0011:0:0:::::s:::\n'
 printf 'fpr:::::::::%s:\n' "$FIXTURE_SIGNER"
 SH

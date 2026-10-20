@@ -6,7 +6,8 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 AGENT_DESK_SHELL_BIN="${SHELL_BIN:-shell}"
 
 agent_desk_validate_name() {
-  local kind="$1" value="$2"
+  local kind="$1"
+  local value="$2"
   if [[ ! "$value" =~ ^[A-Za-z0-9._-]+$ ]]; then
     echo "ERROR: invalid $kind: $value" >&2
     echo "$kind may contain letters, numbers, dot, underscore, and hyphen." >&2
@@ -27,7 +28,8 @@ agent_desk_abs_path() {
 }
 
 agent_desk_abs_file() {
-  local path="$1" dir base
+  local path="$1"
+  local dir base
   if [ -z "$path" ]; then
     return 1
   fi
@@ -66,7 +68,8 @@ agent_desk_resolve_desk() {
 }
 
 agent_desk_resolve_home() {
-  local explicit="$1" desk="$2"
+  local explicit="$1"
+  local desk="$2"
   if [ -n "$explicit" ]; then
     agent_desk_abs_path "$explicit"
     return 0
@@ -88,12 +91,15 @@ agent_desk_shell_status() {
 }
 
 agent_desk_shell_history_tail() {
-  local shell_name="$1" lines="$2"
+  local shell_name="$1"
+  local lines="$2"
   "$AGENT_DESK_SHELL_BIN" history "$shell_name" | tail -n "$lines"
 }
 
 agent_desk_git_status() {
-  local label="$1" repo="$2" recent="$3"
+  local label="$1"
+  local repo="$2"
+  local recent="$3"
   printf '\n== %s ==\n' "$label"
   printf 'path: %s\n' "$repo"
   if [ ! -d "$repo/.git" ] && ! git -C "$repo" rev-parse --git-dir >/dev/null 2>&1; then
@@ -108,14 +114,20 @@ agent_desk_git_status() {
 
 agent_desk_list_default_repos() {
   local desk="$1"
-  [ -n "$desk" ] || return 0
-  [ -d "$desk" ] || return 0
+  if [ -z "$desk" ]; then
+    return 0
+  fi
+  if [ ! -d "$desk" ]; then
+    return 0
+  fi
 
-  find "$desk" -maxdepth 2 -name .git -type d -print | sort | while IFS= read -r git_dir; do
-    repo=${git_dir%/.git}
-    label=${repo##*/}
-    printf '%s=%s\n' "$label" "$repo"
-  done
+  find "$desk" -maxdepth 2 -name .git -type d -print |
+    sort |
+    while IFS= read -r git_dir; do
+      repo=${git_dir%/.git}
+      label=${repo##*/}
+      printf '%s=%s\n' "$label" "$repo"
+    done
 }
 
 agent_desk_parse_repo_spec() {
@@ -128,7 +140,8 @@ agent_desk_parse_repo_spec() {
 }
 
 agent_desk_clean_git_config_get() {
-  local repo="$1" key="$2"
+  local repo="$1"
+  local key="$2"
   env \
     -u GIT_CONFIG_COUNT \
     -u GIT_CONFIG_PARAMETERS \
@@ -139,7 +152,8 @@ agent_desk_clean_git_config_get() {
 }
 
 agent_desk_clean_git_config_bool() {
-  local repo="$1" key="$2"
+  local repo="$1"
+  local key="$2"
   env \
     -u GIT_CONFIG_COUNT \
     -u GIT_CONFIG_PARAMETERS \
@@ -150,16 +164,23 @@ agent_desk_clean_git_config_bool() {
 }
 
 agent_desk_home_github_login() {
-  local home="$1" origin path login repo
+  local home="$1"
+  local origin path login repo
 
   if ! origin=$(agent_desk_clean_git_config_get "$home" remote.origin.url); then
     echo "ERROR: prepared target home has no origin remote: $home" >&2
     return 1
   fi
   case "$origin" in
-    https://github.com/*) path=${origin#https://github.com/} ;;
-    git@github.com:*) path=${origin#git@github.com:} ;;
-    ssh://git@github.com/*) path=${origin#ssh://git@github.com/} ;;
+    https://github.com/*)
+      path=${origin#https://github.com/}
+      ;;
+    git@github.com:*)
+      path=${origin#git@github.com:}
+      ;;
+    ssh://git@github.com/*)
+      path=${origin#ssh://git@github.com/}
+      ;;
     *)
       echo "ERROR: target home origin is not a canonical GitHub OWNER/home URL" >&2
       return 1

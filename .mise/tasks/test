@@ -20,10 +20,10 @@ run_welcome=true
 
 case "${1:-all}" in
   all)
-    [ "$#" -eq 0 ] || {
+    if [ "$#" -ne 0 ]; then
       printf 'test: the all mode does not accept arguments; choose bats or codebase\n' >&2
       exit 2
-    }
+    fi
     ;;
   bats)
     shift
@@ -32,10 +32,10 @@ case "${1:-all}" in
     ;;
   codebase)
     shift
-    [ "$#" -eq 0 ] || {
+    if [ "$#" -ne 0 ]; then
       printf 'test: the codebase mode does not accept arguments\n' >&2
       exit 2
-    }
+    fi
     run_bats=false
     run_welcome=false
     ;;

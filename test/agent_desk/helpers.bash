@@ -5,7 +5,8 @@ setup_desk_test() {
 }
 
 make_repo() {
-  local repo="$1" name="$2"
+  local repo="$1"
+  local name="$2"
   mkdir -p "$repo"
   git init -q -b main "$repo"
   if [ "$name" = home ]; then

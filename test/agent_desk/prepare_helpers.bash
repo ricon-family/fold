@@ -5,7 +5,9 @@ set -euo pipefail
 printf 'mise %s\n' "$*" >> "${MISE_LOG:?}"
 case "${1:-} ${2:-}" in
   "run homes:auth")
-    [[ " $* " == *" --check "* ]] || exit 2
+    if [[ " $* " != *" --check "* ]]; then
+      exit 2
+    fi
     if [ "${FAKE_AUTH_PREREQUISITES_FAIL:-false}" = true ]; then
       printf '{"ready":false}\n'
       exit 1
@@ -39,9 +41,17 @@ case "${1:-} ${2:-}" in
     git -C "$home" commit -q -m 'prepared home'
     ;;
   "run homes:email:setup")
-    [ "${EMAIL_ACCOUNTS:-}" = fixture ] || { echo 'persona email environment missing' >&2; exit 1; }
-    [ "${FAKE_EMAIL_INPUTS_FAIL:-false}" != true ] || { echo 'incomplete email inputs' >&2; exit 1; }
-    [[ " $* " == *" --yes "* ]] || exit 0
+    if [ "${EMAIL_ACCOUNTS:-}" != fixture ]; then
+      echo 'persona email environment missing' >&2
+      exit 1
+    fi
+    if [ "${FAKE_EMAIL_INPUTS_FAIL:-false}" = true ]; then
+      echo 'incomplete email inputs' >&2
+      exit 1
+    fi
+    if [[ " $* " != *" --yes "* ]]; then
+      exit 0
+    fi
     home=""
     while [ "$#" -gt 0 ]; do
       if [ "$1" = "--home" ]; then
@@ -70,7 +80,9 @@ case "${1:-} ${2:-}" in
       echo "homes:status missing --home" >&2
       exit 2
     fi
-    [ -d "$home/.git" ] || exit 1
+    if [ ! -d "$home/.git" ]; then
+      exit 1
+    fi
     printf '{"ready":true}\n'
     ;;
   *)
@@ -85,8 +97,12 @@ SH
   : > "$MISE_LOG"
   cat > "$TMPBIN/prepare-shimmer" <<'SH'
 #!/usr/bin/env bash
-[ "$1" = as ] && [ "$2" = quick ] || exit 2
-[ "${FAKE_PERSONA_FAIL:-false}" != true ] || exit 1
+if [ "$1" != as ] || [ "$2" != quick ]; then
+  exit 2
+fi
+if [ "${FAKE_PERSONA_FAIL:-false}" = true ]; then
+  exit 1
+fi
 printf 'export EMAIL_ACCOUNTS=fixture\n'
 SH
   chmod +x "$TMPBIN/prepare-shimmer"
@@ -101,14 +117,20 @@ printf 'desks %s\n' "$*" >> "${DESKS_LOG:?}"
 root="${FAKE_DESKS_ROOT:?FAKE_DESKS_ROOT not set}"
 case "${1:-}" in
   new)
-    [ "${2:-}" = "--id" ] || { echo "expected --id" >&2; exit 2; }
+    if [ "${2:-}" != "--id" ]; then
+      echo "expected --id" >&2
+      exit 2
+    fi
     id="${3:?id required}"
     mkdir -p "$root/$id/.desk"
     printf '{"id":"%s"}\n' "$id" > "$root/$id/.desk/registry.json"
     ;;
   path)
     id="${2:?id required}"
-    [ -d "$root/$id" ] || { echo "desk not found: $id" >&2; exit 1; }
+    if [ ! -d "$root/$id" ]; then
+      echo "desk not found: $id" >&2
+      exit 1
+    fi
     printf '%s/%s\n' "$root" "$id"
     ;;
   *)

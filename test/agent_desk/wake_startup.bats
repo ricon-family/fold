@@ -109,7 +109,13 @@ setup() {
   home_real=$(cd "$home" && pwd -P)
   export FAKE_SESSION_CWD="$home_real"
 
-  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --work-dir "$work_dir" --yes
+  run fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --model openai-codex/gpt-5.6-sol \
+    --work-dir "$work_dir" \
+    --yes
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"launching fresh wake in shell quick-a"* ]]
@@ -132,7 +138,14 @@ setup() {
   export FAKE_SESSIONS_MODE=deadline-edge
   export FAKE_SESSIONS_DELAY=1.1
 
-  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --startup-timeout 1 --work-dir "$work_dir" --yes
+  run fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --model openai-codex/gpt-5.6-sol \
+    --startup-timeout 1 \
+    --work-dir "$work_dir" \
+    --yes
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"Agent wake ready"* ]]
@@ -146,7 +159,12 @@ setup() {
   make_repo "$home" home
   printf 'hello packet\n' > "$packet"
 
-  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --shell-ready-timeout 99999999999999999999
+  run fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --model openai-codex/gpt-5.6-sol \
+    --shell-ready-timeout 99999999999999999999
 
   [ "$status" -ne 0 ]
   [[ "$output" == *"--shell-ready-timeout must be an integer from 1 to 300"* ]]
@@ -161,7 +179,13 @@ setup() {
   export FAKE_SESSION_CWD="$(cd "$home" && pwd -P)"
   export SHELL_RUN_MODE=fail
 
-  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --shell-ready-timeout 2 --yes
+  run fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --model openai-codex/gpt-5.6-sol \
+    --shell-ready-timeout 2 \
+    --yes
 
   [ "$status" -ne 0 ]
   [[ "$output" == *"probe did not execute"* ]]
@@ -179,7 +203,14 @@ setup() {
   export FAKE_SESSION_CWD="$(cd "$home" && pwd -P)"
   export FAKE_SESSIONS_MODE=never
 
-  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --startup-timeout 1 --work-dir "$work_dir" --yes
+  run fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --model openai-codex/gpt-5.6-sol \
+    --startup-timeout 1 \
+    --work-dir "$work_dir" \
+    --yes
 
   [ "$status" -ne 0 ]
   [[ "$output" == *"no new live Pi process appeared during the 1s window or final observation"* ]]
@@ -196,7 +227,14 @@ setup() {
   export FAKE_SESSIONS_MODE=never
   export SHELL_STATUS_MODE=fail-after-run
 
-  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --startup-timeout 5 --work-dir "$work_dir" --yes
+  run fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --model openai-codex/gpt-5.6-sol \
+    --startup-timeout 5 \
+    --work-dir "$work_dir" \
+    --yes
 
   [ "$status" -ne 0 ]
   [[ "$output" == *"agent shell exited before Pi became ready"* ]]

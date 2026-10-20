@@ -5,7 +5,8 @@ bats_require_minimum_version 1.5.0
 load test_helper
 
 write_passing_test() {
-  local path="$1" name="$2"
+  local path="$1"
+  local name="$2"
   mkdir -p "$(dirname "$path")"
   local test_keyword='@test'
   printf '%s\n' \
@@ -92,13 +93,17 @@ write_passing_test() {
 
   for side in one two; do
     other=one
-    [ "$side" = one ] && other=two
+    if [ "$side" = one ]; then
+      other=two
+    fi
     cat > "$probe_dir/$side.bats" <<BATS
 #!/usr/bin/env bats
 $test_keyword "$side worker observes $other worker" {
   touch "\$PROBE_DIR/$side"
   for _ in {1..50}; do
-    [ ! -e "\$PROBE_DIR/$other" ] || return 0
+    if [ -e "\$PROBE_DIR/$other" ]; then
+      return 0
+    fi
     sleep 0.05
   done
   false

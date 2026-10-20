@@ -23,7 +23,8 @@ ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
 source "$ROOT/.mise/lib/agent_desk.sh"
 
 record_pi_process_baseline() {
-  local baseline="$1" session_processes known_count
+  local baseline="$1"
+  local session_processes known_count
 
   if ! session_processes=$("$SESSIONS_BIN" ps --all --json); then
     echo "ERROR: could not inspect Sessions processes before wake" >&2
@@ -34,29 +35,68 @@ record_pi_process_baseline() {
     return 1
   fi
   if [ "$MODE" = resume ]; then
-    known_count=$(printf '%s\n' "$session_processes" | "$JQ_BIN" -r --arg id "$SESSION_ID" '[.[] | select(.session_id == $id)] | length')
+    known_count=$("$JQ_BIN" -r --arg id "$SESSION_ID" '
+      [.[] | select(.session_id == $id)] | length
+    ' <<< "$session_processes")
     if [ "$known_count" -eq 0 ]; then
       echo "ERROR: Sessions has no process history for session: $SESSION_ID" >&2
       return 1
     fi
-    printf '%s\n' "$session_processes" |
-      "$JQ_BIN" -r --arg id "$SESSION_ID" \
-        '.[] | select(.session_id == $id) | [(.pid | tostring), (.process_start_id // "")] | @tsv' \
-        > "$baseline"
+    "$JQ_BIN" -r --arg id "$SESSION_ID" '
+      .[]
+      | select(.session_id == $id)
+      | [(.pid | tostring), (.process_start_id // "")]
+      | @tsv
+    ' <<< "$session_processes" > "$baseline"
   else
-    printf '%s\n' "$session_processes" |
-      "$JQ_BIN" -r --arg cwd "$HOME_PATH" '.[] | select(.cwd == $cwd) | .session_id' \
-        > "$baseline"
+    "$JQ_BIN" -r --arg cwd "$HOME_PATH" '
+      .[]
+      | select(.cwd == $cwd)
+      | .session_id
+    ' <<< "$session_processes" > "$baseline"
   fi
 }
 
+find_new_pi_session() {
+  local session_processes="$1"
+  local baseline="$2"
+
+  "$JQ_BIN" -r \
+    --arg mode "$MODE" \
+    --arg id "$SESSION_ID" \
+    --arg cwd "$HOME_PATH" \
+    --rawfile baseline "$baseline" '
+      ($baseline | split("\n")) as $known_keys
+      | first(
+          .[]
+          | select(.cwd == $cwd)
+          | select(.status == "live")
+          | select(.harness == "pi")
+          | select($mode != "resume" or .session_id == $id)
+          | (
+              if $mode == "resume" then
+                [(.pid | tostring), (.process_start_id // "")] | @tsv
+              else
+                .session_id
+              end
+            ) as $process_key
+          | select($known_keys | index($process_key) | not)
+          | .session_id
+        )
+    ' <<< "$session_processes"
+}
+
 wait_for_new_pi_process() {
-  local baseline="$1" started_at=$SECONDS final_observation session_processes ready_value
+  local baseline="$1"
+  local deadline final_observation
+  local session_processes ready_session
+
+  deadline=$((SECONDS + STARTUP_TIMEOUT))
 
   printf '\nwaiting %ss plus one final observation for the Pi process\n' "$STARTUP_TIMEOUT"
   while :; do
     final_observation=false
-    if [ $((SECONDS - started_at)) -ge "$STARTUP_TIMEOUT" ]; then
+    if [ "$SECONDS" -ge "$deadline" ]; then
       final_observation=true
     fi
     if ! agent_desk_shell_status "$SHELL_NAME" >/dev/null 2>&1; then
@@ -76,38 +116,11 @@ wait_for_new_pi_process() {
       return 1
     fi
 
-    ready_value=
-    if [ "$MODE" = resume ]; then
-      ready_value=$(
-        printf '%s\n' "$session_processes" |
-          "$JQ_BIN" -r --arg id "$SESSION_ID" --arg cwd "$HOME_PATH" \
-            '.[] | select(.session_id == $id and .cwd == $cwd and .status == "live" and .harness == "pi") | [(.pid | tostring), (.process_start_id // "")] | @tsv' |
-          while IFS= read -r process_key; do
-            [ -n "$process_key" ] || continue
-            if ! grep -Fqx "$process_key" "$baseline"; then
-              printf '%s\n' "$SESSION_ID"
-              break
-            fi
-          done
-      )
-    else
-      ready_value=$(
-        printf '%s\n' "$session_processes" |
-          "$JQ_BIN" -r --arg cwd "$HOME_PATH" \
-            '.[] | select(.cwd == $cwd and .status == "live" and .harness == "pi") | .session_id' |
-          while IFS= read -r session_id; do
-            [ -n "$session_id" ] || continue
-            if ! grep -Fqx "$session_id" "$baseline"; then
-              printf '%s\n' "$session_id"
-              break
-            fi
-          done
-      )
-    fi
-    if [ -n "$ready_value" ]; then
+    ready_session=$(find_new_pi_session "$session_processes" "$baseline")
+    if [ -n "$ready_session" ]; then
       printf 'Agent wake ready\n\n'
       printf 'mode:    %s\n' "$MODE"
-      printf 'session: %s\n' "$ready_value"
+      printf 'session: %s\n' "$ready_session"
       printf 'cwd:     %s\n' "$HOME_PATH"
       printf 'attach:  shell attach %s\n' "$SHELL_NAME"
       return 0
@@ -116,7 +129,7 @@ wait_for_new_pi_process() {
     if [ "$final_observation" = true ]; then
       break
     fi
-    if [ $((SECONDS - started_at)) -lt "$STARTUP_TIMEOUT" ]; then
+    if [ "$SECONDS" -lt "$deadline" ]; then
       sleep 1
     fi
   done
@@ -305,6 +318,10 @@ BASELINE="$WORK_DIR/baseline-processes.txt"
 record_pi_process_baseline "$BASELINE"
 
 printf '\nlaunching %s wake in shell %s from %s\n' "$MODE" "$SHELL_NAME" "$HOME_PATH"
-"$AGENT_DESK_SHELL_BIN" run --probe-ready --ready-timeout "$SHELL_READY_TIMEOUT" --cwd "$HOME_PATH" "$SHELL_NAME" "$LAUNCHER"
+"$AGENT_DESK_SHELL_BIN" run \
+  --probe-ready \
+  --ready-timeout "$SHELL_READY_TIMEOUT" \
+  --cwd "$HOME_PATH" \
+  "$SHELL_NAME" "$LAUNCHER"
 
 wait_for_new_pi_process "$BASELINE"

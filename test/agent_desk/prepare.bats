@@ -56,10 +56,23 @@ setup() {
   [[ "$output" == *"== setup home email =="* ]]
   [[ "$output" == *"== verify home readiness =="* ]]
   [[ "$output" == *"Ready. Next wake command:"* ]]
-  auth_line=$(grep -nF "mise run homes:auth quick --home $HOME --json --check" "$MISE_LOG" | cut -d: -f1)
-  adopt_line=$(grep -nF "mise run homes:adopt-remote quick --home $desk_path/home --branch main --yes --repo quick-ricon/home" "$MISE_LOG" | cut -d: -f1)
-  email_line=$(grep -nF "mise run homes:email:setup quick --home $desk_path/home --yes" "$MISE_LOG" | cut -d: -f1)
-  status_line=$(grep -nF "mise run homes:status quick --home $desk_path/home --json --check" "$MISE_LOG" | cut -d: -f1)
+  auth_line=$(
+    grep -nF "mise run homes:auth quick --home $HOME --json --check" "$MISE_LOG" |
+      cut -d: -f1
+  )
+  adopt_line=$(
+    grep -nF \
+      "mise run homes:adopt-remote quick --home $desk_path/home --branch main --yes --repo quick-ricon/home" \
+      "$MISE_LOG" | cut -d: -f1
+  )
+  email_line=$(
+    grep -nF "mise run homes:email:setup quick --home $desk_path/home --yes" "$MISE_LOG" |
+      cut -d: -f1
+  )
+  status_line=$(
+    grep -nF "mise run homes:status quick --home $desk_path/home --json --check" "$MISE_LOG" |
+      cut -d: -f1
+  )
   [ "$auth_line" -lt "$adopt_line" ]
   [ "$adopt_line" -lt "$email_line" ]
   [ "$email_line" -lt "$status_line" ]
@@ -77,7 +90,10 @@ setup() {
   write_fake_desks
   export FAKE_EMAIL_INPUTS_FAIL=true
 
-  run fold_task agent:desk:prepare quick --desk-id email-incomplete --repo quick-ricon/home --yes
+  run fold_task agent:desk:prepare quick \
+    --desk-id email-incomplete \
+    --repo quick-ricon/home \
+    --yes
 
   [ "$status" -ne 0 ]
   [[ "$output" == *'incomplete email inputs'* ]]
@@ -90,7 +106,10 @@ setup() {
   write_fake_desks
   export FAKE_PERSONA_FAIL=true
 
-  run fold_task agent:desk:prepare quick --desk-id persona-failed --repo quick-ricon/home --yes
+  run fold_task agent:desk:prepare quick \
+    --desk-id persona-failed \
+    --repo quick-ricon/home \
+    --yes
 
   [ "$status" -ne 0 ]
   [ ! -s "$DESKS_LOG" ]
@@ -102,7 +121,10 @@ setup() {
   mkdir -p "$desk"
   write_fake_mise_for_prepare
 
-  run fold_task agent:desk:prepare quick --desk "$desk" --repo quick-ricon/home --skip-email
+  run fold_task agent:desk:prepare quick \
+    --desk "$desk" \
+    --repo quick-ricon/home \
+    --skip-email
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"skip email: no mailbox provisioning or validation"* ]]
@@ -116,7 +138,11 @@ setup() {
   mkdir -p "$desk"
   write_fake_mise_for_prepare
 
-  run fold_task agent:desk:prepare quick --desk "$desk" --repo quick-ricon/home --skip-email --yes
+  run fold_task agent:desk:prepare quick \
+    --desk "$desk" \
+    --repo quick-ricon/home \
+    --skip-email \
+    --yes
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"Ready. Next wake command:"* ]]
@@ -145,9 +171,19 @@ setup() {
   desk="$FAKE_DESKS_ROOT/$desk_id"
   grep -F "desks new --id $desk_id" "$DESKS_LOG" >/dev/null
   grep -F "desks path $desk_id" "$DESKS_LOG" >/dev/null
-  auth_line=$(grep -nF "mise run homes:auth quick --home $HOME --json --check" "$MISE_LOG" | cut -d: -f1)
-  adopt_line=$(grep -nF "mise run homes:adopt-remote quick --home $desk/home --branch main --yes --repo quick-ricon/home" "$MISE_LOG" | cut -d: -f1)
-  email_line=$(grep -nF "mise run homes:email:setup quick --home $desk/home --yes" "$MISE_LOG" | cut -d: -f1)
+  auth_line=$(
+    grep -nF "mise run homes:auth quick --home $HOME --json --check" "$MISE_LOG" |
+      cut -d: -f1
+  )
+  adopt_line=$(
+    grep -nF \
+      "mise run homes:adopt-remote quick --home $desk/home --branch main --yes --repo quick-ricon/home" \
+      "$MISE_LOG" | cut -d: -f1
+  )
+  email_line=$(
+    grep -nF "mise run homes:email:setup quick --home $desk/home --yes" "$MISE_LOG" |
+      cut -d: -f1
+  )
   [ "$auth_line" -lt "$adopt_line" ]
   [ "$adopt_line" -lt "$email_line" ]
   [[ "$output" == *"desk id: $desk_id"* ]]
@@ -162,7 +198,10 @@ setup() {
   write_fake_desks
   export FAKE_AUTH_PREREQUISITES_FAIL=true
 
-  run fold_task agent:desk:prepare quick --desk-id blocked --repo quick-ricon/home --yes
+  run fold_task agent:desk:prepare quick \
+    --desk-id blocked \
+    --repo quick-ricon/home \
+    --yes
 
   [ "$status" -ne 0 ]
   grep -q 'homes:auth .* --json --check' "$MISE_LOG"
@@ -178,7 +217,10 @@ setup() {
   cp "$desk/.gitconfig" "$BATS_TEST_TMPDIR/before.gitconfig"
   write_fake_mise_for_prepare
 
-  run fold_task agent:desk:prepare quick --desk "$desk" --repo quick-ricon/home --yes
+  run fold_task agent:desk:prepare quick \
+    --desk "$desk" \
+    --repo quick-ricon/home \
+    --yes
 
   [ "$status" -eq 0 ]
   cmp -s "$desk/.gitconfig" "$BATS_TEST_TMPDIR/before.gitconfig"

@@ -53,7 +53,12 @@ setup() {
   printf 'hello packet\n' > "$packet"
   home_real=$(cd "$home" && pwd -P)
 
-  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --work-dir "$work_dir"
+  run fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --model openai-codex/gpt-5.6-sol \
+    --work-dir "$work_dir"
 
   [ "$status" -eq 0 ]
   [[ "$output" == *"identity-source: $home_real"* ]]
@@ -85,7 +90,12 @@ setup() {
   export __MISE_DIFF="stale-parent-activation"
   write_target_identity_shimmer
 
-  fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --work-dir "$work_dir" >/dev/null
+  fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --model openai-codex/gpt-5.6-sol \
+    --work-dir "$work_dir" >/dev/null
   run "$work_dir/start-quick-a.sh"
 
   [ "$status" -eq 0 ]
@@ -107,8 +117,13 @@ setup() {
   export REQUIRE_LAUNCH_CONTEXT_RESET=true
   write_target_identity_shimmer
 
-  fold_task agent:desk:wake quick --home "$home" --identity-source "$identity_source" \
-    --shell quick-a --packet "$packet" --model test/model --work-dir "$work_dir" >/dev/null
+  fold_task agent:desk:wake quick \
+    --home "$home" \
+    --identity-source "$identity_source" \
+    --shell quick-a \
+    --packet "$packet" \
+    --model test/model \
+    --work-dir "$work_dir" >/dev/null
   run "$work_dir/start-quick-a.sh"
 
   [ "$status" -eq 0 ]
@@ -129,8 +144,13 @@ setup() {
 
   for session in '' session-123; do
     work_dir="$BATS_TEST_TMPDIR/wake-$session"
-    fold_task agent:desk:wake quick --home "$home/nested" --session "$session" \
-      --shell quick-a --packet "$packet" --model test/model --work-dir "$work_dir" >/dev/null
+    fold_task agent:desk:wake quick \
+      --home "$home/nested" \
+      --session "$session" \
+      --shell quick-a \
+      --packet "$packet" \
+      --model test/model \
+      --work-dir "$work_dir" >/dev/null
     run "$work_dir/start-quick-a.sh"
 
     [ "$status" -ne 0 ]
@@ -170,15 +190,25 @@ setup() {
 
   for session in '' session-123; do
     work_dir="$BATS_TEST_TMPDIR/wake-$session"
-    fold_task agent:desk:wake quick --home "$home" --session "$session" \
-      --shell quick-a --packet "$packet" --model test/model --work-dir "$work_dir" >/dev/null
-    run env GIT_DIR="$BATS_TEST_TMPDIR/parent/.git" \
-      GIT_WORK_TREE="$BATS_TEST_TMPDIR/parent" GIT_COMMON_DIR="$BATS_TEST_TMPDIR/parent/.git" \
+    fold_task agent:desk:wake quick \
+      --home "$home" \
+      --session "$session" \
+      --shell quick-a \
+      --packet "$packet" \
+      --model test/model \
+      --work-dir "$work_dir" >/dev/null
+
+    run env \
+      GIT_DIR="$BATS_TEST_TMPDIR/parent/.git" \
+      GIT_WORK_TREE="$BATS_TEST_TMPDIR/parent" \
+      GIT_COMMON_DIR="$BATS_TEST_TMPDIR/parent/.git" \
       "$work_dir/start-quick-a.sh"
 
     [ "$status" -eq 0 ]
     log="$AGENT_LOG"
-    [ -z "$session" ] || log="$SESSIONS_ENV_LOG"
+    if [ -n "$session" ]; then
+      log="$SESSIONS_ENV_LOG"
+    fi
     grep -Fx "AGENT_HOME=$home_real" "$log"
     grep -Fx 'AGENT_IDENTITY=quick' "$log"
     grep -Fx 'CHAT_IDENTITY=quick' "$log"
@@ -222,7 +252,12 @@ setup() {
   export AGENT_LOG="$agent_log"
   write_target_identity_shimmer
 
-  fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model test/model --work-dir "$work_dir" >/dev/null
+  fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --model test/model \
+    --work-dir "$work_dir" >/dev/null
   run "$work_dir/start-quick-a.sh"
 
   [ "$status" -eq 0 ]
@@ -244,7 +279,12 @@ setup() {
   export AGENT_LOG="$agent_log"
   write_target_identity_shimmer
 
-  fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model test/model --work-dir "$work_dir" >/dev/null
+  fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --model test/model \
+    --work-dir "$work_dir" >/dev/null
   run "$work_dir/start-quick-a.sh"
 
   [ "$status" -ne 0 ]
@@ -260,7 +300,12 @@ setup() {
   git -C "$home" config user.name ''
   printf 'hello packet\n' > "$packet"
 
-  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model test/model --work-dir "$work_dir"
+  run fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --model test/model \
+    --work-dir "$work_dir"
 
   [ "$status" -ne 0 ]
   [[ "$output" == *'prepared target home has no Git name'* ]]
@@ -279,7 +324,12 @@ setup() {
   export FAKE_ACTIVE_SIGNING_KEY=5ea22cee669f73cb
   write_target_identity_shimmer
 
-  fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --work-dir "$work_dir" >/dev/null
+  fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --model openai-codex/gpt-5.6-sol \
+    --work-dir "$work_dir" >/dev/null
   run "$work_dir/start-quick-a.sh"
 
   [ "$status" -eq 0 ]
@@ -298,7 +348,12 @@ setup() {
   export FAKE_ACTIVE_SIGNING_KEY=1111222233334444
   write_target_identity_shimmer
 
-  fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --work-dir "$work_dir" >/dev/null
+  fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --model openai-codex/gpt-5.6-sol \
+    --work-dir "$work_dir" >/dev/null
   run "$work_dir/start-quick-a.sh"
 
   [ "$status" -ne 0 ]
@@ -317,7 +372,12 @@ setup() {
   export FAKE_GITHUB_LOGIN=junior-ricon
   write_target_identity_shimmer
 
-  fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --work-dir "$work_dir" >/dev/null
+  fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --model openai-codex/gpt-5.6-sol \
+    --work-dir "$work_dir" >/dev/null
   run "$work_dir/start-quick-a.sh"
 
   [ "$status" -ne 0 ]
@@ -349,7 +409,12 @@ esac
 SH
   chmod +x "$TMPBIN/shimmer"
 
-  fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --work-dir "$work_dir" >/dev/null
+  fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --model openai-codex/gpt-5.6-sol \
+    --work-dir "$work_dir" >/dev/null
   run "$work_dir/start-quick-a.sh"
 
   [ "$status" -eq 23 ]
@@ -369,7 +434,12 @@ SH
   export AGENT_LOG="$agent_log"
   write_target_identity_shimmer
 
-  fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" --model openai-codex/gpt-5.6-sol --work-dir "$work_dir" >/dev/null
+  fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --model openai-codex/gpt-5.6-sol \
+    --work-dir "$work_dir" >/dev/null
   run "$work_dir/start-quick-a.sh"
 
   [ "$status" -ne 0 ]
@@ -383,7 +453,12 @@ SH
   make_repo "$home" home
   repo_real=$(cd "$REPO_DIR" && pwd -P)
 
-  run fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet AGENTS.md --model openai-codex/gpt-5.6-sol --work-dir "$work_dir"
+  run fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet AGENTS.md \
+    --model openai-codex/gpt-5.6-sol \
+    --work-dir "$work_dir"
 
   [ "$status" -eq 0 ]
   export AGENT_LOG="$BATS_TEST_TMPDIR/agent.log"
@@ -406,8 +481,13 @@ SH
   export AGENT_MESSAGE_LOG="$BATS_TEST_TMPDIR/message"
   write_target_identity_shimmer
 
-  fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" \
-    --title "$literal" --model "$literal" --work-dir "$work_dir" >/dev/null
+  fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --title "$literal" \
+    --model "$literal" \
+    --work-dir "$work_dir" >/dev/null
   run "$work_dir/start-quick-a.sh"
 
   [ "$status" -eq 0 ]
@@ -435,8 +515,12 @@ SH
 
   # Remove the owned user.name entry without updating its ownership record.
   export GIT_CONFIG_KEY_0=core.editor
-  fold_task agent:desk:wake quick --home "$home" --shell quick-a --packet "$packet" \
-    --model test/model --work-dir "$work_dir" >/dev/null
+  fold_task agent:desk:wake quick \
+    --home "$home" \
+    --shell quick-a \
+    --packet "$packet" \
+    --model test/model \
+    --work-dir "$work_dir" >/dev/null
   run "$work_dir/start-quick-a.sh"
 
   [ "$status" -ne 0 ]
