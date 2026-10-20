@@ -197,6 +197,10 @@ case "${1:-}" in
       [ -z "${GIT_CONFIG_COUNT:-}" ]
       [ -z "${GIT_CONFIG_KEY_0:-}" ]
       [ -z "${GIT_CONFIG_VALUE_0:-}" ]
+      if [ -n "${SHIMMER_PERSONA_STATE+x}" ]; then
+        echo 'inherited persona ownership state reached target activation' >&2
+        exit 1
+      fi
       [ -z "${GIT_DIR:-}" ]
       [ -z "${GIT_WORK_TREE:-}" ]
       [ -z "${GIT_COMMON_DIR:-}" ]
@@ -233,6 +237,7 @@ case "${1:-}" in
       printf 'GIT_AUTHOR_EMAIL=%s\n' "${GIT_AUTHOR_EMAIL:-unset}"
       printf 'GIT_COMMITTER_NAME=%s\n' "${GIT_COMMITTER_NAME:-unset}"
       printf 'GIT_COMMITTER_EMAIL=%s\n' "${GIT_COMMITTER_EMAIL:-unset}"
+      printf 'GIT_SIGNING_KEY=%s\n' "$(git config --get user.signingkey)"
       printf 'GH_TOKEN=%s\n' "${GH_TOKEN:-unset}"
     } > "${AGENT_LOG:?}"
     ;;
@@ -767,7 +772,7 @@ JSON
   done
 }
 
-@test "agent:desk:wake scrubs a poisoned parent persona before target activation" {
+@test "agent:desk:wake replaces an activated parent persona without mutating the parent" {
   home="$BATS_TEST_TMPDIR/home"
   work_dir="$BATS_TEST_TMPDIR/wake"
   packet="$BATS_TEST_TMPDIR/packet.md"
@@ -791,6 +796,16 @@ JSON
   export GIT_CONFIG_COUNT=1
   export GIT_CONFIG_KEY_0=user.name
   export GIT_CONFIG_VALUE_0=junior
+  export SHIMMER_PERSONA_STATE='{
+    "version": 1,
+    "variables": {},
+    "git": [{
+      "key": "user.name",
+      "hash": "8fdd880f097cddfef86895d2c48f649e943bed14639f0ad29671508b536c9fc1",
+      "owned": true
+    }]
+  }'
+  parent_persona_state="$SHIMMER_PERSONA_STATE"
   export __MISE_DIFF="junior-activation"
   write_target_identity_shimmer
 
@@ -809,7 +824,15 @@ JSON
   grep -Fx 'GIT_AUTHOR_EMAIL=quick@ricon.family' "$agent_log"
   grep -Fx 'GIT_COMMITTER_NAME=quick' "$agent_log"
   grep -Fx 'GIT_COMMITTER_EMAIL=quick@ricon.family' "$agent_log"
+  grep -Fx 'GIT_SIGNING_KEY=AABBCCDDEEFF0011' "$agent_log"
   grep -Fx 'GH_TOKEN=quick-target-token' "$agent_log"
+
+  [ "$SHIMMER_PERSONA_STATE" = "$parent_persona_state" ]
+  [ "$GIT_CONFIG_COUNT" = 1 ]
+  [ "$GIT_CONFIG_KEY_0" = user.name ]
+  [ "$GIT_CONFIG_VALUE_0" = junior ]
+  [ "$GIT_AUTHOR_NAME" = junior ]
+  [ "$GH_TOKEN" = junior-token ]
 }
 
 @test "agent:desk:wake verifies configured Git identity independently of the handle" {
