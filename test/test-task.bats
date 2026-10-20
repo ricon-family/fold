@@ -5,8 +5,7 @@ bats_require_minimum_version 1.5.0
 load test_helper
 
 write_passing_test() {
-  local path="$1"
-  local name="$2"
+  local path="$1" name="$2"
   mkdir -p "$(dirname "$path")"
   local test_keyword='@test'
   printf '%s\n' \

@@ -58,8 +58,7 @@ record_pi_process_baseline() {
 }
 
 find_new_pi_session() {
-  local session_processes="$1"
-  local baseline="$2"
+  local session_processes="$1" baseline="$2"
 
   "$JQ_BIN" -r \
     --arg mode "$MODE" \
