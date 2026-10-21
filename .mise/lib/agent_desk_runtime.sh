@@ -8,6 +8,7 @@ agent_desk_runtime_error() {
 
 agent_desk_runtime_require() {
   local name="$1"
+
   if [ -z "${!name:-}" ]; then
     agent_desk_runtime_error "missing runtime input: $name"
   fi
@@ -94,6 +95,7 @@ agent_desk_runtime_verify_git_and_github() {
   if [ "${GIT_AUTHOR_EMAIL:-}" != "$AGENT_DESK_EXPECTED_EMAIL" ]; then
     agent_desk_runtime_error "Git author email is not $AGENT_DESK_EXPECTED_EMAIL"
   fi
+
   if [ "${GIT_COMMITTER_NAME:-}" != "$AGENT_DESK_EXPECTED_NAME" ]; then
     agent_desk_runtime_error "Git committer name does not match the prepared target home"
   fi

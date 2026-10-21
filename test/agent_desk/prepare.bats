@@ -41,6 +41,7 @@ setup() {
   mkdir -p "$desk/.desk"
   printf '{"id":"probe"}\n' > "$desk/.desk/registry.json"
   desk_path="$desk"
+
   write_fake_mise_for_prepare
 
   run fold_task agent:desk:prepare quick \
@@ -56,6 +57,7 @@ setup() {
   [[ "$output" == *"== setup home email =="* ]]
   [[ "$output" == *"== verify home readiness =="* ]]
   [[ "$output" == *"Ready. Next wake command:"* ]]
+
   auth_line=$(
     grep -nF "mise run homes:auth quick --home $HOME --json --check" "$MISE_LOG" |
       cut -d: -f1
@@ -73,13 +75,16 @@ setup() {
     grep -nF "mise run homes:status quick --home $desk_path/home --json --check" "$MISE_LOG" |
       cut -d: -f1
   )
+
   [ "$auth_line" -lt "$adopt_line" ]
   [ "$adopt_line" -lt "$email_line" ]
   [ "$email_line" -lt "$status_line" ]
+
   [ ! -e "$desk/.gitconfig" ]
   ! grep -q 'homes:auth:setup' "$MISE_LOG"
   [ -d "$desk/home/.git" ]
   [ -f "$desk/home/.emails/himalaya.toml" ]
+
   if [ -f "$SHELL_LOG" ]; then
     ! grep -q 'shell run' "$SHELL_LOG"
   fi
@@ -167,10 +172,12 @@ setup() {
     --yes
 
   [ "$status" -eq 0 ]
+
   desk_id="quick-rewind-investigation-20260620133700"
   desk="$FAKE_DESKS_ROOT/$desk_id"
   grep -F "desks new --id $desk_id" "$DESKS_LOG" >/dev/null
   grep -F "desks path $desk_id" "$DESKS_LOG" >/dev/null
+
   auth_line=$(
     grep -nF "mise run homes:auth quick --home $HOME --json --check" "$MISE_LOG" |
       cut -d: -f1
@@ -184,8 +191,10 @@ setup() {
     grep -nF "mise run homes:email:setup quick --home $desk/home --yes" "$MISE_LOG" |
       cut -d: -f1
   )
+
   [ "$auth_line" -lt "$adopt_line" ]
   [ "$adopt_line" -lt "$email_line" ]
+
   [[ "$output" == *"desk id: $desk_id"* ]]
   [[ "$output" == *"mise run agent:desk:wake quick --desk $desk --shell $desk_id --packet /tmp/packet.md --model '<model>' --yes"* ]]
   [ -f "$desk/.desk/registry.json" ]
@@ -215,6 +224,7 @@ setup() {
   mkdir -p "$desk"
   printf '# existing workspace settings\n' > "$desk/.gitconfig"
   cp "$desk/.gitconfig" "$BATS_TEST_TMPDIR/before.gitconfig"
+
   write_fake_mise_for_prepare
 
   run fold_task agent:desk:prepare quick \

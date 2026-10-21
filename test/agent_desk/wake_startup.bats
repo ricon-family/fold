@@ -37,6 +37,7 @@ setup() {
   [[ "$output" == *"mode:    resume"* ]]
   [[ "$output" == *"session: session-123"* ]]
   [[ "$output" == *"attach:  shell attach quick-cont"* ]]
+
   work_real=$(cd "$work_dir" && pwd -P)
   grep -q "shell run --probe-ready --ready-timeout 10 --cwd $home_real quick-cont $work_real/start-quick-cont.sh" "$SHELL_LOG"
   [ "$(cat "$SESSIONS_CALLS")" -ge 2 ]
@@ -123,6 +124,7 @@ setup() {
   [[ "$output" == *"mode:    fresh"* ]]
   [[ "$output" == *"session: new-pi-session"* ]]
   [[ "$output" == *"attach:  shell attach quick-a"* ]]
+
   work_real=$(cd "$work_dir" && pwd -P)
   grep -q "shell run --probe-ready --ready-timeout 10 --cwd $home_real quick-a $work_real/start-quick-a.sh" "$SHELL_LOG"
   grep -q "sessions ps --all --json" "$SESSIONS_LOG"

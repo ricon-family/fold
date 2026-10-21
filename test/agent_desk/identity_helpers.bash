@@ -11,6 +11,7 @@ if [ "${1:-}" = api ] && [ "${2:-}" = user ] &&
   printf '%s\n' "${FAKE_GITHUB_LOGIN:-quick-ricon}"
   exit 0
 fi
+
 echo "unexpected gh command: $*" >&2
 exit 2
 SH
@@ -37,11 +38,13 @@ case "${1:-}" in
       [ -z "${GIT_COMMON_DIR:-}" ]
       [ -z "${__MISE_DIFF:-}" ]
     fi
+
     if [ -n "${SHIMMER_ACTIVATE_LIB:-}" ]; then
       source "$SHIMMER_ACTIVATE_LIB"
       persona_activate "${2:?persona required}"
       exit
     fi
+
     if [ -n "${FAKE_IDENTITY_HOME:-}" ]; then
       printf 'export AGENT_HOME=%q\n' "$FAKE_IDENTITY_HOME"
     fi
@@ -99,10 +102,12 @@ SH
 write_resume_sessions() {
   export SESSIONS_LOG="$BATS_TEST_TMPDIR/sessions.log"
   export SESSIONS_ENV_LOG="$BATS_TEST_TMPDIR/sessions-env.log"
+
   cat > "$TMPBIN/sessions" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
 printf 'sessions %s\n' "$*" >> "${SESSIONS_LOG:?}"
+
 if [ "${1:-}" = wake ]; then
   {
     printf 'CWD=%s\n' "$(pwd -P)"
@@ -127,6 +132,7 @@ if [ "${1:-}" = wake ]; then
   } > "${SESSIONS_ENV_LOG:?}"
   exit 0
 fi
+
 echo "unexpected sessions command: $*" >&2
 exit 2
 SH
@@ -145,11 +151,13 @@ setup_switching_personas() {
         ;;
     esac
   done < <(compgen -A variable)
+
   unset SHIMMER_PERSONA_STATE GH_TOKEN GITHUB_TOKEN GH_CONFIG_DIR
   unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL
 
   shimmer_root=$(mise -C "$REPO_DIR" where shiv:shimmer)
   export SHIMMER_ACTIVATE_LIB="$shimmer_root/packages/shimmer/lib/persona/activate.sh"
+
   export FIXTURE_PERSONAS="$BATS_TEST_TMPDIR/personas"
   export FIXTURE_SIGNER=11223344556677889900AABBAABBCCDDEEFF0011
   mkdir -p "$FIXTURE_PERSONAS"
@@ -191,21 +199,25 @@ set -euo pipefail
 if [ "${1:-}" != export ] || [ "${2:-}" != --prefix ]; then
   exit 2
 fi
+
 case "${3:-}" in
   junior/|quick/) cat "$FIXTURE_PERSONAS/${3%/}.json" ;;
 
   *) exit 2 ;;
 esac
 SH
+
   cat > "$TMPBIN/gpg" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ " $* " != *" --list-secret-keys "* ]]; then
   exit 2
 fi
+
 printf 'sec:u:4096:1:AABBCCDDEEFF0011:0:0:::::s:::\n'
 printf 'fpr:::::::::%s:\n' "$FIXTURE_SIGNER"
 SH
+
   chmod +x "$TMPBIN/secrets" "$TMPBIN/gpg"
   write_target_identity_shimmer
 }

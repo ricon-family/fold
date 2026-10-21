@@ -6,8 +6,10 @@ load test_helper
 
 write_passing_test() {
   local path="$1" name="$2"
+
   mkdir -p "$(dirname "$path")"
   local test_keyword='@test'
+
   printf '%s\n' \
     '#!/usr/bin/env bats' \
     "$test_keyword \"$name\" {" \
@@ -95,6 +97,7 @@ write_passing_test() {
     if [ "$side" = one ]; then
       other=two
     fi
+
     cat > "$probe_dir/$side.bats" <<BATS
 #!/usr/bin/env bats
 $test_keyword "$side worker observes $other worker" {

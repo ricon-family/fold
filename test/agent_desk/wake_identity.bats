@@ -67,6 +67,7 @@ setup() {
   if [ -f "$SHELL_LOG" ]; then
     ! grep -q 'shell run' "$SHELL_LOG"
   fi
+
   export AGENT_LOG="$BATS_TEST_TMPDIR/agent.log"
   write_target_identity_shimmer
   "$work_dir/start-quick-a.sh"
@@ -88,6 +89,7 @@ setup() {
   export EMAILS_CONFIG="/agents/junior/home/.emails/himalaya.toml"
   export HIMALAYA_CONFIG="/agents/brownie/home/.emails/himalaya.toml"
   export __MISE_DIFF="stale-parent-activation"
+
   write_target_identity_shimmer
 
   fold_task agent:desk:wake quick \
@@ -99,6 +101,7 @@ setup() {
   run "$work_dir/start-quick-a.sh"
 
   [ "$status" -eq 0 ]
+
   home_real=$(cd "$home" && pwd -P)
   grep -Fx "EMAILS_CONFIG=$home_real/.emails/himalaya.toml" "$agent_log"
   grep -Fx 'HIMALAYA_CONFIG=unset' "$agent_log"
@@ -127,6 +130,7 @@ setup() {
   run "$work_dir/start-quick-a.sh"
 
   [ "$status" -eq 0 ]
+
   home_real=$(cd "$home" && pwd -P)
   grep -Fx "CWD=$home_real" "$AGENT_LOG"
   grep -Fx "AGENT_HOME=$home_real" "$AGENT_LOG"
@@ -172,6 +176,7 @@ setup() {
   export GIT_CONFIG_KEY_0=core.editor
   export GIT_CONFIG_VALUE_0=fixture-editor
   export UNRELATED_SETTING=keep-me
+
   parent_exports=$("$TMPBIN/shimmer" as junior)
   eval "$parent_exports"
   unset parent_exports
@@ -186,6 +191,7 @@ setup() {
   export GITHUB_TOKEN=junior-github-token
   export GH_CONFIG_DIR="/agents/junior/gh"
   export __MISE_DIFF=junior-activation
+
   home_real=$(cd "$home" && pwd -P)
 
   for session in '' session-123; do
@@ -209,6 +215,7 @@ setup() {
     if [ -n "$session" ]; then
       log="$SESSIONS_ENV_LOG"
     fi
+
     grep -Fx "AGENT_HOME=$home_real" "$log"
     grep -Fx 'AGENT_IDENTITY=quick' "$log"
     grep -Fx 'CHAT_IDENTITY=quick' "$log"
@@ -244,10 +251,12 @@ setup() {
   packet="$BATS_TEST_TMPDIR/packet.md"
   agent_log="$BATS_TEST_TMPDIR/agent.log"
   make_repo "$home" home
+
   export FAKE_ACTIVE_NAME='Persona "Author"'
   export FAKE_ACTIVE_EMAIL=commits@example.test
   git -C "$home" config user.name "$FAKE_ACTIVE_NAME"
   git -C "$home" config user.email "$FAKE_ACTIVE_EMAIL"
+
   printf 'hello packet\n' > "$packet"
   export AGENT_LOG="$agent_log"
   write_target_identity_shimmer
@@ -463,9 +472,11 @@ SH
     --work-dir "$work_dir"
 
   [ "$status" -eq 0 ]
+
   export AGENT_LOG="$BATS_TEST_TMPDIR/agent.log"
   write_target_identity_shimmer
   "$work_dir/start-quick-a.sh"
+
   grep -Fx "PACKET=$repo_real/AGENTS.md" "$AGENT_LOG"
 }
 
@@ -496,10 +507,13 @@ SH
   grep -Fx "GIT_AUTHOR_NAME=$literal" "$AGENT_LOG"
   grep -Fx "GIT_COMMITTER_NAME=$literal" "$AGENT_LOG"
   grep -Fx "MODEL=$literal" "$AGENT_LOG"
+
   packet_real=$(cd "$(dirname "$packet")" && pwd -P)/$(basename "$packet")
   grep -Fx "PACKET=$packet_real" "$AGENT_LOG"
+
   printf '[%s]\n%s' "$literal" "$literal" > "$BATS_TEST_TMPDIR/expected-message"
   cmp "$BATS_TEST_TMPDIR/expected-message" "$AGENT_MESSAGE_LOG"
+
   [ ! -e "$marker" ]
 }
 
@@ -511,12 +525,14 @@ SH
   printf 'hello packet\n' > "$packet"
   export AGENT_LOG="$BATS_TEST_TMPDIR/agent.log"
   setup_switching_personas
+
   parent_exports=$("$TMPBIN/shimmer" as junior)
   eval "$parent_exports"
   unset parent_exports
 
   # Remove the owned user.name entry without updating its ownership record.
   export GIT_CONFIG_KEY_0=core.editor
+
   fold_task agent:desk:wake quick \
     --home "$home" \
     --shell quick-a \
@@ -561,6 +577,7 @@ SH
   run "$work_dir/start-quick-cont.sh"
 
   [ "$status" -eq 0 ]
+
   home_real=$(cd "$home" && pwd -P)
   packet_real=$(cd "$(dirname "$packet")" && pwd -P)/$(basename "$packet")
   grep -F "sessions wake session-123 --model openai-codex/gpt-5.6-sol --context-file $packet_real" "$SESSIONS_LOG"

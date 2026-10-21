@@ -21,6 +21,7 @@ case "${1:-}" in
       echo "exited (1)"
       exit 1
     fi
+
     echo "running"
     ;;
 
@@ -33,10 +34,12 @@ case "${1:-}" in
       echo "probe did not execute" >&2
       exit 1
     fi
+
     : > "${SHELL_RUN_MARKER:?}"
     if [ "${SHELL_STATUS_MODE:-ok}" = fail-after-run ]; then
       : > "${SHELL_EXITED_MARKER:?}"
     fi
+
     echo "${5:-}"
     ;;
 

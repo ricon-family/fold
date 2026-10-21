@@ -34,6 +34,7 @@ record_pi_process_baseline() {
     echo "ERROR: Sessions process output is not a JSON array" >&2
     return 1
   fi
+
   if [ "$MODE" = resume ]; then
     known_count=$("$JQ_BIN" -r --arg id "$SESSION_ID" '
       [.[] | select(.session_id == $id)] | length
@@ -42,6 +43,7 @@ record_pi_process_baseline() {
       echo "ERROR: Sessions has no process history for session: $SESSION_ID" >&2
       return 1
     fi
+
     "$JQ_BIN" -r --arg id "$SESSION_ID" '
       .[]
       | select(.session_id == $id)
@@ -98,6 +100,7 @@ wait_for_new_pi_process() {
     if [ "$SECONDS" -ge "$deadline" ]; then
       final_observation=true
     fi
+
     if ! agent_desk_shell_status "$SHELL_NAME" >/dev/null 2>&1; then
       echo "ERROR: agent shell exited before Pi became ready" >&2
       if ! mise run -q agent:desk:smoke --shell "$SHELL_NAME"; then
@@ -138,6 +141,7 @@ wait_for_new_pi_process() {
   else
     echo "ERROR: no new live Pi process appeared during the ${STARTUP_TIMEOUT}s window or final observation" >&2
   fi
+
   if ! mise run -q agent:desk:smoke --shell "$SHELL_NAME"; then
     : # Preserve the primary startup timeout if diagnostics also fail.
   fi
@@ -158,10 +162,12 @@ SHELL_READY_TIMEOUT="${usage_shell_ready_timeout:-10}"
 STARTUP_TIMEOUT="${usage_startup_timeout:-30}"
 WORK_DIR="${usage_work_dir:-}"
 YES="${usage_yes:-false}"
+
 SESSIONS_BIN="${SESSIONS_BIN:-sessions}"
 JQ_BIN="${JQ:-jq}"
 GH_BIN="${GH_BIN:-gh}"
 RUNTIME_PATH="$ROOT/.mise/lib/agent_desk_runtime.sh"
+
 MODE=fresh
 if [ -n "$SESSION_ID" ]; then
   MODE=resume
@@ -171,6 +177,7 @@ validate_agent "$AGENT"
 if [ -n "$SESSION_ID" ]; then
   agent_desk_validate_name session "$SESSION_ID"
 fi
+
 if [ -z "$HOME_PATH" ]; then
   echo "ERROR: --home is required when --desk/home cannot be resolved" >&2
   exit 64
@@ -204,6 +211,7 @@ if [ ! -x "$RUNTIME_PATH" ]; then
   echo "ERROR: maintained agent desk runtime is unavailable: $RUNTIME_PATH" >&2
   exit 1
 fi
+
 PACKET_PATH=$(agent_desk_abs_file "$PACKET_PATH")
 IDENTITY_SOURCE=$(agent_desk_abs_path "$IDENTITY_SOURCE")
 
@@ -211,10 +219,12 @@ if ! command -v "$JQ_BIN" >/dev/null 2>&1; then
   echo "ERROR: jq command not found: $JQ_BIN" >&2
   exit 1
 fi
+
 EXPECTED_NAME=$(agent_desk_clean_git_config_get "$HOME_PATH" user.name || true)
 EXPECTED_EMAIL=$(agent_desk_clean_git_config_get "$HOME_PATH" user.email || true)
 EXPECTED_SIGNING_KEY=$(agent_desk_clean_git_config_get "$HOME_PATH" user.signingkey || true)
 EXPECTED_GPGSIGN=$(agent_desk_clean_git_config_bool "$HOME_PATH" commit.gpgsign || true)
+
 if [ -z "$EXPECTED_NAME" ]; then
   echo "ERROR: prepared target home has no Git name: $HOME_PATH" >&2
   exit 1
@@ -231,6 +241,7 @@ if [ "$EXPECTED_GPGSIGN" != true ]; then
   echo "ERROR: prepared target home does not require signed commits: $HOME_PATH" >&2
   exit 1
 fi
+
 EXPECTED_GITHUB_LOGIN=$(agent_desk_home_github_login "$HOME_PATH")
 
 if [ -z "$WORK_DIR" ]; then
@@ -313,6 +324,7 @@ if [ "$MODE" = resume ]; then
     exit 1
   fi
 fi
+
 BASELINE="$WORK_DIR/baseline-processes.txt"
 record_pi_process_baseline "$BASELINE"
 
