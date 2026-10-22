@@ -169,4 +169,3 @@ SH
   mkdir -p "$FAKE_DESKS_ROOT"
   : > "$DESKS_LOG"
 }
-

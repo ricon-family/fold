@@ -594,4 +594,3 @@ SH
   grep -Fx 'GH_TOKEN=quick-target-token' "$SESSIONS_ENV_LOG"
   grep -Fx 'GIT_CONFIG_COUNT=4' "$SESSIONS_ENV_LOG"
 }
-

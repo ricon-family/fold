@@ -74,4 +74,3 @@ JSON
   [[ "$output" == *"line two"* ]]
   [[ "$output" == *"line three"* ]]
 }
-

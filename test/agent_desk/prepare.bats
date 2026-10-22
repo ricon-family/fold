@@ -249,4 +249,3 @@ setup() {
   [[ "${output}${stderr:-}" == *"explicit --desk path must already exist"* ]]
   [ ! -s "$MISE_LOG" ]
 }
-

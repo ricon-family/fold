@@ -52,4 +52,3 @@ SH
   chmod +x "$TMPBIN/shell"
   export SHELL_BIN="$TMPBIN/shell"
 }
-

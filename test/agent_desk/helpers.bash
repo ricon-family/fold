@@ -29,4 +29,3 @@ make_repo() {
     git -C "$repo" remote add origin https://github.com/quick-ricon/home.git
   fi
 }
-

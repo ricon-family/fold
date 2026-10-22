@@ -148,4 +148,3 @@ SH
   chmod +x "$TMPBIN/sessions"
   export SESSIONS_BIN="$TMPBIN/sessions"
 }
-
