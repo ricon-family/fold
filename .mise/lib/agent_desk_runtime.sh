@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Maintained target-identity boundary for agent desk wakes.
 set -euo pipefail
 
 agent_desk_runtime_error() {
@@ -9,28 +8,34 @@ agent_desk_runtime_error() {
 
 agent_desk_runtime_require() {
   local name="$1"
+
   if [ -z "${!name:-}" ]; then
     agent_desk_runtime_error "missing runtime input: $name"
   fi
 }
 
-agent_desk_runtime_scrub_inherited_identity() {
-  local variable
+agent_desk_runtime_select_home() {
+  local actual_home home_root
 
-  while IFS= read -r variable; do
-    [ -n "$variable" ] || continue
-    unset "$variable"
-  done < <(compgen -A variable GIT_CONFIG_ || true)
+  # Keep persona values and their ownership record together for activation.
+  unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR
+  unset AGENT_HOME AGENT_IDENTITY CHAT_IDENTITY EMAILS_CONFIG HIMALAYA_CONFIG
+  unset GITHUB_TOKEN GH_CONFIG_DIR __MISE_DIFF
 
-  unset \
-    AGENT_HOME AGENT_IDENTITY CHAT_IDENTITY \
-    SHIMMER_PERSONA_STATE \
-    EMAILS_CONFIG HIMALAYA_CONFIG \
-    GH_TOKEN GITHUB_TOKEN GH_CONFIG_DIR \
-    GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL \
-    GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL \
-    GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR \
-    __MISE_DIFF
+  cd "$AGENT_DESK_HOME"
+
+  actual_home=$(pwd -P)
+  if [ "$actual_home" != "$AGENT_DESK_HOME" ]; then
+    agent_desk_runtime_error "working directory does not match the selected home"
+  fi
+
+  if ! home_root=$(git rev-parse --show-toplevel); then
+    agent_desk_runtime_error "selected home is not a Git worktree"
+  fi
+
+  if [ "$home_root" != "$actual_home" ]; then
+    agent_desk_runtime_error "selected home must be the Git worktree root"
+  fi
 }
 
 agent_desk_runtime_signing_keys_match() {
@@ -39,70 +44,102 @@ agent_desk_runtime_signing_keys_match() {
   expected=$(printf '%s' "$1" | tr '[:lower:]' '[:upper:]' | sed 's/^0X//')
   actual=$(printf '%s' "$2" | tr '[:lower:]' '[:upper:]' | sed 's/^0X//')
   case "$expected:$actual" in
-    *[!0-9A-F:]*|:*|*:) return 1 ;;
+    *[!0-9A-F:]*|:*|*:)
+      return 1
+      ;;
   esac
-  [ "${#expected}" -ge 16 ] || return 1
-  [ "${#actual}" -ge 16 ] || return 1
-  [ "$expected" = "$actual" ] && return 0
-  case "$expected" in *"$actual") return 0 ;; esac
-  case "$actual" in *"$expected") return 0 ;; esac
+
+  if [ "${#expected}" -lt 16 ]; then
+    return 1
+  fi
+  if [ "${#actual}" -lt 16 ]; then
+    return 1
+  fi
+
+  if [[ "$expected" == *"$actual" ]]; then
+    return 0
+  fi
+  if [[ "$actual" == *"$expected" ]]; then
+    return 0
+  fi
+
   return 1
 }
 
-agent_desk_runtime_activate_target() {
-  local actual_home home_root actual_github actual_name actual_email actual_signing_key
+agent_desk_runtime_activate_persona() {
   local identity_shell
 
-  agent_desk_runtime_scrub_inherited_identity
-  actual_home=$(pwd -P)
-  [ "$actual_home" = "$AGENT_DESK_HOME" ] || \
-    agent_desk_runtime_error "working directory does not match the selected home"
-  home_root=$(git rev-parse --show-toplevel) || \
-    agent_desk_runtime_error "selected home is not a Git worktree"
-  [ "$home_root" = "$actual_home" ] || \
-    agent_desk_runtime_error "selected home must be the Git worktree root"
-
-  identity_shell=$(cd "$AGENT_DESK_IDENTITY_SOURCE" && shimmer as "$AGENT_DESK_AGENT") || return $?
-  eval "$identity_shell"
+  if identity_shell=$(
+    cd "$AGENT_DESK_IDENTITY_SOURCE" || exit $?
+    shimmer as "$AGENT_DESK_AGENT"
+  ); then
+    eval "$identity_shell"
+  else
+    return $?
+  fi
   unset identity_shell
 
-  [ -z "${AGENT_HOME+x}" ] || \
+  if [ -n "${AGENT_HOME+x}" ]; then
     agent_desk_runtime_error "persona activation must not assign AGENT_HOME"
+  fi
+}
 
-  [ "${GIT_AUTHOR_NAME:-}" = "$AGENT_DESK_EXPECTED_NAME" ] || \
+agent_desk_runtime_verify_git_and_github() {
+  local actual_name actual_email
+  local actual_signing_key commit_signing_enabled
+  local actual_github
+
+  if [ "${GIT_AUTHOR_NAME:-}" != "$AGENT_DESK_EXPECTED_NAME" ]; then
     agent_desk_runtime_error "Git author name does not match the prepared target home"
-  [ "${GIT_AUTHOR_EMAIL:-}" = "$AGENT_DESK_EXPECTED_EMAIL" ] || \
+  fi
+  if [ "${GIT_AUTHOR_EMAIL:-}" != "$AGENT_DESK_EXPECTED_EMAIL" ]; then
     agent_desk_runtime_error "Git author email is not $AGENT_DESK_EXPECTED_EMAIL"
-  [ "${GIT_COMMITTER_NAME:-}" = "$AGENT_DESK_EXPECTED_NAME" ] || \
+  fi
+
+  if [ "${GIT_COMMITTER_NAME:-}" != "$AGENT_DESK_EXPECTED_NAME" ]; then
     agent_desk_runtime_error "Git committer name does not match the prepared target home"
-  [ "${GIT_COMMITTER_EMAIL:-}" = "$AGENT_DESK_EXPECTED_EMAIL" ] || \
+  fi
+  if [ "${GIT_COMMITTER_EMAIL:-}" != "$AGENT_DESK_EXPECTED_EMAIL" ]; then
     agent_desk_runtime_error "Git committer email is not $AGENT_DESK_EXPECTED_EMAIL"
+  fi
 
   actual_name=$(git -C "$AGENT_DESK_HOME" config --get user.name || true)
-  actual_email=$(git -C "$AGENT_DESK_HOME" config --get user.email || true)
-  actual_signing_key=$(git -C "$AGENT_DESK_HOME" config --get user.signingkey || true)
-  [ "$actual_name" = "$AGENT_DESK_EXPECTED_NAME" ] || \
+  if [ "$actual_name" != "$AGENT_DESK_EXPECTED_NAME" ]; then
     agent_desk_runtime_error "Git config user.name does not match the prepared target home"
-  [ "$actual_email" = "$AGENT_DESK_EXPECTED_EMAIL" ] || \
-    agent_desk_runtime_error "Git config user.email is not $AGENT_DESK_EXPECTED_EMAIL"
-  agent_desk_runtime_signing_keys_match \
-    "$AGENT_DESK_EXPECTED_SIGNING_KEY" "$actual_signing_key" || \
-    agent_desk_runtime_error "Git signing key does not match the prepared target home"
-  [ "$(git -C "$AGENT_DESK_HOME" config --bool commit.gpgsign || true)" = true ] || \
-    agent_desk_runtime_error "Git commit signing is not enabled"
+  fi
 
-  command -v "$AGENT_DESK_GH_BIN" >/dev/null 2>&1 || \
+  actual_email=$(git -C "$AGENT_DESK_HOME" config --get user.email || true)
+  if [ "$actual_email" != "$AGENT_DESK_EXPECTED_EMAIL" ]; then
+    agent_desk_runtime_error "Git config user.email is not $AGENT_DESK_EXPECTED_EMAIL"
+  fi
+
+  actual_signing_key=$(git -C "$AGENT_DESK_HOME" config --get user.signingkey || true)
+  if ! agent_desk_runtime_signing_keys_match \
+    "$AGENT_DESK_EXPECTED_SIGNING_KEY" "$actual_signing_key"; then
+    agent_desk_runtime_error "Git signing key does not match the prepared target home"
+  fi
+
+  commit_signing_enabled=$(git -C "$AGENT_DESK_HOME" config --bool commit.gpgsign || true)
+  if [ "$commit_signing_enabled" != true ]; then
+    agent_desk_runtime_error "Git commit signing is not enabled"
+  fi
+
+  if ! command -v "$AGENT_DESK_GH_BIN" >/dev/null 2>&1; then
     agent_desk_runtime_error "GitHub CLI is unavailable: $AGENT_DESK_GH_BIN"
+  fi
   if ! actual_github=$("$AGENT_DESK_GH_BIN" api user --jq .login); then
     agent_desk_runtime_error "GitHub authentication check failed"
   fi
-  [ "$actual_github" = "$AGENT_DESK_EXPECTED_GITHUB_LOGIN" ] || \
+  if [ "$actual_github" != "$AGENT_DESK_EXPECTED_GITHUB_LOGIN" ]; then
     agent_desk_runtime_error \
       "GitHub login is $actual_github, expected $AGENT_DESK_EXPECTED_GITHUB_LOGIN"
+  fi
+}
 
+agent_desk_runtime_bind_home() {
   unset HIMALAYA_CONFIG __MISE_DIFF
-  export EMAILS_CONFIG="$actual_home/.emails/himalaya.toml"
-  export AGENT_HOME="$actual_home"
+  export EMAILS_CONFIG="$AGENT_DESK_HOME/.emails/himalaya.toml"
+  export AGENT_HOME="$AGENT_DESK_HOME"
   export AGENT_IDENTITY="$AGENT_DESK_AGENT"
   export CHAT_IDENTITY="$AGENT_DESK_AGENT"
 }
@@ -126,16 +163,22 @@ unset required_input
 
 case "$AGENT_DESK_MODE" in
   fresh) ;;
+
   resume)
     agent_desk_runtime_require AGENT_DESK_SESSION
     agent_desk_runtime_require AGENT_DESK_MESSAGE
     agent_desk_runtime_require AGENT_DESK_SESSIONS_BIN
     ;;
-  *) agent_desk_runtime_error "unknown wake mode: $AGENT_DESK_MODE" ;;
+
+  *)
+    agent_desk_runtime_error "unknown wake mode: $AGENT_DESK_MODE"
+    ;;
 esac
 
-cd "$AGENT_DESK_HOME"
-agent_desk_runtime_activate_target
+agent_desk_runtime_select_home
+agent_desk_runtime_activate_persona
+agent_desk_runtime_verify_git_and_github
+agent_desk_runtime_bind_home
 
 case "$AGENT_DESK_MODE" in
   fresh)
@@ -143,6 +186,7 @@ case "$AGENT_DESK_MODE" in
     exec shimmer agent --model "$AGENT_DESK_MODEL" "[$AGENT_DESK_TITLE]
 ${packet}"
     ;;
+
   resume)
     exec "$AGENT_DESK_SESSIONS_BIN" wake "$AGENT_DESK_SESSION" \
       --model "$AGENT_DESK_MODEL" \

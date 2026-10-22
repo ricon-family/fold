@@ -6,8 +6,10 @@ load test_helper
 
 write_passing_test() {
   local path="$1" name="$2"
+
   mkdir -p "$(dirname "$path")"
   local test_keyword='@test'
+
   printf '%s\n' \
     '#!/usr/bin/env bats' \
     "$test_keyword \"$name\" {" \
@@ -33,6 +35,15 @@ write_passing_test() {
   [[ "$output" == *'ok 1 agent:list --json emits explicit GitHub logins'* ]]
   [[ "$output" != *'== codebase lint =='* ]]
   [[ "$output" != *'== welcome smoke =='* ]]
+}
+
+@test "the default test target discovers nested wake suites" {
+  run fold_task test bats --jobs 1 \
+    --filter '^agent:desk:wake requires an explicit model before rendering$'
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'1..1'* ]]
+  [[ "$output" == *'ok 1 agent:desk:wake requires an explicit model before rendering'* ]]
 }
 
 @test "the codebase mode runs only configured Codebase lints" {
@@ -83,13 +94,18 @@ write_passing_test() {
 
   for side in one two; do
     other=one
-    [ "$side" = one ] && other=two
+    if [ "$side" = one ]; then
+      other=two
+    fi
+
     cat > "$probe_dir/$side.bats" <<BATS
 #!/usr/bin/env bats
 $test_keyword "$side worker observes $other worker" {
   touch "\$PROBE_DIR/$side"
   for _ in {1..50}; do
-    [ ! -e "\$PROBE_DIR/$other" ] || return 0
+    if [ -e "\$PROBE_DIR/$other" ]; then
+      return 0
+    fi
     sleep 0.05
   done
   false

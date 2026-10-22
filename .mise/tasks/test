@@ -20,31 +20,34 @@ run_welcome=true
 
 case "${1:-all}" in
   all)
-    [ "$#" -eq 0 ] || {
+    if [ "$#" -ne 0 ]; then
       printf 'test: the all mode does not accept arguments; choose bats or codebase\n' >&2
       exit 2
-    }
+    fi
     ;;
+
   bats)
     shift
     run_codebase=false
     run_welcome=false
     ;;
+
   codebase)
     shift
-    [ "$#" -eq 0 ] || {
+    if [ "$#" -ne 0 ]; then
       printf 'test: the codebase mode does not accept arguments\n' >&2
       exit 2
-    }
+    fi
     run_bats=false
     run_welcome=false
     ;;
+
   *) ;;
 esac
 
 if $run_bats; then
   printf '\n== bats ==\n'
-  bats --print-output-on-failure "$@"
+  bats --recursive --print-output-on-failure "$@"
 fi
 
 if $run_codebase; then
