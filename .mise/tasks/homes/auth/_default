@@ -76,7 +76,7 @@ git/name|Git name
 git/email|Git email
 git/signing-fingerprint|GPG fingerprint
 github-username|GitHub username
-github/token|GitHub PAT
+github-pat|GitHub PAT
 EOF_SECRETS
 }
 
@@ -128,7 +128,7 @@ check_github() {
     record_row "GitHub token" fail "missing GitHub username secret"
     return 0
   fi
-  if ! token=$("$SECRETS_BIN" get "$AGENT/github/token" 2>/dev/null) || [ -z "$token" ]; then
+  if ! token=$("$SECRETS_BIN" get "$AGENT/github-pat" 2>/dev/null) || [ -z "$token" ]; then
     record_row "GitHub token" fail "missing GitHub PAT secret"
     return 0
   fi

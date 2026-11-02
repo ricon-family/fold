@@ -7,6 +7,8 @@ set -euo pipefail
 ROOT="${MISE_CONFIG_ROOT:?MISE_CONFIG_ROOT not set}"
 CI_ONLY="${usage_ci:-false}"
 AGENTS_ARG="${usage_agents:-}"
+SECRETS_BIN="${SECRETS_BIN:-secrets}"
+GH_BIN="${GH_BIN:-gh}"
 
 require_tool() {
   local tool="$1"
@@ -71,8 +73,8 @@ print_row() {
   printf '%-12s %-8s %-8s %-18s %-24s %-8s %s\n' "$@"
 }
 
-require_tool secrets
-require_tool gh
+require_tool "$SECRETS_BIN"
+require_tool "$GH_BIN"
 require_tool date
 require_tool awk
 require_tool sed
@@ -104,9 +106,9 @@ while IFS= read -r agent; do
   [ -n "$agent" ] || continue
   validate_agent "$agent"
 
-  key="$agent/github/token"
+  key="$agent/github-pat"
   token=""
-  if ! token=$(secrets get "$key" 2>/dev/null); then
+  if ! token=$("$SECRETS_BIN" get "$key" 2>/dev/null); then
     print_row "$agent" "missing" "unknown" "-" "-" "-" "secret not found"
     continue
   fi
@@ -118,7 +120,7 @@ while IFS= read -r agent; do
   fi
 
   response=""
-  if ! response=$(GH_TOKEN="$token" gh api /user -i 2>&1); then
+  if ! response=$(GH_TOKEN="$token" "$GH_BIN" api /user -i 2>&1); then
     note=$(printf '%s\n' "$response" | redact | tr '\n' ' ' | sed 's/[[:space:]]\{1,\}/ /g; s/^ //; s/ $//' | cut -c1-80)
     if printf '%s\n' "$response" | grep -q 'Bad credentials'; then
       print_row "$agent" "present" "no" "-" "-" "-" "bad credentials"
