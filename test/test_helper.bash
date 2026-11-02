@@ -14,9 +14,9 @@ if [ "${1:-}" != "get" ]; then
 fi
 case "${2:-}" in
   rho/github-username) echo "rho-ricon" ;;
-  rho/github/token) echo "token-rho" ;;
+  rho/github-pat) echo "token-rho" ;;
   quick/github-username) echo "quick-ricon" ;;
-  quick/github/token) echo "token-quick" ;;
+  quick/github-pat) echo "token-quick" ;;
   *) echo "missing secret: ${2:-}" >&2; exit 1 ;;
 esac
 SH
@@ -125,11 +125,12 @@ key_path() {
 case "${1:-}" in
   get)
     key="${2:?key required}"
+    printf '%s\n' "$key" >> "$store_dir/get-log"
     case "$key" in
       */github-username) printf '%s-ricon\n' "${key%%/*}" ;;
       */github-password) printf 'password-for-%s\n' "${key%%/*}" ;;
-      brownie/github/token) printf 'ghp_operator\n' ;;
-      */github/token)
+      brownie/github-pat) printf 'ghp_operator\n' ;;
+      */github-pat)
         path="$(key_path "$key")"
         if [ -f "$path" ]; then cat "$path"; else printf 'ghp_old\n'; fi ;;
       */github-totp)
