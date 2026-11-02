@@ -196,7 +196,7 @@ if [ "${1:-}" != "get" ]; then
   exit 2
 fi
 case "${2:-}" in
-  test-agent/github/token) echo "fixture-github-token" ;;
+  test-agent/github-pat) echo "fixture-github-token" ;;
   test-agent/git/name) echo "Persona Author" ;;
   test-agent/git/email) echo "commits@example.test" ;;
   *) echo "missing secret: ${2:-}" >&2; exit 1 ;;

@@ -167,7 +167,7 @@ setup_switching_personas() {
       ($agent + "/git/name"): $agent,
       ($agent + "/git/email"): ($agent + "@ricon.family"),
       ($agent + "/git/signing-fingerprint"): $signer,
-      ($agent + "/github/token"): ($agent + "-target-token")
+      ($agent + "/github-pat"): ($agent + "-target-token")
     } + (if $agent == "junior" then {
       "junior/email/accounts": "legacy",
       "junior/email/default-account": "legacy",
@@ -196,7 +196,8 @@ setup_switching_personas() {
   cat > "$TMPBIN/secrets" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
-if [ "${1:-}" != export ] || [ "${2:-}" != --prefix ]; then
+if [ "$#" -ne 3 ] || [ "${1:-}" != export ] || [ "${2:-}" != --prefix ]; then
+  echo "unexpected Secrets export arguments" >&2
   exit 2
 fi
 

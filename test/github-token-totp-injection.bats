@@ -50,7 +50,7 @@ write_fake_shimmer_and_gh() {
 set -euo pipefail
 printf '%s\n' "$*" >> "$BATS_TEST_TMPDIR/shimmer-log"
 if [ "${1:-}" = "github:token:store" ]; then
-  key="${2:?agent}/github/token"
+  key="${2:?agent}/github-pat"
   path="$FAKE_SECRET_STORE/$(printf '%s' "$key" | tr '/' '__')"
   printf '%s' "${3:?token}" > "$path"
   exit 0
@@ -68,6 +68,7 @@ case "${1:-}" in
   api)
     case "${2:-}" in
       /user)
+        [ "${GH_TOKEN:-}" = "ghp_newtoken" ] || exit 1
         attempt_file="$BATS_TEST_TMPDIR/gh-user-attempts"
         attempt=0
         if [ -f "$attempt_file" ]; then
@@ -78,7 +79,11 @@ case "${1:-}" in
         if [ "$attempt" -le "${GH_FAIL_USER_ATTEMPTS:-0}" ]; then
           exit 1
         fi
-        printf 'c0da-ricon\n'
+        if [[ " $* " == *" -i "* ]]; then
+          printf 'HTTP/2.0 200 OK\r\n\r\n{"login":"c0da-ricon"}\n'
+        else
+          printf 'c0da-ricon\n'
+        fi
         exit 0
         ;;
       repos/ricon-family/fold/actions/secrets/public-key)
@@ -105,6 +110,51 @@ echo "unexpected gh command: $*" >&2
 exit 2
 EOF
   chmod +x "$TMPBIN/gh"
+}
+
+@test "github:token:status checks the canonical PAT rather than a legacy entry" {
+  write_fake_shimmer_and_gh
+  printf 'ghp_newtoken' > "$FAKE_SECRET_STORE/c0da_github-pat"
+  printf 'ghp_legacy' > "$FAKE_SECRET_STORE/c0da_github_token"
+
+  run fold_task github:token:status c0da
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"present"*"yes"*"c0da-ricon"* ]]
+  grep -Fxq 'c0da/github-pat' "$FAKE_SECRET_STORE/get-log"
+  ! grep -Fxq 'c0da/github/token' "$FAKE_SECRET_STORE/get-log"
+  [[ "$output" != *"ghp_newtoken"* ]]
+  [[ "$output" != *"ghp_legacy"* ]]
+}
+
+@test "github:token:create stores and verifies the canonical PAT despite a legacy entry" {
+  write_fake_websites github:token:create
+  write_fake_shimmer_and_gh
+  printf 'ghp_legacy' > "$FAKE_SECRET_STORE/c0da_github_token"
+
+  run fold_task github:token:create --yes --no-sync-ci c0da
+
+  [ "$status" -eq 0 ]
+  [ "$(cat "$FAKE_SECRET_STORE/c0da_github-pat")" = "ghp_newtoken" ]
+  [ "$(cat "$FAKE_SECRET_STORE/c0da_github_token")" = "ghp_legacy" ]
+  grep -Fxq 'c0da/github-pat' "$FAKE_SECRET_STORE/get-log"
+  ! grep -Fxq 'c0da/github/token' "$FAKE_SECRET_STORE/get-log"
+  [[ "$output" == *"✓ verified as c0da-ricon"* ]]
+}
+
+@test "github:token:rotate stores and verifies the canonical PAT despite a legacy entry" {
+  write_fake_websites github:token:rotate
+  write_fake_shimmer_and_gh
+  printf 'ghp_legacy' > "$FAKE_SECRET_STORE/c0da_github_token"
+
+  run fold_task github:token:rotate --yes --no-sync-ci c0da
+
+  [ "$status" -eq 0 ]
+  [ "$(cat "$FAKE_SECRET_STORE/c0da_github-pat")" = "ghp_newtoken" ]
+  [ "$(cat "$FAKE_SECRET_STORE/c0da_github_token")" = "ghp_legacy" ]
+  grep -Fxq 'c0da/github-pat' "$FAKE_SECRET_STORE/get-log"
+  ! grep -Fxq 'c0da/github/token' "$FAKE_SECRET_STORE/get-log"
+  [[ "$output" == *"✓ verified as c0da-ricon"* ]]
 }
 
 @test "github:token:create passes command-backed TOTP resolver when stored seed exists" {
