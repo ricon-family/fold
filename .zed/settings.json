@@ -1,0 +1,21 @@
+{
+  "format_on_save": "on",
+  "use_on_type_format": false,
+
+  "languages": {
+    "JSON": {
+      "tab_size": 2,
+      "hard_tabs": false,
+    },
+
+    "JSONC": {
+      "tab_size": 2,
+      "hard_tabs": false,
+    },
+
+    "Shell Script": {
+      "tab_size": 4,
+      "hard_tabs": false,
+    },
+  },
+}
