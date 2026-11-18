@@ -118,7 +118,8 @@ run_websites_rotate() {
   local totp_command=""
 
   if "$SECRETS_BIN" get "$agent/github-totp" >/dev/null 2>&1; then
-    printf -v totp_command '%q totp %q' "$SECRETS_BIN" "$agent/github-totp"
+    printf -v totp_command '%q -C %q exec -- %q totp %q' \
+      "$(command -v mise)" "$ROOT" "$SECRETS_BIN" "$agent/github-totp"
     GITHUB_USERNAME="$username" GITHUB_PASSWORD="$password" GITHUB_TOTP_COMMAND="$totp_command" \
       "$WEBSITES_BIN" github:token:rotate "$agent" --login-id "$agent" >"$stdout" 2>"$stderr"
   else

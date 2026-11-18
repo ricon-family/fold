@@ -1,14 +1,17 @@
 [settings]
 experimental = true
 quiet = true
-task_output = "interleave"
-aqua.registries = ["https://github.com/KnickKnackLabs/bats-core"]
 
-[shell_alias]
-header = '''printf '\n== %s ==\n''''
+[settings.task]
+output = "interleave"
+
+[settings.aqua]
+registries = ["https://github.com/KnickKnackLabs/bats-core"]
+
 
 [plugins]
 shiv = "https://github.com/KnickKnackLabs/vfox-shiv"
+
 
 [tools]
 # Task runtimes and command-line utilities
@@ -33,9 +36,13 @@ yq = "4.53.6"
 "shiv:rudi" = "0.5"
 "shiv:secrets" = "0.3"
 "shiv:sessions" = "0.5"
+"shiv:shell" = "0.1"
 "shiv:shimmer" = "0.1"
 "shiv:threads" = "0.3"
 "shiv:websites" = "0.1"
+
+[shell_alias]
+header = '''printf '\n== %s ==\n''''
 
 [_.codebase]
 name = "fold"
